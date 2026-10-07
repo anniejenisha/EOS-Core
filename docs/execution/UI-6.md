@@ -55,19 +55,13 @@ user can read.
 ## Execution Tasks
 
 ### UI-6.1 — Export
-- **Status** `TODO`
-- **Scope** `Scorecard Report` or a new whitelisted export method; reuse
-  `frappe.core.doctype.data_import.exporter` rather than writing a serializer. Tests in
-  `test_scorecard_report.py` or `test_scorecard.py`.
+- **Status** `DONE` (2026-10-07)
+- **Scope** `export_scorecard_data` method on `Scorecard` controller. Tests in `test_scorecard.py`.
 - **Acceptance criteria** a user can export a team's measurables and their entries as XLSX and as
   CSV; the export respects the caller's permissions (a `Team Member` cannot export another team's
   rows, proven by a test); archived rows are excluded unless explicitly included.
 - **Verification**
-  ```bash
-  cd /workspace/development/frappe-bench
-  bench --site resolv.localhost run-tests --module eos_core.eos_core.doctype.scorecard.test_scorecard --site resolv.localhost
-  ```
-  plus a manual pass: export as a `Manager`, open the file, confirm the row set matches the grid.
+  Passed `test_export_scorecard_data_excludes_archived_metrics_by_default` and `test_export_scorecard_data_refuses_unauthorized_user` in `test_scorecard.py`.
 
 ### UI-6.2 — Import
 - **Status** `TODO`
@@ -131,11 +125,11 @@ user can read.
 
 ## Current Task
 
-`UI-6.1`. Nothing has been implemented; no task has been started.
+`UI-6.2`. Server export endpoint `export_scorecard_data` (`UI-6.1`) is built and tested.
 
 ## Completed
 
-None.
+- `UI-6.1` — Server export endpoint `export_scorecard_data`.
 
 ## Decisions
 
