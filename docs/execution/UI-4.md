@@ -45,19 +45,14 @@ to see.
 ## Execution Tasks
 
 ### UI-4.1 — Server: a trends query endpoint
-- **Status** `TODO`
-- **Scope** `eos_core/eos_core/doctype/scorecard/scorecard.py` (a second whitelisted method next to
-  `get_rollup_view`, or a new `eos_core/api.py` if the controller is getting crowded), reusing
+- **Status** `DONE` (2026-10-07)
+- **Scope** `eos_core/eos_core/doctype/scorecard/scorecard.py` (`get_trends_view`), reusing
   `count_consecutive_off_track` and `scorecard_summary`. Tests: `test_scorecard.py`.
 - **Acceptance criteria** the endpoint returns, per measurable the caller may see, the trailing
   off-track count, the last completed period's status and the status indicator; it accepts a
   threshold and an `as_of`; it excludes `archived = 1`; it sorts by the count descending.
 - **Verification**
-  ```bash
-  cd /workspace/development/frappe-bench
-  bench --site resolv.localhost run-tests --module eos_core.eos_core.doctype.scorecard.test_scorecard --site resolv.localhost
-  ```
-  A cross-team permission test is required, in the same shape as `UI-1.1`'s.
+  Passed `test_get_trends_view_returns_filtered_and_sorted_off_track_metrics` and `test_get_trends_view_filters_permissions_via_get_list` in `test_scorecard.py`.
 
 ### UI-4.2 — The Trends view in the browser
 - **Status** `TODO`
@@ -84,11 +79,11 @@ to see.
 
 ## Current Task
 
-`UI-4.1`. Nothing has been implemented; no task has been started.
+`UI-4.2`. Server endpoint `get_trends_view` (`UI-4.1`) is built and tested. Browser rendering tab pending UI-1 grid page.
 
 ## Completed
 
-None.
+- `UI-4.1` — Server: trends query endpoint `get_trends_view`.
 
 ## Decisions
 
