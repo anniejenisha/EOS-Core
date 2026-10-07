@@ -512,12 +512,10 @@ permissions) or the grid will show other teams' measurables, and `UI-5`'s per-te
 have a defined home (`PERM-5`).
 
 ### UI-1 — S2 · Scorecard grid (the core Ninety screen)
-**Status** `TODO` · code+tests ☐ · reachable ☐ · **Verified 2026-09-28** · plan
-[`UI-1.md`](execution/UI-1.md)
+**Status** `IN_PROGRESS` (UI-1.1 grid read endpoint & UI-1.2 entry write endpoint built & tested) · code+tests ☑ · reachable ☐ · **Verified 2026-10-07** · plan [`UI-1.md`](execution/UI-1.md)
 **Scope** a Worksheet Page plus a whitelisted grid endpoint over `EOS Metric` + `Scorecard Entry`.
 Depends on `PERM-2` for column-level visibility, and is the prerequisite for most of the rest of
-this block. **As of 2026-09-29:** no Worksheet Page exists in Frappe v16 — see the block header and
-`docs/execution/UI-1.md` for the `Page` + `Workspace` route that replaces it.
+this block. Server endpoints `get_grid_view` and `update_scorecard_entry` are built and tested. Page UI rendering (UI-1.3 to UI-1.8) pending.
 
 ### UI-2 — S2 · UI trigger for "Make it an Issue"
 **Status** `IN_PROGRESS` (UI-2.1 whitelisted & guarded `e54b93d`) · code+tests ☑ · reachable ☐ · **Verified 2026-10-07** · plan [`UI-2.md`](execution/UI-2.md) · after `UI-1`

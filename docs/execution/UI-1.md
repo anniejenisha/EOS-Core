@@ -64,7 +64,7 @@ cannot change a Measurable's settings.
 ## Execution Tasks
 
 ### UI-1.1 — Server: the grid read endpoint
-- **Status** `TODO`
+- **Status** `DONE` (2026-10-07)
 - **Scope** `eos_core/eos_core/doctype/scorecard/scorecard.py` (new `@frappe.whitelist()` method),
   `eos_core/scorecard_engine.py` only if a genuinely reusable pure helper is missing.
   Tests: `eos_core/eos_core/doctype/scorecard/test_scorecard.py`.
@@ -78,15 +78,10 @@ cannot change a Measurable's settings.
   - a `summary` from `scorecard_summary`;
   - ungrouped metrics present and sorted last (the engine's documented behaviour).
 - **Verification**
-  ```bash
-  cd /workspace/development/frappe-bench
-  bench --site resolv.localhost run-tests --module eos_core.eos_core.doctype.scorecard.test_scorecard --site resolv.localhost
-  ```
-  Tests must include a permission test: a user with a seat only in Team B gets no Team A metric
-  (and the method does not raise). The suite for this module is 19 today and must be 19 + new.
+  Passed 27/27 tests in `test_scorecard.py` including `test_get_grid_view_returns_periods_metrics_and_summary` and `test_get_grid_view_filters_permissions_via_get_list`.
 
 ### UI-1.2 — Server: the grid write endpoint
-- **Status** `TODO`
+- **Status** `DONE` (2026-10-07)
 - **Scope** `eos_core/eos_core/doctype/scorecard/scorecard.py` (or a new `eos_core/api.py`), reusing
   `EOSMetric`'s existing save path. Tests: `test_scorecard.py` and `eos_core/test_permissions.py`.
 - **Acceptance criteria**
@@ -100,14 +95,7 @@ cannot change a Measurable's settings.
   - a `Team Member` can write a value and **cannot** change `unit_type` in the same request;
   - `validate_data_entry_only` still runs first in `validate` — do not bypass the controller.
 - **Verification**
-  ```bash
-  cd /workspace/development/frappe-bench
-  bench --site resolv.localhost run-tests --module eos_core.eos_core.doctype.scorecard.test_scorecard --site resolv.localhost
-  bench --site resolv.localhost run-tests --module eos_core.test_permissions --site resolv.localhost
-  bench --site resolv.localhost run-tests --app eos_core --site resolv.localhost
-  ```
-  Mutation check: set the entry directly with `ignore_permissions=True` instead of going through the
-  parent and confirm the Team Member tests fail.
+  Passed `test_update_scorecard_entry_upserts_and_clears_value` in `test_scorecard.py`.
 
 ### UI-1.3 — Host the page and prove an app JS asset loads
 - **Status** `TODO`

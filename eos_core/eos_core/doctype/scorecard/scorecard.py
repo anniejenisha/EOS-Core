@@ -345,3 +345,44 @@ class Scorecard(Document):
 				for period in periods
 			],
 		}
+
+
+@frappe.whitelist()
+def update_scorecard_entry(metric, week_start_date, actual_value=None):
+	doc = frappe.get_doc("EOS Metric", metric)
+
+	frappe.has_permission("EOS Metric", "write", doc=doc, throw=True)
+
+	target_date = str(getdate(week_start_date))
+	existing_entry = None
+	for entry in doc.get("entries", []):
+		if str(entry.week_start_date) == target_date:
+			existing_entry = entry
+			break
+
+	if actual_value is None or str(actual_value).strip() == "":
+		if existing_entry:
+			doc.remove(existing_entry)
+	else:
+		val = float(actual_value)
+		if existing_entry:
+			existing_entry.actual_value = val
+			existing_entry.is_manual = 1
+		else:
+			doc.append(
+				"entries",
+				{
+					"metric": doc.metric_name,
+					"week_start_date": target_date,
+					"actual_value": val,
+					"is_manual": 1,
+				},
+			)
+
+	doc.save()
+	return {
+		"metric": doc.name,
+		"week_start_date": target_date,
+		"saved": True,
+		"entries_count": len(doc.get("entries", [])),
+	}

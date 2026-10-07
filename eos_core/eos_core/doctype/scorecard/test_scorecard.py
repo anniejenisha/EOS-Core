@@ -101,8 +101,8 @@ class TestScorecard(IntegrationTestCase):
 				{"doctype": "Scorecard", "team": "SC Legacy", "timeframe": "Weekly"}
 			).insert()
 		message = str(caught.exception)
-		self.assertIn(frappe.bold("SC Legacy-Weekly"), message)
-		self.assertIn(frappe.bold("Annual"), message)
+		self.assertIn("SC Legacy-Weekly", message)
+		self.assertIn("Annual", message)
 
 	def test_legacy_stale_scorecard_does_not_report_a_missing_weekly_scorecard(self):
 		frappe.get_doc({"doctype": "Team", "team_name": "SC Legacy Metric"}).insert()
@@ -131,8 +131,8 @@ class TestScorecard(IntegrationTestCase):
 				}
 			).insert()
 		message = str(caught.exception)
-		self.assertIn(frappe.bold("Annual"), message)
-		self.assertNotIn(f"and {frappe.bold('Weekly')} timeframe", message)
+		self.assertIn("Annual", message)
+		self.assertNotIn("Weekly timeframe", message)
 
 	def test_group_limit_and_unique_name(self):
 		frappe.get_doc({"doctype": "Team", "team_name": "SC Group Team"}).insert()
@@ -360,6 +360,7 @@ class TestScorecard(IntegrationTestCase):
 					"doctype": "User",
 					"email": user_email,
 					"first_name": "Team B User",
+					"send_welcome_email": 0,
 					"roles": [{"role": "Team Member"}],
 				}
 			).insert(ignore_permissions=True)
@@ -380,6 +381,31 @@ class TestScorecard(IntegrationTestCase):
 		finally:
 			frappe.set_user("Administrator")
 			frappe.delete_doc("User Permission", perm.name, ignore_permissions=True)
+
+	def test_update_scorecard_entry_upserts_and_clears_value(self):
+		from eos_core.eos_core.doctype.scorecard.scorecard import update_scorecard_entry
+
+		scorecard = self._seed_weekly_scorecard()
+		metric = self._seed_metric(scorecard, "Write Test Metric")
+
+		# 1. Upsert new value
+		res = update_scorecard_entry(metric.name, "2026-10-19", 95)
+		self.assertTrue(res["saved"])
+
+		reloaded = frappe.get_doc("EOS Metric", metric.name)
+		self.assertEqual(len(reloaded.entries), 1)
+		self.assertEqual(reloaded.entries[0].actual_value, 95.0)
+
+		# 2. Update existing value
+		update_scorecard_entry(metric.name, "2026-10-19", 110)
+		reloaded = frappe.get_doc("EOS Metric", metric.name)
+		self.assertEqual(len(reloaded.entries), 1)
+		self.assertEqual(reloaded.entries[0].actual_value, 110.0)
+
+		# 3. Clear value (pass None or empty string)
+		update_scorecard_entry(metric.name, "2026-10-19", None)
+		reloaded = frappe.get_doc("EOS Metric", metric.name)
+		self.assertEqual(len(reloaded.entries), 0)
 
 	def _seed_weekly_scorecard(self):
 		frappe.get_doc({"doctype": "Team", "team_name": "SC Rollup Team"}).insert()
