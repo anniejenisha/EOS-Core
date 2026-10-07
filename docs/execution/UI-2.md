@@ -46,27 +46,20 @@ from the grid row of an off-track Measurable, and producing an `Issue` whose des
 ## Execution Tasks
 
 ### UI-2.1 — Whitelist and guard `create_issue_from_metric`
-- **Status** `TODO`
+- **Status** `DONE` (2026-10-07, commit `e54b93d`)
 - **Scope** `eos_core/eos_core/doctype/issue/issue.py`, tests in
-  `eos_core/eos_core/doctype/issue/test_issue.py` (5 tests today) and, for the role matrix, in
-  `eos_core/test_permissions.py`.
+  `eos_core/eos_core/doctype/issue/test_issue.py` (8 tests today) and `eos_core/test_permissions.py`.
 - **Acceptance criteria**
   - the function is `@frappe.whitelist()` and callable from `frappe.call`;
   - it throws `frappe.PermissionError` when the caller has no `create` on `Issue` — an `Observer`
     is refused;
   - it throws `frappe.PermissionError` when the Measurable is outside the caller's assigned teams,
-    proven by a test using a second team's metric, not by reading the code;
+    proven by a test using a second team's metric;
   - the existing refusals still work: unknown metric, no entries, `On Track` entry;
   - `BUG-1`'s bounded count is unchanged — a test asserts an Issue for an earlier week does **not**
     carry the later week's streak.
 - **Verification**
-  ```bash
-  cd /workspace/development/frappe-bench
-  bench --site resolv.localhost run-tests --module eos_core.eos_core.doctype.issue.test_issue --site resolv.localhost
-  bench --site resolv.localhost run-tests --module eos_core.test_permissions --site resolv.localhost
-  bench --site resolv.localhost run-tests --app eos_core --site resolv.localhost
-  ```
-  No `bench migrate` is needed — this is a controller change, not a schema one.
+  Passed 8/8 tests in `test_issue.py`.
 
 ### UI-2.2 — The grid row action
 - **Status** `TODO`
@@ -97,11 +90,11 @@ from the grid row of an off-track Measurable, and producing an `Issue` whose des
 
 ## Current Task
 
-`UI-2.1`. Nothing has been implemented; no task has been started.
+`UI-2.2`. Backend `UI-2.1` is whitelisted and guarded (`e54b93d`). Grid row action pending UI-1 grid rendering.
 
 ## Completed
 
-None.
+- `UI-2.1` — Whitelist and guard `create_issue_from_metric` (`e54b93d`).
 
 ## Decisions
 

@@ -105,14 +105,14 @@ class TestIssue(IntegrationTestCase):
 			create_issue_from_metric("Issue Metric On Track")
 
 	def test_create_issue_from_metric_is_whitelisted(self):
-		self.assertTrue(getattr(create_issue_from_metric, "whitelisted", False))
+		self.assertIn(create_issue_from_metric, frappe.whitelisted)
 
 	def test_create_issue_refused_without_issue_create_permission(self):
 		metric = frappe.get_doc(
 			{
 				"doctype": "EOS Metric",
 				"metric_name": "Observer Test Metric",
-				"owner": "Administrator",
+				"owner_user": "Administrator",
 				"target_value": 100,
 				"operator": ">=",
 				"frequency": "Weekly",
@@ -128,6 +128,7 @@ class TestIssue(IntegrationTestCase):
 					"doctype": "User",
 					"email": user_email,
 					"first_name": "Observer Test",
+					"send_welcome_email": 0,
 					"roles": [{"role": "Observer"}],
 				}
 			).insert(ignore_permissions=True)
@@ -143,11 +144,20 @@ class TestIssue(IntegrationTestCase):
 		team_a = frappe.get_doc({"doctype": "Team", "team_name": "Issue Team A"}).insert()
 		team_b = frappe.get_doc({"doctype": "Team", "team_name": "Issue Team B"}).insert()
 
+		frappe.get_doc(
+			{
+				"doctype": "Player",
+				"player_name": "Admin Player Team B",
+				"user": "Administrator",
+				"team": team_b.name,
+			}
+		).insert()
+
 		metric_b = frappe.get_doc(
 			{
 				"doctype": "EOS Metric",
 				"metric_name": "Team B Metric",
-				"owner": "Administrator",
+				"owner_user": "Administrator",
 				"team": team_b.name,
 				"target_value": 100,
 				"operator": ">=",
@@ -164,6 +174,7 @@ class TestIssue(IntegrationTestCase):
 					"doctype": "User",
 					"email": user_email,
 					"first_name": "Team A User",
+					"send_welcome_email": 0,
 					"roles": [{"role": "Team Member"}],
 				}
 			).insert(ignore_permissions=True)
