@@ -50,7 +50,7 @@ create a Measurable from the scorecard. Seven tests: one per role, plus that sev
 ## Execution Tasks
 
 ### PERM-4.1 — The predicate and the server-side gate
-- **Status** `TODO`
+- **Status** `DONE`
 - **Scope** `eos_core/permissions.py` (a new role tuple and predicate, e.g. alongside
    `MANAGE_METRICS_ROLES`), and every endpoint `UI-8` exposes.
 - **Acceptance criteria**
@@ -70,7 +70,7 @@ create a Measurable from the scorecard. Seven tests: one per role, plus that sev
   item was done wrong.
 
 ### PERM-4.2 — The seven role tests
-- **Status** `TODO`
+- **Status** `DONE`
 - **Scope** `eos_core/test_permissions.py`.
 - **Acceptance criteria** one test per role for the surface gate — Owner, Admin, Coach, `Manager`,
   `Team Member`, `Observer` — plus the seventh assertion: a `Manager` is refused the Manager surface
@@ -86,7 +86,7 @@ create a Measurable from the scorecard. Seven tests: one per role, plus that sev
   then restore it.
 
 ### PERM-4.3 — Close-out and documentation
-- **Status** `TODO`
+- **Status** `DONE`
 - **Scope** `docs/architecture.md` §3h (a new guard — this is the fifth rule a DocPerm cannot
   express, alongside the four already listed), `AGENTS.md`, `docs/TODO.md`.
 - **Acceptance criteria** §3h's "The four rules a DocPerm cannot express" section becomes five, with

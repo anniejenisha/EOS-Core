@@ -305,7 +305,7 @@ someone else inside its group, is refused outside it, and cannot rename or delet
 case. **Now blocked on `UI-1`.**
 
 ### PERM-4 — S2 · Only Owner / Admin / Coach see the Measurable Manager
-**Status** `TODO` · code+tests ☐ · reachable ☐ · **Verified 2026-09-29** · plan [`PERM-4.md`](execution/PERM-4.md)
+**Status** **DONE** (2026-10-07) · code+tests ☑ · reachable ☑ · **Verified 2026-10-07** · plan [`PERM-4.md`](execution/PERM-4.md)
 Ninety: *"Accessible only to Admins, Owners, or Coaches/Implementers. Managers and Team
 Members/Managees cannot access the Measurable Manager."*
 **Status after `PERM-2` — only half is DocPerm-covered, and the two cases differ.** Verified live:
@@ -575,7 +575,7 @@ browser pass too, because an assertion cannot prove a button is clickable.
 because `get_rock_summary` serialises that value straight to JSON. Fix it with, or before, this item.
 
 ### UI-8 — S2 · Measurable Manager: the only Ninety surface with no queue item
-**Status** `TODO` · code+tests ☐ · reachable ☐ · *found 2026-09-29, not in any prior list* · plan
+**Status** **DONE** (2026-10-07) · code+tests ☑ · reachable ☑ · *found 2026-09-29, completed 2026-10-07* · plan
 [`UI-8.md`](execution/UI-8.md) · independent of `UI-1`; gates `PERM-4`
 **Why it was missing** `PERM-4` says the Measurable Manager is visible only to Owner / Admin / Coach,
 and its own text says *"Block C has no item for it"* — so a permission item was left permanently

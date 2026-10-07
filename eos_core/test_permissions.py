@@ -4,9 +4,11 @@ from frappe.tests import IntegrationTestCase
 from eos_core.permissions import (
 	COMPANY_WIDE_ROLES,
 	MANAGE_METRICS_ROLES,
+	MEASURABLE_MANAGER_ROLES,
 	OWNER_ROLES,
 	ROLE_PRECEDENCE,
 	TEAM_SCOPED_DOCTYPES,
+	can_access_measurable_manager,
 	can_manage_metrics,
 	can_own_content,
 	has_company_wide_access,
@@ -582,6 +584,99 @@ class TestPermissions(IntegrationTestCase):
 			self.assertIn(
 				self.rows["a"][doctype].name, self._visible(doctype, "Administrator"), doctype
 			)
+
+	def test_measurable_manager_role_access(self):
+		from eos_core.eos_core.doctype.eos_metric.eos_metric import (
+			delete_measurable,
+			duplicate_measurable,
+			get_measurable_manager_list,
+			toggle_archive_measurable,
+		)
+
+		allowed_roles = ("Owner", "Admin", "Coach")
+		refused_roles = ("Manager", "Team Member", "Observer")
+
+		for role in allowed_roles:
+			user = self._make_user(role)
+			self._seat(user, self.team_a.name)
+			self.assertTrue(can_access_measurable_manager(user), f"Role {role} should be allowed")
+			with self.set_user(user):
+				res = get_measurable_manager_list()
+				self.assertIsInstance(res, list, f"Role {role} should be able to get list")
+
+		for role in refused_roles:
+			user = self._make_user(role)
+			self._seat(user, self.team_a.name)
+			self.assertFalse(can_access_measurable_manager(user), f"Role {role} should be refused")
+			with self.set_user(user):
+				with self.assertRaises(frappe.PermissionError):
+					get_measurable_manager_list()
+
+	def test_manager_denied_measurable_manager_surface_and_can_create_measurable_from_scorecard(self):
+		from eos_core.eos_core.doctype.eos_metric.eos_metric import get_measurable_manager_list
+
+		user = self._make_user("Manager")
+		self._seat(user, self.team_a.name)
+
+		# 1. Denied the surface
+		self.assertFalse(can_access_measurable_manager(user))
+		with self.set_user(user):
+			with self.assertRaises(frappe.PermissionError):
+				get_measurable_manager_list()
+
+		# 2. Can still create a Measurable on their team's scorecard
+		with self.set_user(user):
+			metric = frappe.get_doc({
+				"doctype": "EOS Metric",
+				"metric_name": f"Manager Metric {self.counter}",
+				"team": self.team_a.name,
+				"owner_user": user,
+				"frequency": "Weekly",
+			}).insert()
+			self.created.append(("EOS Metric", metric.name))
+			self.assertTrue(frappe.db.exists("EOS Metric", metric.name))
+
+	def test_measurable_manager_row_actions(self):
+		from eos_core.eos_core.doctype.eos_metric.eos_metric import (
+			delete_measurable,
+			duplicate_measurable,
+			get_measurable_manager_list,
+			toggle_archive_measurable,
+		)
+
+		user = self._make_user("Owner")
+		self._seat(user, self.team_a.name)
+
+		with self.set_user(user):
+			metric = frappe.get_doc({
+				"doctype": "EOS Metric",
+				"metric_name": f"Action Metric {self.counter}",
+				"team": self.team_a.name,
+				"owner_user": user,
+				"frequency": "Weekly",
+			}).insert()
+			self.created.append(("EOS Metric", metric.name))
+
+			# Toggle Archive
+			toggled = toggle_archive_measurable(metric.name, 1)
+			self.assertEqual(toggled["archived"], 1)
+
+			active_list = [m["name"] for m in get_measurable_manager_list(include_archived=0)]
+			self.assertNotIn(metric.name, active_list)
+
+			archived_list = [m["name"] for m in get_measurable_manager_list(include_archived=1)]
+			self.assertIn(metric.name, archived_list)
+
+			toggle_archive_measurable(metric.name, 0)
+
+			# Duplicate
+			dup = duplicate_measurable(metric.name)
+			self.created.append(("EOS Metric", dup["name"]))
+			self.assertTrue(frappe.db.exists("EOS Metric", dup["name"]))
+
+			# Delete
+			delete_measurable(dup["name"])
+			self.assertFalse(frappe.db.exists("EOS Metric", dup["name"]))
 
 
 def _make_visibility_test(doctype, role, scoped):

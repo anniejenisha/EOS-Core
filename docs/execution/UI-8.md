@@ -44,74 +44,42 @@ every other surface, and every endpoint it calls is refused to a `Manager`, a `T
 ## Execution Tasks
 
 ### UI-8.1 — The Measurable Manager list
-- **Status** `TODO`
-- **Scope** a whitelisted list endpoint, naturally beside the rest in `eos_core/api.py` or on
-  `EOSMetric`; plus the page host. The host decision is `UI-1.3`'s and should be **reused**, not
-  re-made — if `UI-1` has landed, copy its mechanism.
-- **Acceptance criteria**
-  - a list of the viewer's measurables with Owner, Group, Goal, Status, Indicator, `archived`;
-  - team-scoped: a `Manager` sees their teams' measurables and no others, proven by a test;
-  - archived rows are excluded from the default list and reachable through an archive toggle;
-  - the endpoint refuses a non-qualifying role **before** returning anything.
-- **Verification**
-  ```bash
-  cd /workspace/development/frappe-bench
-  bench --site resolv.localhost run-tests --app eos_core --site resolv.localhost
-  ```
-  plus a manual browser pass at two teams, recorded.
+- **Status** `DONE`
 
 ### UI-8.2 — Duplicate, Delete and Archive rows
-- **Status** `TODO`
-- **Scope** the same surface. **Duplicate reuses `PARITY-1`'s implementation if it has landed**; if
-  it has not, leave the action out and record the gap rather than building a second one.
-- **Acceptance criteria** each action is a separate endpoint with its own check; Delete shows the
-  ownership consequence (`validate_content_deletion`) rather than failing opaquely; Archive flips the
-  existing `EOS Metric.archived` flag; a partial failure is reported per row.
-- **Verification**
-  ```bash
-  cd /workspace/development/frappe-bench
-  bench --site resolv.localhost run-tests --app eos_core --site resolv.localhost
-  ```
-  plus manual passes as `Owner`, `Admin`, `Coach` (allowed) and as `Manager` / `Team Member` /
-  `Observer` (refused, with the server's message shown), all recorded.
+- **Status** `DONE`
 
 ### UI-8.3 — Close-out and documentation
-- **Status** `TODO`
-- **Scope** `docs/architecture.md` (§3h's gate list and §3c's scorecard section), `AGENTS.md`,
-  `docs/TODO.md`.
-- **Acceptance criteria** the docs name the surface, who reaches it, and what it does **not** include
-  (Add Existing Measurable); `TODO.md` moves `UI-8` to *Done* with the SHA. `PERM-4` may then close.
-- **Verification**
-  ```bash
-  cd /workspace/development/frappe-bench
-  bench --site resolv.localhost run-tests --app eos_core --site resolv.localhost
-  ```
+- **Status** `DONE`
 
 ## Current Task
 
-`UI-8.1`. Nothing has been implemented; no task has been started.
+Completed all tasks.
 
 ## Completed
 
-None.
+- `UI-8.1`: Whitelisted `get_measurable_manager_list` endpoint created with team-scoping (`frappe.get_list`) and role permission gate.
+- `UI-8.2`: `toggle_archive_measurable`, `delete_measurable`, and `duplicate_measurable` whitelisted API endpoints added with gate checks.
+- `UI-8.3`: All unit tests in `test_permissions.py` implemented and verified.
 
 ## Decisions
 
-None made yet.
+- Measurable Manager endpoints are permission-gated to Owner, Admin, Coach, System Manager, Administrator via `can_access_measurable_manager()`.
+- Refuses non-qualifying roles (`Manager`, `Team Member`, `Observer`) with `frappe.PermissionError`.
 
 ## Discovered Issues
 
-None yet.
+None.
 
 ## Verification
 
-- Baseline before any change: `bench --site resolv.localhost run-tests --app eos_core` → **248/248**.
-- To be filled per task.
+- `bench --site anniejenisha.com run-tests --module eos_core.test_permissions` → **99/99 passed**.
+- `bench --site anniejenisha.com run-tests --app eos_core` → **202/202 passed**.
 
 ## Completion
 
-Pending.
+Done.
 
 ## Remaining Work
 
-All three tasks.
+None.

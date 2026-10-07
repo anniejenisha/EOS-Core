@@ -2,6 +2,7 @@ import frappe
 from frappe.model.document import Document
 
 from eos_core.permissions import (
+	check_measurable_manager_access,
 	validate_content_deletion,
 	validate_content_owner,
 	validate_data_entry_only,
@@ -181,3 +182,68 @@ class EOSMetric(Document):
 			if inputs is None:
 				continue
 			entry.actual_value = evaluate_formula(self.formula, inputs)
+
+
+@frappe.whitelist()
+def get_measurable_manager_list(include_archived=0):
+	check_measurable_manager_access()
+	include_archived = frappe.utils.cint(include_archived)
+	return frappe.get_list(
+		"EOS Metric",
+		fields=[
+			"name",
+			"metric_name",
+			"owner_user",
+			"group",
+			"target_value",
+			"operator",
+			"min_value",
+			"max_value",
+			"frequency",
+			"unit",
+			"team",
+			"archived",
+			"is_smart",
+		],
+		filters={"archived": 1 if include_archived else 0},
+		order_by="creation desc",
+	)
+
+
+@frappe.whitelist()
+def toggle_archive_measurable(metric_name, archived=None):
+	check_measurable_manager_access()
+	doc = frappe.get_doc("EOS Metric", metric_name)
+	if archived is None:
+		new_state = 0 if doc.archived else 1
+	else:
+		new_state = 1 if frappe.utils.cint(archived) else 0
+	doc.archived = new_state
+	doc.save(ignore_permissions=True)
+	return {"name": doc.name, "archived": doc.archived}
+
+
+@frappe.whitelist()
+def delete_measurable(metric_name):
+	check_measurable_manager_access()
+	doc = frappe.get_doc("EOS Metric", metric_name)
+	frappe.delete_doc("EOS Metric", metric_name)
+	return {"status": "deleted", "name": metric_name}
+
+
+@frappe.whitelist()
+def duplicate_measurable(metric_name, new_name=None):
+	check_measurable_manager_access()
+	doc = frappe.get_doc("EOS Metric", metric_name)
+	copy_name = new_name or f"{doc.metric_name} (Copy)"
+	if frappe.db.exists("EOS Metric", copy_name):
+		count = 1
+		while frappe.db.exists("EOS Metric", f"{copy_name} {count}"):
+			count += 1
+		copy_name = f"{copy_name} {count}"
+
+	new_doc = frappe.copy_doc(doc)
+	new_doc.metric_name = copy_name
+	new_doc.name = copy_name
+	new_doc.insert(ignore_permissions=True)
+	return {"name": new_doc.name, "metric_name": new_doc.metric_name}

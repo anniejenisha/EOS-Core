@@ -5,6 +5,7 @@ COMPANY_WIDE_ROLES = ("Owner", "Admin", "Coach")
 OWNER_ROLES = ("Owner", "Admin", "Manager", "Team Member")
 DELETE_OWN_CONTENT_ROLES = ("Manager", "Team Member")
 MANAGE_METRICS_ROLES = ("Owner", "Admin", "Coach", "Manager")
+MEASURABLE_MANAGER_ROLES = ("Owner", "Admin", "Coach")
 
 TEAM_SCOPED_DOCTYPES = (
 	"EOS Metric",
@@ -77,6 +78,22 @@ def can_manage_metrics(user=None):
 	if is_privileged(user):
 		return True
 	return primary_role(user) in MANAGE_METRICS_ROLES
+
+
+def can_access_measurable_manager(user=None):
+	if is_privileged(user):
+		return True
+	return primary_role(user) in MEASURABLE_MANAGER_ROLES
+
+
+def check_measurable_manager_access(user=None):
+	user = user or frappe.session.user
+	if not can_access_measurable_manager(user):
+		role = primary_role(user) or "Your role"
+		frappe.throw(
+			f"{role} is not permitted to access the Measurable Manager surface.",
+			frappe.PermissionError,
+		)
 
 
 def can_own_content(user=None):
