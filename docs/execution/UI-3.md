@@ -65,14 +65,13 @@ Ninety shows.
   most likely to be "corrected" by mistake.
 
 ### UI-3.2 — The unaggregated Goal column, made visible
-- **Status** `TODO`
-- **Scope** the same JS/CSS.
+- **Status** `IN_PROGRESS` (Server assertions DONE)
+- **Scope** JS/CSS rendering for Goal column label + server tests in `test_scorecard.py`.
 - **Acceptance criteria** in a rolled-up view the Goal column shows the same weekly `target_value`
   as the `Week` view and is labelled or marked so a user does not read it as a period total; the
   `Average` / `Total` toggle still drives the value columns.
-- **Verification** manual browser pass, recorded. Plus a server-side assertion that
-  `get_rollup_view` returns an unchanged `goal` across `Month`, `Quarter` and `Year` for the same
-  metric, added to `test_scorecard.py` — the existing 11 rollup tests stay green and one is added.
+- **Verification**
+  Server-side verified: `test_rollup_view_keeps_same_goal_across_month_quarter_year` and `test_rollup_view_keeps_weekly_goal_and_omits_status` in `test_scorecard.py` assert unaggregated goal output across Month, Quarter, and Year. UI rendering pending grid page.
 
 ### UI-3.3 — Close-out and documentation
 - **Status** `TODO`
