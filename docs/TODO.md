@@ -521,10 +521,8 @@ this block. **As of 2026-09-29:** no Worksheet Page exists in Frappe v16 — see
 `docs/execution/UI-1.md` for the `Page` + `Workspace` route that replaces it.
 
 ### UI-2 — S2 · UI trigger for "Make it an Issue"
-**Status** `TODO` · code+tests ☐ · reachable ☐ · **Verified 2026-09-28** · plan
-[`UI-2.md`](execution/UI-2.md) · after `UI-1`
-**Where** `create_issue_from_metric` works and is tested, but is **not** whitelisted and has no
-button. Fix `BUG-1` first, or the button will show wrong numbers.
+**Status** `IN_PROGRESS` (UI-2.1 whitelisted & guarded `e54b93d`) · code+tests ☑ · reachable ☐ · **Verified 2026-10-07** · plan [`UI-2.md`](execution/UI-2.md) · after `UI-1`
+**Where** `create_issue_from_metric` is whitelisted and permission-guarded (`e54b93d`). Grid row trigger pending (`UI-2.2`).
 **Done when** an off-track metric in the grid has a "Make it an Issue" action, the Issue is created
 from the browser, and the streak in the description matches `BUG-1`'s corrected behaviour.
 
