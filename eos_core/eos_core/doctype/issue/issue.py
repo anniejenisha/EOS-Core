@@ -31,15 +31,26 @@ class Issue(Document):
 			frappe.throw("Solved issues require a Solution.")
 
 
+@frappe.whitelist()
 def create_issue_from_metric(metric_name, week_start_date=None, owner_user=None):
-	metric = frappe.db.get_value(
-		"EOS Metric",
-		metric_name,
-		["team", "frequency", "target_value", "operator"],
-		as_dict=True,
-	)
-	if not metric:
+	if not frappe.has_permission("Issue", "create"):
+		frappe.throw("No permission to create Issue.", frappe.PermissionError)
+
+	if not frappe.db.exists("EOS Metric", metric_name):
 		frappe.throw(f"Metric {frappe.bold(metric_name)} not found.")
+
+	metrics = frappe.get_list(
+		"EOS Metric",
+		filters={"name": metric_name},
+		fields=["team", "frequency", "target_value", "operator"],
+		limit=1,
+	)
+	if not metrics or not frappe.has_permission("EOS Metric", "read", doc=metric_name):
+		frappe.throw(
+			f"No permission to access metric {frappe.bold(metric_name)}.",
+			frappe.PermissionError,
+		)
+	metric = metrics[0]
 
 	filters = {"metric": metric_name}
 	if week_start_date:

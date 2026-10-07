@@ -104,8 +104,90 @@ class TestIssue(IntegrationTestCase):
 		with self.assertRaises(frappe.ValidationError):
 			create_issue_from_metric("Issue Metric On Track")
 
+	def test_create_issue_from_metric_is_whitelisted(self):
+		self.assertTrue(getattr(create_issue_from_metric, "whitelisted", False))
+
+	def test_create_issue_refused_without_issue_create_permission(self):
+		metric = frappe.get_doc(
+			{
+				"doctype": "EOS Metric",
+				"metric_name": "Observer Test Metric",
+				"owner": "Administrator",
+				"target_value": 100,
+				"operator": ">=",
+				"frequency": "Weekly",
+			}
+		).insert()
+		metric.append("entries", {"week_start_date": "2026-09-14", "actual_value": 70})
+		metric.save()
+
+		user_email = "observer_issue_test@example.com"
+		if not frappe.db.exists("User", user_email):
+			user = frappe.get_doc(
+				{
+					"doctype": "User",
+					"email": user_email,
+					"first_name": "Observer Test",
+					"roles": [{"role": "Observer"}],
+				}
+			).insert(ignore_permissions=True)
+
+		frappe.set_user(user_email)
+		try:
+			with self.assertRaises(frappe.PermissionError):
+				create_issue_from_metric("Observer Test Metric")
+		finally:
+			frappe.set_user("Administrator")
+
+	def test_create_issue_refused_for_metric_outside_user_team(self):
+		team_a = frappe.get_doc({"doctype": "Team", "team_name": "Issue Team A"}).insert()
+		team_b = frappe.get_doc({"doctype": "Team", "team_name": "Issue Team B"}).insert()
+
+		metric_b = frappe.get_doc(
+			{
+				"doctype": "EOS Metric",
+				"metric_name": "Team B Metric",
+				"owner": "Administrator",
+				"team": team_b.name,
+				"target_value": 100,
+				"operator": ">=",
+				"frequency": "Weekly",
+			}
+		).insert()
+		metric_b.append("entries", {"week_start_date": "2026-09-14", "actual_value": 50})
+		metric_b.save()
+
+		user_email = "team_a_user@example.com"
+		if not frappe.db.exists("User", user_email):
+			user = frappe.get_doc(
+				{
+					"doctype": "User",
+					"email": user_email,
+					"first_name": "Team A User",
+					"roles": [{"role": "Team Member"}],
+				}
+			).insert(ignore_permissions=True)
+
+		perm = frappe.get_doc(
+			{
+				"doctype": "User Permission",
+				"user": user_email,
+				"allow": "Team",
+				"for_value": team_a.name,
+			}
+		).insert(ignore_permissions=True)
+
+		frappe.set_user(user_email)
+		try:
+			with self.assertRaises(frappe.PermissionError):
+				create_issue_from_metric("Team B Metric")
+		finally:
+			frappe.set_user("Administrator")
+			frappe.delete_doc("User Permission", perm.name, ignore_permissions=True)
+
 	def tearDown(self):
 		frappe.db.delete("Issue")
 		frappe.db.delete("Scorecard Entry")
 		frappe.db.delete("EOS Metric")
 		frappe.db.delete("Team")
+		frappe.db.delete("User Permission")
