@@ -545,9 +545,9 @@ and the weekly Goal column is visibly *not* aggregated (that asymmetry is Ninety
 the per-team override of company defaults (depends on `PERM-5`).
 
 ### UI-6 — S3 · Bulk UX
-**Status** `TODO` · code+tests ☐ · reachable ☐ · **Verified 2026-09-28** · plan
+**Status** `IN_PROGRESS` (UI-6.1 server export endpoint `export_scorecard_data` built) · code+tests ☑ · reachable ☐ · **Verified 2026-10-07** · plan
 [`UI-6.md`](execution/UI-6.md) · after `UI-1` and `DATA-3`
-**Scope** import/export XLSX/CSV, bulk paste, bulk archive / duplicate / share.
+**Scope** import/export XLSX/CSV, bulk paste, bulk archive / duplicate / share. Server export endpoint `export_scorecard_data` built and tested with permission checking and archived filtering.
 
 ### UI-7 — S2 · Buttons for the three built endpoints nothing can reach
 **Status** `TODO` · code+tests ☐ · reachable ☐ · **Verified 2026-09-28** · *found 2026-09-28 while

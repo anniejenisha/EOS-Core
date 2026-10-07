@@ -328,6 +328,59 @@ class TestScorecard(IntegrationTestCase):
 		self.assertEqual(trends["scorecard"], scorecard_a.name)
 		self.assertTrue(isinstance(trends["metrics"], list))
 
+	def test_export_scorecard_data_excludes_archived_metrics_by_default(self):
+		scorecard = self._seed_weekly_scorecard()
+		m1 = self._seed_metric(scorecard, "Export Active Metric")
+		m2 = self._seed_metric(scorecard, "Export Archived Metric")
+		m2.archived = 1
+		m2.save()
+
+		export_data = scorecard.export_scorecard_data(file_type="csv")
+		metric_names = [m["metric_name"] for m in export_data["metrics"]]
+		self.assertIn("Export Active Metric", metric_names)
+		self.assertNotIn("Export Archived Metric", metric_names)
+
+		export_all = scorecard.export_scorecard_data(file_type="csv", include_archived=True)
+		all_names = [m["metric_name"] for m in export_all["metrics"]]
+		self.assertIn("Export Active Metric", all_names)
+		self.assertIn("Export Archived Metric", all_names)
+
+	def test_export_scorecard_data_refuses_unauthorized_user(self):
+		team_a = frappe.get_doc({"doctype": "Team", "team_name": "Export Team A"}).insert()
+		team_b = frappe.get_doc({"doctype": "Team", "team_name": "Export Team B"}).insert()
+
+		scorecard_a = frappe.get_doc(
+			{"doctype": "Scorecard", "team": team_a.name, "timeframe": "Weekly"}
+		).insert()
+
+		user_email = "export_team_b_user@example.com"
+		if not frappe.db.exists("User", user_email):
+			user = frappe.get_doc(
+				{
+					"doctype": "User",
+					"email": user_email,
+					"first_name": "Team B User",
+					"roles": [{"role": "Team Member"}],
+				}
+			).insert(ignore_permissions=True)
+
+		perm = frappe.get_doc(
+			{
+				"doctype": "User Permission",
+				"user": user_email,
+				"allow": "Team",
+				"for_value": team_b.name,
+			}
+		).insert(ignore_permissions=True)
+
+		frappe.set_user(user_email)
+		try:
+			with self.assertRaises(frappe.PermissionError):
+				scorecard_a.export_scorecard_data()
+		finally:
+			frappe.set_user("Administrator")
+			frappe.delete_doc("User Permission", perm.name, ignore_permissions=True)
+
 	def _seed_weekly_scorecard(self):
 		frappe.get_doc({"doctype": "Team", "team_name": "SC Rollup Team"}).insert()
 		frappe.get_doc(

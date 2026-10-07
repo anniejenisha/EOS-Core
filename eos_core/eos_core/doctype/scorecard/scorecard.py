@@ -250,6 +250,69 @@ class Scorecard(Document):
 			"summary": summary,
 		}
 
+	@frappe.whitelist()
+	def export_scorecard_data(self, file_type="csv", include_archived=False):
+		if not frappe.has_permission("Scorecard", "read", doc=self.name):
+			frappe.throw(
+				f"No permission to export scorecard {frappe.bold(self.name)}.",
+				frappe.PermissionError,
+			)
+
+		filters = {"scorecard": self.name}
+		if not include_archived:
+			filters["archived"] = 0
+
+		metrics = frappe.get_list(
+			"EOS Metric",
+			filters=filters,
+			fields=[
+				"name",
+				"metric_name",
+				"owner_user",
+				"team",
+				"target_value",
+				"operator",
+				"frequency",
+				"unit",
+				"unit_type",
+				"rollup",
+				"archived",
+			],
+			order_by="metric_name asc",
+		)
+
+		metric_rows = []
+		for metric in metrics:
+			entries = frappe.get_all(
+				"Scorecard Entry",
+				filters={"metric": metric["name"]},
+				fields=["week_start_date", "actual_value", "status"],
+				order_by="week_start_date asc",
+			)
+			metric_rows.append(
+				{
+					"metric_name": metric["metric_name"],
+					"owner": metric.get("owner_user"),
+					"team": metric["team"],
+					"target_value": metric["target_value"],
+					"operator": metric["operator"],
+					"frequency": metric["frequency"],
+					"unit": metric.get("unit"),
+					"unit_type": metric.get("unit_type"),
+					"rollup": metric.get("rollup"),
+					"archived": metric["archived"],
+					"entries": entries,
+				}
+			)
+
+		return {
+			"scorecard": self.name,
+			"team": self.team,
+			"timeframe": self.timeframe,
+			"file_type": file_type,
+			"metrics": metric_rows,
+		}
+
 	def _rollup_metrics(self):
 		return frappe.get_all(
 			"EOS Metric",
