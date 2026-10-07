@@ -76,6 +76,59 @@ class TestTeam(IntegrationTestCase):
 			child.save()
 		self.assertIn(grandparent.name, str(context.exception))
 
+	def test_get_scorecard_settings_defaults(self):
+		from eos_core.eos_core.doctype.team.team import get_scorecard_settings
+
+		team = frappe.get_doc({"doctype": "Team", "team_name": "Settings Team"}).insert()
+		settings = get_scorecard_settings(team.name)
+		self.assertEqual(settings["team"], team.name)
+		self.assertTrue(settings["show_owner"])
+		self.assertTrue(settings["show_goal"])
+		self.assertTrue(settings["show_status_colors"])
+		self.assertEqual(settings["default_timeframe"], "Weekly")
+
+	def test_update_scorecard_settings_updates_team(self):
+		from eos_core.eos_core.doctype.team.team import (
+			get_scorecard_settings,
+			update_scorecard_settings,
+		)
+
+		team = frappe.get_doc({"doctype": "Team", "team_name": "Update Settings Team"}).insert()
+		updated = update_scorecard_settings(
+			team.name,
+			{"show_owner": False, "show_status_colors": False, "default_timeframe": "Monthly"},
+		)
+		self.assertFalse(updated["show_owner"])
+		self.assertFalse(updated["show_status_colors"])
+		self.assertEqual(updated["default_timeframe"], "Monthly")
+
+		reloaded = get_scorecard_settings(team.name)
+		self.assertFalse(reloaded["show_owner"])
+		self.assertFalse(reloaded["show_status_colors"])
+		self.assertEqual(reloaded["default_timeframe"], "Monthly")
+
+	def test_update_scorecard_settings_refuses_unprivileged_role(self):
+		from eos_core.eos_core.doctype.team.team import update_scorecard_settings
+
+		team = frappe.get_doc({"doctype": "Team", "team_name": "Refused Settings Team"}).insert()
+		user_email = "team_member_settings_test@example.com"
+		if not frappe.db.exists("User", user_email):
+			user = frappe.get_doc(
+				{
+					"doctype": "User",
+					"email": user_email,
+					"first_name": "Team Member",
+					"roles": [{"role": "Team Member"}],
+				}
+			).insert(ignore_permissions=True)
+
+		frappe.set_user(user_email)
+		try:
+			with self.assertRaises(frappe.PermissionError):
+				update_scorecard_settings(team.name, {"show_owner": False})
+		finally:
+			frappe.set_user("Administrator")
+
 	def tearDown(self):
 		frappe.db.delete("Player")
 		frappe.db.delete("Team")

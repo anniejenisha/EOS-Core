@@ -10,7 +10,14 @@
   "organization",
   "parent_team",
   "leader",
-  "archived"
+  "archived",
+  "section_break_scorecard_settings",
+  "show_owner",
+  "show_goal",
+  "show_rollup",
+  "show_current_period",
+  "show_status_colors",
+  "default_timeframe"
  ],
  "fields": [
   {
@@ -45,6 +52,48 @@
    "fieldname": "archived",
    "fieldtype": "Check",
    "label": "Archived"
+  },
+  {
+   "fieldname": "section_break_scorecard_settings",
+   "fieldtype": "Section Break",
+   "label": "Scorecard Settings"
+  },
+  {
+   "default": "1",
+   "fieldname": "show_owner",
+   "fieldtype": "Check",
+   "label": "Show Owner"
+  },
+  {
+   "default": "1",
+   "fieldname": "show_goal",
+   "fieldtype": "Check",
+   "label": "Show Goal"
+  },
+  {
+   "default": "1",
+   "fieldname": "show_rollup",
+   "fieldtype": "Check",
+   "label": "Show Rollup"
+  },
+  {
+   "default": "1",
+   "fieldname": "show_current_period",
+   "fieldtype": "Check",
+   "label": "Show Current Period"
+  },
+  {
+   "default": "1",
+   "fieldname": "show_status_colors",
+   "fieldtype": "Check",
+   "label": "Show Status Colors"
+  },
+  {
+   "default": "Weekly",
+   "fieldname": "default_timeframe",
+   "fieldtype": "Select",
+   "label": "Default Timeframe",
+   "options": "Weekly\nMonthly\nQuarterly\nAnnual"
   }
  ],
  "grid_page_length": 50,

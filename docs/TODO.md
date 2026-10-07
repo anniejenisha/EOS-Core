@@ -323,10 +323,9 @@ asserts each of the six roles sees or does not see it — with a fourth assertio
 still create a measurable from the scorecard while being denied the Manager surface.
 
 ### PERM-5 — S3 · Worksheet column visibility and status-colour toggles
-**Status** `TODO` · code+tests ☐ · reachable ☐ · **Verified 2026-09-28** · plan [`PERM-5.md`](execution/PERM-5.md)
-**Scope** per-team settings for which columns are visible and whether status colours show.
-`PERM-6` settled where these settings *live* (a team-scoped setting row read by the grid), which
-this item still has to build.
+**Status** `IN_PROGRESS` (PERM-5 backend settings implemented on Team) · code+tests ☑ · reachable ☐ · **Verified 2026-10-07** · plan [`PERM-5.md`](execution/PERM-5.md)
+**Scope** per-team settings for column visibility (`show_owner`, `show_goal`, `show_rollup`, `show_current_period`, `show_status_colors`, `default_timeframe`).
+Backend setting fields added to `Team` doctype with whitelisted `get_scorecard_settings` and `update_scorecard_settings` methods, with permission enforcement for Manager and above.
 
 ### PERM-6 — S1 · Team-scoped row visibility, which no DocPerm can express — **DONE**
 **Status** `DONE` · code+tests ☑ · reachable ☑ · **Closed 2026-09-29**
