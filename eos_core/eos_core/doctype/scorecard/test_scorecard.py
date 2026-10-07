@@ -214,6 +214,18 @@ class TestScorecard(IntegrationTestCase):
 		self.assertNotIn("trend", row)
 		self.assertTrue(view["read_only"])
 
+	def test_rollup_view_keeps_same_goal_across_month_quarter_year(self):
+		scorecard = self._seed_weekly_scorecard()
+		metric = self._seed_metric(scorecard, "SC Goal Consistency")
+		metric.append("entries", {"week_start_date": "2026-10-19", "actual_value": 70})
+		metric.save()
+		m_view = scorecard.get_rollup_view("Month", "2026-10-01", "2026-12-31")
+		q_view = scorecard.get_rollup_view("Quarter", "2026-10-01", "2026-12-31")
+		y_view = scorecard.get_rollup_view("Year", "2026-10-01", "2026-12-31")
+		self.assertEqual(m_view["metrics"][0]["goal"], 100.0)
+		self.assertEqual(q_view["metrics"][0]["goal"], 100.0)
+		self.assertEqual(y_view["metrics"][0]["goal"], 100.0)
+
 	def test_rollup_view_labels_quarter_columns(self):
 		scorecard = self._seed_weekly_scorecard()
 		view = scorecard.get_rollup_view("Quarter", "2026-10-01", "2027-02-28")

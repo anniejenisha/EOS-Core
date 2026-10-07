@@ -527,9 +527,9 @@ this block. **As of 2026-09-29:** no Worksheet Page exists in Frappe v16 — see
 from the browser, and the streak in the description matches `BUG-1`'s corrected behaviour.
 
 ### UI-3 — S2 · "View by" dropdown wired to `get_rollup_view`
-**Status** `TODO` · code+tests ☐ · reachable ☐ · **Verified 2026-09-28** · plan
+**Status** `TODO` · code+tests ☑ · reachable ☐ · **Verified 2026-10-07** · plan
 [`UI-3.md`](execution/UI-3.md) · after `UI-1`
-**Note** the endpoint is built, correct and tested (11 tests in `test_scorecard.py`). Only the UI is
+**Note** the endpoint is built, correct and tested (12 tests in `test_scorecard.py`). Only the UI is
 missing. This is the cheapest parity win in the project.
 **Done when** a `Week / Month / Quarter / Year` control on the grid renders the rolled-up columns,
 and the weekly Goal column is visibly *not* aggregated (that asymmetry is Ninety's, not a bug).
