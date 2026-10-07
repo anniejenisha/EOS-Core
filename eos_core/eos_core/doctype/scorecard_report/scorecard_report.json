@@ -1,5 +1,10 @@
 {
- "actions": [],
+ "actions": [
+  {
+   "action": "send_report",
+   "label": "Send Report"
+  }
+ ],
  "autoname": "format:SCR-{team}-{week_start_date}",
  "creation": "2026-09-15 12:00:00.000000",
  "doctype": "DocType",

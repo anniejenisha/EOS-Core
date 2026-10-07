@@ -130,6 +130,22 @@ class TestRock(IntegrationTestCase):
 		self.assertEqual(summary["linked_todos"], 2)
 		self.assertEqual(later["todos"]["overdue"], 1)
 
+	def test_rock_progress_type_is_float_for_empty_milestones(self):
+		rock = frappe.get_doc(
+			{
+				"doctype": "Rock",
+				"rock_name": "Progress Float Test",
+				"status": "Not Started",
+				"owner_user": "Administrator",
+				"duration_start": "2026-09-01",
+				"duration_end": "2026-11-30",
+			}
+		).insert()
+		self.assertIsInstance(rock.progress, float)
+		self.assertEqual(rock.progress, 0.0)
+		summary = rock.get_rock_summary()
+		self.assertIsInstance(summary["progress"], float)
+
 	def tearDown(self):
 		frappe.db.delete("To Do")
 		frappe.db.delete("Rock")

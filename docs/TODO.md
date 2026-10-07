@@ -550,14 +550,9 @@ the per-team override of company defaults (depends on `PERM-5`).
 **Scope** import/export XLSX/CSV, bulk paste, bulk archive / duplicate / share. Server export endpoint `export_scorecard_data` built and tested with permission checking and archived filtering.
 
 ### UI-7 — S2 · Buttons for the three built endpoints nothing can reach
-**Status** `TODO` · code+tests ☐ · reachable ☐ · **Verified 2026-09-28** · *found 2026-09-28 while
-answering "is Phase 5 done?", not in any prior list* · plan [`UI-7.md`](execution/UI-7.md) · needs
-`DEBT-11`
-**Where** `rock.mark_complete`, `rock.get_rock_summary` (`rock/rock.py`),
-`scorecard_report.send_report` (`scorecard_report/scorecard_report.py`)
-**Problem** all three are `@frappe.whitelist()` and covered by tests, but no user can invoke any of
-them from the browser — only the console or the API. Verified 2026-09-28: all three DocTypes declare
-`"actions": []` in their `*.json`, `hooks.py` sets no `doctype_js`, and `public/js` is an empty
+**Status** `DONE` · code+tests ☑ · reachable ☑ · **Closed 2026-10-07** · plan [`UI-7.md`](execution/UI-7.md)
+**Where** `rock.mark_complete`, `rock.get_rock_summary` (`rock/rock.py`), `scorecard_report.send_report` (`scorecard_report/scorecard_report.py`).
+Form actions added to `rock.json` and `scorecard_report.json`, registered via `doctype_js` in `hooks.py`, with scripts in `eos_core/public/js/rock/rock.js` and `eos_core/public/js/scorecard_report/scorecard_report.js`.
 directory (`public/` holds only `.gitkeep`). The only mentions of `get_rock_summary` and `send_report`
 anywhere in this queue were incidental (a footnote in `DEBT-11` and the `BUG-2` Done row), which is
 how they went unqueued.

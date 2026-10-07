@@ -30,7 +30,7 @@ class Rock(Document):
 	def progress(self):
 		milestones = list(self.milestones)
 		if not milestones:
-			return 0
+			return 0.0
 		completed = sum(1 for milestone in milestones if milestone.completed)
 		return round(completed / len(milestones) * 100, 1)
 

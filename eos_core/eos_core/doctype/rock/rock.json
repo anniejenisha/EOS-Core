@@ -1,5 +1,14 @@
 {
- "actions": [],
+ "actions": [
+  {
+   "action": "mark_complete",
+   "label": "Mark Complete"
+  },
+  {
+   "action": "get_rock_summary",
+   "label": "Rock Summary"
+  }
+ ],
  "autoname": "format:R-{rock_name}",
  "creation": "2026-09-15 10:00:00",
  "doctype": "DocType",
