@@ -250,6 +250,41 @@ class TestScorecard(IntegrationTestCase):
 		with self.assertRaises(frappe.ValidationError):
 			scorecard.get_rollup_view("Month", "2026-11-30", "2026-10-01")
 
+	def test_get_grid_view_returns_periods_metrics_and_summary(self):
+		scorecard = self._seed_weekly_scorecard()
+		group1 = frappe.get_doc(
+			{"doctype": "Measurable Group", "group_name": "Sales", "scorecard": scorecard.name, "order": 1}
+		).insert()
+		metric = self._seed_metric(scorecard, "SC Grid Metric")
+		metric.group = group1.name
+		metric.append("entries", {"week_start_date": "2026-10-19", "actual_value": 120})
+		metric.append("entries", {"week_start_date": "2026-10-26", "actual_value": 80})
+		metric.save()
+
+		grid = scorecard.get_grid_view(as_of="2026-10-26", range_weeks=4)
+		self.assertEqual(grid["scorecard"], scorecard.name)
+		self.assertEqual(len(grid["periods"]), 4)
+		self.assertEqual(len(grid["metrics"]), 1)
+		m = grid["metrics"][0]
+		self.assertEqual(m["metric_name"], "SC Grid Metric")
+		self.assertEqual(m["status_indicator"], "Yellow")
+		self.assertEqual(m["consecutive_off_track"], 1)
+		self.assertIn("summary", grid)
+		self.assertEqual(grid["summary"]["total"], 1)
+		self.assertEqual(grid["summary"]["off_track"], 1)
+
+	def test_get_grid_view_filters_permissions_via_get_list(self):
+		scorecard_a = self._seed_weekly_scorecard()
+		self._seed_metric(scorecard_a, "SC Team A Metric")
+		frappe.get_doc({"doctype": "Team", "team_name": "SC Team B"}).insert()
+		scorecard_b = frappe.get_doc(
+			{"doctype": "Scorecard", "team": "SC Team B", "timeframe": "Weekly"}
+		).insert()
+
+		grid = scorecard_a.get_grid_view(as_of="2026-10-26")
+		self.assertEqual(grid["scorecard"], scorecard_a.name)
+		self.assertEqual(len(grid["metrics"]), 1)
+
 	def _seed_weekly_scorecard(self):
 		frappe.get_doc({"doctype": "Team", "team_name": "SC Rollup Team"}).insert()
 		frappe.get_doc(

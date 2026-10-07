@@ -6,8 +6,14 @@ from eos_core.scorecard_engine import (
 	READ_ONLY_VIEW_BY,
 	ROLLUP_RANGE_WEEKS,
 	aggregate_entries_for_period,
+	completed_period_statuses,
+	compute_status,
+	compute_status_indicator,
+	count_consecutive_off_track,
 	normalise_view_by,
 	rollup_periods,
+	scorecard_summary,
+	sort_metrics_by_group,
 )
 
 
@@ -73,6 +79,110 @@ class Scorecard(Document):
 			"metrics": [
 				self._rollup_metric(metric, periods) for metric in self._rollup_metrics()
 			],
+		}
+
+	@frappe.whitelist()
+	def get_grid_view(self, as_of=None, range_weeks=None):
+		as_of_date = getdate(as_of) if as_of else getdate(nowdate())
+		num_weeks = int(range_weeks) if range_weeks else ROLLUP_RANGE_WEEKS
+		view = normalise_view_by(self.timeframe or "Weekly")
+		period_start = add_days(as_of_date, -((num_weeks - 1) * 7))
+		periods = rollup_periods(view, period_start, as_of_date)
+
+		raw_metrics = frappe.get_list(
+			"EOS Metric",
+			filters={"scorecard": self.name, "archived": 0},
+			fields=[
+				"name",
+				"metric_name",
+				"owner",
+				"team",
+				"target_value",
+				"operator",
+				"min_value",
+				"max_value",
+				"frequency",
+				"unit",
+				"unit_type",
+				"rollup",
+				"is_smart",
+				"formula",
+				"scorecard",
+				"group",
+				"archived",
+				"description",
+			],
+		)
+
+		groups = frappe.get_all(
+			"Measurable Group",
+			filters={"scorecard": self.name},
+			fields=["name", "order"],
+		)
+		group_orders = {g["name"]: g["order"] for g in groups}
+		sorted_metrics = sort_metrics_by_group(raw_metrics, group_orders)
+
+		metric_results = []
+		latest_statuses = []
+
+		for metric in sorted_metrics:
+			entries = frappe.get_all(
+				"Scorecard Entry",
+				filters={"metric": metric["name"]},
+				fields=["week_start_date", "actual_value", "status"],
+				order_by="week_start_date asc",
+			)
+			completed = completed_period_statuses(entries, today=as_of_date)
+			status_indicator = compute_status_indicator(completed)
+			statuses_seq = [e["status"] for e in entries if e.get("status")]
+			consecutive_off = count_consecutive_off_track(statuses_seq)
+
+			period_values = []
+			for period in periods:
+				p_val = aggregate_entries_for_period(
+					entries,
+					period["period_start"],
+					period["period_end"],
+					metric.get("rollup") or "Total",
+				)
+				p_status = compute_status(
+					metric.get("target_value"),
+					p_val,
+					metric.get("operator"),
+					metric.get("min_value"),
+					metric.get("max_value"),
+				)
+				period_values.append(
+					{
+						"period_start": period["period_start"],
+						"period_end": period["period_end"],
+						"label": period["label"],
+						"value": p_val,
+						"status": p_status,
+					}
+				)
+
+			latest_status = period_values[-1]["status"] if period_values else None
+			if latest_status:
+				latest_statuses.append(latest_status)
+
+			m_copy = dict(metric)
+			m_copy["values"] = period_values
+			m_copy["latest_status"] = latest_status
+			m_copy["status_indicator"] = status_indicator
+			m_copy["consecutive_off_track"] = consecutive_off
+			metric_results.append(m_copy)
+
+		summary = scorecard_summary(latest_statuses)
+
+		return {
+			"scorecard": self.name,
+			"team": self.team,
+			"timeframe": self.timeframe,
+			"as_of": as_of_date.isoformat(),
+			"periods": periods,
+			"metrics": metric_results,
+			"summary": summary,
 		}
 
 	def _rollup_metrics(self):
