@@ -15,9 +15,10 @@ from the browser, with the company default and a team override both visible and 
 
 ## Dependencies
 
-- **`PERM-5`** — the setting row and its effective-value reader. Without it there is nothing to
-  toggle, and this item is blocked.
-- **`UI-1`** — the toggles act on the grid, which does not exist yet.
+## Dependencies
+
+- **`PERM-5`** — **closed (backend)**. Setting fields added to `Team` with `get_scorecard_settings` and `update_scorecard_settings` API methods.
+- **`UI-1`** — the toggles act on the grid shell.
 - Independent of `UI-2`, `UI-3`, `UI-4`.
 
 ## Decisions to settle before implementing
@@ -83,11 +84,11 @@ from the browser, with the company default and a team override both visible and 
 
 ## Current Task
 
-`UI-5.1`. Nothing has been implemented; no task has been started.
+`UI-5.1`. Backend `PERM-5` settings API completed on `Team`. Grid toggles pending `UI-1` grid page assembly.
 
 ## Completed
 
-None.
+- Backend `PERM-5` settings API (`get_scorecard_settings` and `update_scorecard_settings`).
 
 ## Decisions
 
