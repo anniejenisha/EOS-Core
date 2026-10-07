@@ -185,6 +185,71 @@ class Scorecard(Document):
 			"summary": summary,
 		}
 
+	@frappe.whitelist()
+	def get_trends_view(self, as_of=None, threshold=None):
+		as_of_date = getdate(as_of) if as_of else getdate(nowdate())
+		min_threshold = int(threshold) if threshold is not None else 3
+
+		raw_metrics = frappe.get_list(
+			"EOS Metric",
+			filters={"scorecard": self.name, "archived": 0},
+			fields=[
+				"name",
+				"metric_name",
+				"owner_user",
+				"team",
+				"target_value",
+				"operator",
+				"min_value",
+				"max_value",
+				"frequency",
+				"unit",
+				"unit_type",
+				"group",
+				"description",
+			],
+		)
+
+		trending_metrics = []
+		all_statuses = []
+
+		for metric in raw_metrics:
+			entries = frappe.get_all(
+				"Scorecard Entry",
+				filters={"metric": metric["name"]},
+				fields=["week_start_date", "actual_value", "status"],
+				order_by="week_start_date asc",
+			)
+			completed = completed_period_statuses(entries, today=as_of_date)
+			status_indicator = compute_status_indicator(completed)
+			statuses_seq = [e["status"] for e in entries if e.get("status")]
+			consecutive_off = count_consecutive_off_track(statuses_seq)
+			last_status = entries[-1]["status"] if entries else None
+
+			if last_status:
+				all_statuses.append(last_status)
+
+			if consecutive_off >= min_threshold:
+				m_copy = dict(metric)
+				m_copy["owner"] = metric.get("owner_user")
+				m_copy["consecutive_off_track"] = consecutive_off
+				m_copy["last_status"] = last_status
+				m_copy["status_indicator"] = status_indicator
+				trending_metrics.append(m_copy)
+
+		trending_metrics.sort(key=lambda m: m["consecutive_off_track"], reverse=True)
+		summary = scorecard_summary(all_statuses)
+
+		return {
+			"scorecard": self.name,
+			"team": self.team,
+			"timeframe": self.timeframe,
+			"as_of": as_of_date.isoformat(),
+			"threshold": min_threshold,
+			"metrics": trending_metrics,
+			"summary": summary,
+		}
+
 	def _rollup_metrics(self):
 		return frappe.get_all(
 			"EOS Metric",

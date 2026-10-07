@@ -535,10 +535,9 @@ missing. This is the cheapest parity win in the project.
 and the weekly Goal column is visibly *not* aggregated (that asymmetry is Ninety's, not a bug).
 
 ### UI-4 — S3 · Trends view
-**Status** `TODO` · code+tests ☐ · reachable ☐ · **Verified 2026-09-28** · plan
+**Status** `IN_PROGRESS` (UI-4.1 server endpoint `get_trends_view` built) · code+tests ☑ · reachable ☐ · **Verified 2026-10-07** · plan
 [`UI-4.md`](execution/UI-4.md) · after `UI-1`
-**Scope** Ninety's read-only, filterable list narrowed to off-track measurables. Only the
-`count_consecutive_off_track` helper exists today.
+**Scope** Ninety's read-only, filterable list narrowed to off-track measurables. Server endpoint `get_trends_view` built and tested.
 
 ### UI-5 — S3 · Scorecard column toggles
 **Status** `TODO` · code+tests ☐ · reachable ☐ · **Verified 2026-09-28** · plan

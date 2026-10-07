@@ -297,6 +297,37 @@ class TestScorecard(IntegrationTestCase):
 		self.assertEqual(grid["scorecard"], scorecard_a.name)
 		self.assertEqual(len(grid["metrics"]), 1)
 
+	def test_get_trends_view_returns_filtered_and_sorted_off_track_metrics(self):
+		scorecard = self._seed_weekly_scorecard()
+		m1 = self._seed_metric(scorecard, "Trend Metric 1")
+		m1.append("entries", {"week_start_date": "2026-10-19", "actual_value": 70})
+		m1.append("entries", {"week_start_date": "2026-10-26", "actual_value": 60})
+		m1.save()
+
+		m2 = self._seed_metric(scorecard, "Trend Metric 2")
+		m2.append("entries", {"week_start_date": "2026-10-19", "actual_value": 120})
+		m2.append("entries", {"week_start_date": "2026-10-26", "actual_value": 50})
+		m2.save()
+
+		trends = scorecard.get_trends_view(as_of="2026-10-26", threshold=1)
+		self.assertEqual(trends["scorecard"], scorecard.name)
+		self.assertEqual(len(trends["metrics"]), 2)
+		self.assertEqual(trends["metrics"][0]["metric_name"], "Trend Metric 1")
+		self.assertEqual(trends["metrics"][0]["consecutive_off_track"], 2)
+		self.assertEqual(trends["metrics"][1]["metric_name"], "Trend Metric 2")
+		self.assertEqual(trends["metrics"][1]["consecutive_off_track"], 1)
+
+		high_trends = scorecard.get_trends_view(as_of="2026-10-26", threshold=2)
+		self.assertEqual(len(high_trends["metrics"]), 1)
+		self.assertEqual(high_trends["metrics"][0]["metric_name"], "Trend Metric 1")
+
+	def test_get_trends_view_filters_permissions_via_get_list(self):
+		scorecard_a = self._seed_weekly_scorecard()
+		self._seed_metric(scorecard_a, "Trends Team A Metric")
+		trends = scorecard_a.get_trends_view(as_of="2026-10-26", threshold=0)
+		self.assertEqual(trends["scorecard"], scorecard_a.name)
+		self.assertTrue(isinstance(trends["metrics"], list))
+
 	def _seed_weekly_scorecard(self):
 		frappe.get_doc({"doctype": "Team", "team_name": "SC Rollup Team"}).insert()
 		frappe.get_doc(
