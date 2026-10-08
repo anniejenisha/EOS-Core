@@ -13,32 +13,33 @@
   "due_date",
   "priority",
   "items",
-  "notes"
+  "notes",
+  "archived"
  ],
  "fields": [
   {
    "fieldname": "todo_name",
    "fieldtype": "Data",
+   "in_list_view": 1,
    "label": "To-Do Name",
    "reqd": 1,
-   "unique": 1,
-   "in_list_view": 1
+   "unique": 1
   },
   {
+   "default": "Not Started",
    "fieldname": "status",
    "fieldtype": "Select",
+   "in_list_view": 1,
    "label": "Status",
-   "options": "Not Started\nIn Progress\nComplete\nDropped",
-   "default": "Not Started",
-   "in_list_view": 1
+   "options": "Not Started\nIn Progress\nComplete\nDropped"
   },
   {
    "fieldname": "owner_user",
    "fieldtype": "Link",
+   "in_list_view": 1,
    "label": "Owner",
    "options": "User",
-   "reqd": 1,
-   "in_list_view": 1
+   "reqd": 1
   },
   {
    "fieldname": "team",
@@ -55,15 +56,15 @@
   {
    "fieldname": "due_date",
    "fieldtype": "Date",
-   "label": "Due Date",
-   "in_list_view": 1
+   "in_list_view": 1,
+   "label": "Due Date"
   },
   {
+   "default": "Medium",
    "fieldname": "priority",
    "fieldtype": "Select",
    "label": "Priority",
-   "options": "Low\nMedium\nHigh",
-   "default": "Medium"
+   "options": "Low\nMedium\nHigh"
   },
   {
    "fieldname": "items",
@@ -75,6 +76,12 @@
    "fieldname": "notes",
    "fieldtype": "Small Text",
    "label": "Notes"
+  },
+  {
+   "default": 0,
+   "fieldname": "archived",
+   "fieldtype": "Check",
+   "label": "Archived"
   }
  ],
  "index_web_search_results": 0,
@@ -86,63 +93,63 @@
  "owner": "Administrator",
  "permissions": [
   {
+   "create": 1,
+   "delete": 1,
+   "read": 1,
    "role": "System Manager",
-   "read": 1,
-   "write": 1,
-   "create": 1,
-   "delete": 1
+   "write": 1
   },
   {
+   "create": 1,
+   "delete": 1,
+   "export": 1,
+   "read": 1,
+   "report": 1,
    "role": "Owner",
-   "read": 1,
-   "write": 1,
-   "create": 1,
-   "delete": 1,
-   "report": 1,
-   "export": 1,
-   "share": 1
+   "share": 1,
+   "write": 1
   },
   {
+   "create": 1,
+   "delete": 1,
+   "export": 1,
+   "read": 1,
+   "report": 1,
    "role": "Admin",
-   "read": 1,
-   "write": 1,
-   "create": 1,
-   "delete": 1,
-   "report": 1,
-   "export": 1,
-   "share": 1
+   "share": 1,
+   "write": 1
   },
   {
+   "create": 1,
+   "delete": 1,
+   "export": 1,
+   "read": 1,
+   "report": 1,
    "role": "Coach",
-   "read": 1,
-   "write": 1,
-   "create": 1,
-   "delete": 1,
-   "report": 1,
-   "export": 1,
-   "share": 1
+   "share": 1,
+   "write": 1
   },
   {
+   "create": 1,
+   "delete": 1,
+   "export": 1,
+   "read": 1,
+   "report": 1,
    "role": "Manager",
-   "read": 1,
-   "write": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
    "create": 1,
    "delete": 1,
-   "report": 1,
-   "export": 1,
-   "share": 1
-  },
-  {
+   "read": 1,
    "role": "Team Member",
-   "read": 1,
-   "write": 1,
-   "create": 1,
-   "delete": 1
+   "write": 1
   },
   {
-   "role": "Observer",
+   "delete": 1,
    "read": 1,
-   "delete": 1
+   "role": "Observer"
   }
  ],
  "sort_field": "creation",

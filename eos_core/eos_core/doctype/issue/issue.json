@@ -18,7 +18,8 @@
   "solution",
   "section_break_source",
   "source",
-  "originating_metric"
+  "originating_metric",
+  "archived"
  ],
  "fields": [
   {
@@ -101,6 +102,12 @@
    "fieldtype": "Link",
    "label": "Originating Metric",
    "options": "EOS Metric"
+  },
+  {
+   "default": 0,
+   "fieldname": "archived",
+   "fieldtype": "Check",
+   "label": "Archived"
   }
  ],
  "links": [],
@@ -123,56 +130,56 @@
    "write": 1
   },
   {
+   "create": 1,
+   "delete": 1,
+   "export": 1,
+   "read": 1,
+   "report": 1,
    "role": "Owner",
-   "read": 1,
-   "write": 1,
-   "create": 1,
-   "delete": 1,
-   "report": 1,
-   "export": 1,
-   "share": 1
+   "share": 1,
+   "write": 1
   },
   {
+   "create": 1,
+   "delete": 1,
+   "export": 1,
+   "read": 1,
+   "report": 1,
    "role": "Admin",
-   "read": 1,
-   "write": 1,
-   "create": 1,
-   "delete": 1,
-   "report": 1,
-   "export": 1,
-   "share": 1
+   "share": 1,
+   "write": 1
   },
   {
+   "create": 1,
+   "delete": 1,
+   "export": 1,
+   "read": 1,
+   "report": 1,
    "role": "Coach",
-   "read": 1,
-   "write": 1,
-   "create": 1,
-   "delete": 1,
-   "report": 1,
-   "export": 1,
-   "share": 1
+   "share": 1,
+   "write": 1
   },
   {
+   "create": 1,
+   "delete": 1,
+   "export": 1,
+   "read": 1,
+   "report": 1,
    "role": "Manager",
-   "read": 1,
-   "write": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
    "create": 1,
    "delete": 1,
-   "report": 1,
-   "export": 1,
-   "share": 1
-  },
-  {
+   "read": 1,
    "role": "Team Member",
-   "read": 1,
-   "write": 1,
-   "create": 1,
-   "delete": 1
+   "write": 1
   },
   {
-   "role": "Observer",
+   "delete": 1,
    "read": 1,
-   "delete": 1
+   "role": "Observer"
   }
  ],
  "row_format": "Dynamic",

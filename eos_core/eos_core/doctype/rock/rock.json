@@ -26,7 +26,8 @@
   "milestones",
   "section_notes",
   "notes",
-  "amended_from"
+  "amended_from",
+  "archived"
  ],
  "fields": [
   {
@@ -38,12 +39,12 @@
    "set_only_once": 1
   },
   {
+   "default": "Not Started",
    "fieldname": "status",
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Status",
-   "options": "Not Started\nIn Progress\nComplete\nDropped",
-   "default": "Not Started"
+   "options": "Not Started\nIn Progress\nComplete\nDropped"
   },
   {
    "fieldname": "owner_user",
@@ -54,11 +55,11 @@
    "reqd": 1
   },
   {
+   "default": "Company",
    "fieldname": "scope",
    "fieldtype": "Select",
    "label": "Scope",
-   "options": "Company\nTeam\nIndividual",
-   "default": "Company"
+   "options": "Company\nTeam\nIndividual"
   },
   {
    "fieldname": "team",
@@ -109,9 +110,15 @@
    "fieldtype": "Link",
    "label": "Amended From",
    "no_copy": 1,
-   "print_hide": 1,
    "options": "Rock",
+   "print_hide": 1,
    "read_only": 1
+  },
+  {
+   "default": 0,
+   "fieldname": "archived",
+   "fieldtype": "Check",
+   "label": "Archived"
   }
  ],
  "index_web_search_results": 0,
@@ -135,55 +142,55 @@
    "write": 1
   },
   {
+   "create": 1,
+   "delete": 1,
+   "export": 1,
+   "read": 1,
+   "report": 1,
    "role": "Owner",
-   "read": 1,
-   "write": 1,
-   "create": 1,
-   "delete": 1,
-   "report": 1,
-   "export": 1,
-   "share": 1
+   "share": 1,
+   "write": 1
   },
   {
+   "create": 1,
+   "delete": 1,
+   "export": 1,
+   "read": 1,
+   "report": 1,
    "role": "Admin",
-   "read": 1,
-   "write": 1,
-   "create": 1,
-   "delete": 1,
-   "report": 1,
-   "export": 1,
-   "share": 1
+   "share": 1,
+   "write": 1
   },
   {
+   "create": 1,
+   "delete": 1,
+   "export": 1,
+   "read": 1,
+   "report": 1,
    "role": "Coach",
-   "read": 1,
-   "write": 1,
-   "create": 1,
-   "delete": 1,
-   "report": 1,
-   "export": 1,
-   "share": 1
+   "share": 1,
+   "write": 1
   },
   {
+   "create": 1,
+   "delete": 1,
+   "export": 1,
+   "read": 1,
+   "report": 1,
    "role": "Manager",
-   "read": 1,
-   "write": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
    "create": 1,
    "delete": 1,
-   "report": 1,
-   "export": 1,
-   "share": 1
-  },
-  {
-   "role": "Team Member",
    "read": 1,
-   "write": 1,
-   "create": 1,
-   "delete": 1
+   "role": "Team Member",
+   "write": 1
   },
   {
-   "role": "Observer",
-   "read": 1
+   "read": 1,
+   "role": "Observer"
   }
  ],
  "sort_field": "creation",
