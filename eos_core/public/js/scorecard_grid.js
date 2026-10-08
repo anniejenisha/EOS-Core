@@ -27,6 +27,7 @@ frappe.eos_core.ScorecardGridPage = class {
 	}
 
 	make() {
+		$(this.page.body).empty();
 		this.render_header();
 		this.render_containers();
 		this.bind_events();
