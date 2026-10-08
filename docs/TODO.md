@@ -517,10 +517,11 @@ missing. This is the cheapest parity win in the project.
 **Done when** a `Week / Month / Quarter / Year` control on the grid renders the rolled-up columns,
 and the weekly Goal column is visibly *not* aggregated (that asymmetry is Ninety's, not a bug).
 
-### UI-4 — S3 · Trends view
-**Status** `IN_PROGRESS` (UI-4.1 server endpoint `get_trends_view` built) · code+tests ☑ · reachable ☐ · **Verified 2026-10-07** · plan
-[`UI-4.md`](execution/UI-4.md) · after `UI-1`
-**Scope** Ninety's read-only, filterable list narrowed to off-track measurables. Server endpoint `get_trends_view` built and tested.
+### UI-4 — S3 · Trends view — **DONE**
+**Status** `DONE` · code+tests ☑ · reachable ☑ · **Closed 2026-10-08** · plan [`UI-4.md`](execution/UI-4.md) · after `UI-1`
+**Scope** Ninety's read-only, filterable list narrowed to off-track measurables.
+**Result** Implemented `get_trends_view` and `get_scorecard_trends` backend endpoints on `Scorecard` controller (reusing `count_consecutive_off_track` engine helper), tested in `test_scorecard.py`. Implemented frontend Trends View in `scorecard_grid.js` with trailing off-track threshold input, group & status filters, summary panel, read-only table, and empty states.
+
 
 ### UI-5 — S3 · Scorecard column toggles — **DONE**
 **Status** `DONE` · code+tests ☑ · reachable ☑ · **Closed 2026-10-08** · plan [`UI-5.md`](execution/UI-5.md) · after `UI-1` and `PERM-5`

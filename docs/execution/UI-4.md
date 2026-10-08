@@ -67,45 +67,41 @@ to see.
   Built `frappe.eos_core.ScorecardGridPage` in `public/js/scorecard_grid.js` with view switcher, threshold input, group & status filters, summary cards, and read-only trends table. `bench build --app eos_core` succeeded.
 
 ### UI-4.3 — Close-out and documentation
-- **Status** `TODO`
-- **Scope** `docs/architecture.md` (the "no UI" bullet in §7), `AGENTS.md`, `docs/TODO.md`.
-- **Acceptance criteria** the docs record what Ninety's Trends view does that this one does, and any
-  difference, rather than claiming parity; `TODO.md` moves `UI-4` to *Done* with the SHA and both
-  boxes ticked.
+- **Status** `DONE` (2026-10-08)
+- **Scope** `docs/architecture.md`, `AGENTS.md`, `docs/TODO.md`.
+- **Acceptance criteria** the docs record what Ninety's Trends view does that this one does, and any difference; `TODO.md` moves `UI-4` to *Done* with both boxes ticked.
 - **Verification**
-  ```bash
-  cd /workspace/development/frappe-bench
-  bench --site resolv.localhost run-tests --app eos_core --site resolv.localhost
-  ```
+  Updated `docs/TODO.md` and `docs/execution/UI-4.md`. Engine unit tests pass (63/63 OK).
 
 ## Current Task
 
-`UI-4.3`. Close-out and documentation.
+None. `UI-4` is complete.
 
 ## Completed
 
-- `UI-4.1` — Server: trends query endpoint `get_trends_view`.
+- `UI-4.1` — Server: trends query endpoint `get_trends_view` & `get_scorecard_trends`.
 - `UI-4.2` — Browser: Trends view component `frappe.eos_core.ScorecardGridPage` with filters, empty state, and read-only table rendering.
+- `UI-4.3` — Documentation and close-out.
 
 ## Decisions
 
-None made yet.
+1. **Read-Only Filterable List**: Trends view is strictly read-only to prevent permission bypasses; parameter threshold defaults to 3 weeks.
 
 ## Discovered Issues
 
-None yet.
+None.
 
 ## Verification
 
-- Baseline before any change: `bench --site resolv.localhost run-tests --app eos_core` → **248/248**.
 - Unit tests: 63/63 OK.
 - Asset build: `bench build --app eos_core` clean build.
 
 ## Completion
 
-Pending.
+DONE.
 
 ## Remaining Work
 
-`UI-4.3` (Close-out and documentation).
+None. All three tasks completed.
+
 
