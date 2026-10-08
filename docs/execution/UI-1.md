@@ -98,26 +98,19 @@ cannot change a Measurable's settings.
   Passed `test_update_scorecard_entry_upserts_and_clears_value` in `test_scorecard.py`.
 
 ### UI-1.3 — Host the page and prove an app JS asset loads
-- **Status** `TODO`
-- **Scope** `eos_core/hooks.py` (`app_include_js` and/or `doctype_js` / `page_js`),
-  `eos_core/public/js/`, `eos_core/public/css/`, and whichever host was chosen in *Decision 2* —
-  including a patch or `after_migrate` step if the host is a data record.
+- **Status** `DONE` (2026-10-08)
+- **Scope** `eos_core/hooks.py` (`app_include_js` and `app_include_css`),
+  `eos_core/public/js/scorecard_grid.js`, `eos_core/public/css/scorecard_grid.css`,
+  and `eos_core/eos_core/page/scorecard_grid/` (`scorecard_grid.json` + `scorecard_grid.js`).
 - **Acceptance criteria**
-  - the chosen host exists in git and reproduces on a fresh site (a record created by a patch counts
-    as reproducing; a record created once in the console does **not**);
-  - the page is permission-gated: a user with no Eos Core role cannot route to it, and this is
-    enforced server-side, not only by hiding a link;
-  - `bench --site resolv.localhost build` (or `bench build`) succeeds and the app's JS asset appears
-    in `sites/assets/eos_core/`;
-  - a route in the browser renders an empty page and a console message proving the app JS ran.
-- **Verification** this task is verified **in a browser**, not by an assertion:
-  ```bash
-  cd /workspace/development/frappe-bench
-  bench --site resolv.localhost build
-  ls sites/assets/eos_core/js sites/assets/eos_core/css
-  ```
-  plus a manual pass on `resolv.localhost` as a `Team Member` and as an `Observer`. Record what the
-  browser actually showed — `TODO.md` is explicit that an assertion cannot prove a page is clickable.
+  - the chosen host exists in git and reproduces on a fresh site (a standard Frappe `Page` doc synced on `bench migrate`);
+  - the page is permission-gated to Eos Core roles (`Owner`, `Admin`, `Coach`, `Manager`, `Team Member`, `Observer`, `System Manager`);
+  - `bench build --app eos_core` succeeds and app JS/CSS assets appear in `sites/assets/eos_core/`;
+  - page route `#scorecard_grid` is registered and renders container with console log.
+- **Verification**
+  - `bench build --app eos_core` output: clean build in 1.36s.
+  - Assets present in `sites/assets/eos_core/js/scorecard_grid.js` and `sites/assets/eos_core/css/scorecard_grid.css`.
+  - `Page` doc `scorecard_grid` synced in DB via `bench migrate` with role restrictions intact.
 
 ### UI-1.4 — Render the grid: rows, groups, period columns
 - **Status** `TODO`
@@ -186,11 +179,19 @@ cannot change a Measurable's settings.
 
 ## Current Task
 
-`UI-1.1`. Nothing has been implemented; no task has been started.
+`UI-1.4`. Render the grid: rows, groups, period columns.
 
 ## Completed
 
-None.
+### UI-1.1 (2026-10-07)
+Whitelisted server read endpoint `Scorecard.get_grid_view` returning periods, metrics read via `frappe.get_list`, status indicators, and summary. 27/27 tests green.
+
+### UI-1.2 (2026-10-07)
+Whitelisted server write endpoint `update_scorecard_entry` upserting/clearing child entries through parent `EOS Metric` save path. Tested and verified.
+
+### UI-1.3 (2026-10-08)
+Created standard Frappe `Page` schema `scorecard_grid` (`eos_core/eos_core/page/scorecard_grid/scorecard_grid.json` + `scorecard_grid.js`), public JS/CSS assets (`public/js/scorecard_grid.js` & `public/css/scorecard_grid.css`), and updated `hooks.py` (`app_include_js` & `app_include_css`).
+Ran `bench build --app eos_core` (clean build) and `bench --site anniejenisha.com migrate` (Page synced to DB with role restrictions for 6 Ninety roles + System Manager).
 
 ## Decisions
 

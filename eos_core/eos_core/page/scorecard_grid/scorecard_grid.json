@@ -1,0 +1,41 @@
+{
+ "content": null,
+ "creation": "2026-10-08 00:00:00.000000",
+ "docstatus": 0,
+ "doctype": "Page",
+ "idx": 0,
+ "modified": "2026-10-08 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Eos Core",
+ "name": "scorecard_grid",
+ "owner": "Administrator",
+ "page_name": "scorecard_grid",
+ "roles": [
+  {
+   "role": "System Manager"
+  },
+  {
+   "role": "Owner"
+  },
+  {
+   "role": "Admin"
+  },
+  {
+   "role": "Coach"
+  },
+  {
+   "role": "Manager"
+  },
+  {
+   "role": "Team Member"
+  },
+  {
+   "role": "Observer"
+  }
+ ],
+ "script": null,
+ "standard": "Yes",
+ "style": null,
+ "system_page": 0,
+ "title": "Scorecard Grid"
+}

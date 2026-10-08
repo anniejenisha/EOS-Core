@@ -25,8 +25,8 @@ app_license = "mit"
 # ------------------
 
 # include js, css files in header of desk.html
-# app_include_css = "/assets/eos_core/css/eos_core.css"
-# app_include_js = "/assets/eos_core/js/eos_core.js"
+app_include_css = "/assets/eos_core/css/scorecard_grid.css"
+app_include_js = "/assets/eos_core/js/scorecard_grid.js"
 
 # include js, css files in header of web template
 # web_include_css = "/assets/eos_core/css/eos_core.css"
