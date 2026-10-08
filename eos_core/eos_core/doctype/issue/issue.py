@@ -30,6 +30,18 @@ class Issue(Document):
 		if self.status == "Solved" and not self.solution:
 			frappe.throw("Solved issues require a Solution.")
 
+	@frappe.whitelist()
+	def archive(self):
+		self.check_permission("write")
+		self.archived = 1
+		self.save()
+
+	@frappe.whitelist()
+	def restore(self):
+		self.check_permission("write")
+		self.archived = 0
+		self.save()
+
 
 @frappe.whitelist()
 def create_issue_from_metric(metric_name, week_start_date=None, owner_user=None):

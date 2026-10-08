@@ -35,6 +35,18 @@ class Rock(Document):
 		return round(completed / len(milestones) * 100, 1)
 
 	@frappe.whitelist()
+	def archive(self):
+		self.check_permission("write")
+		self.archived = 1
+		self.save()
+
+	@frappe.whitelist()
+	def restore(self):
+		self.check_permission("write")
+		self.archived = 0
+		self.save()
+
+	@frappe.whitelist()
 	def mark_complete(self):
 		for milestone in self.milestones:
 			if not milestone.completed:

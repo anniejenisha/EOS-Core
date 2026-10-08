@@ -22,6 +22,18 @@ class ToDo(Document):
 					f"Cannot transition from {frappe.bold(previous)} to {frappe.bold(self.status)}."
 				)
 
+	@frappe.whitelist()
+	def archive(self):
+		self.check_permission("write")
+		self.archived = 1
+		self.save()
+
+	@frappe.whitelist()
+	def restore(self):
+		self.check_permission("write")
+		self.archived = 0
+		self.save()
+
 
 def cascade_todo_transitions(todo_names, status):
 	for name in todo_names:

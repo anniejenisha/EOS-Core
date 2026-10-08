@@ -678,6 +678,79 @@ class TestPermissions(IntegrationTestCase):
 			delete_measurable(dup["name"])
 			self.assertFalse(frappe.db.exists("EOS Metric", dup["name"]))
 
+	def test_archive_and_restore_rock_issue_todo(self):
+		observer = self._make_user("Observer")
+		self._seat(observer, self.team_a.name)
+		rock = self.rows["a"]["Rock"]
+		with self.set_user(observer):
+			with self.assertRaises(frappe.PermissionError):
+				rock.archive()
+		self.assertEqual(frappe.db.get_value("Rock", rock.name, "archived"), 0)
+
+		member = self._make_user("Team Member")
+		self._seat(member, self.team_a.name)
+		with self.set_user(member):
+			todo = frappe.get_doc(
+				{
+					"doctype": "To Do",
+					"todo_name": f"Archive Test Todo {self.counter}",
+					"status": "Not Started",
+					"owner_user": member,
+					"team": self.team_a.name,
+				}
+			).insert()
+			self.created.append(("To Do", todo.name))
+			todo.archive()
+			self.assertEqual(frappe.db.get_value("To Do", todo.name, "archived"), 1)
+
+		manager = self._make_user("Manager")
+		self._seat(manager, self.team_a.name)
+		with self.set_user(manager):
+			issue = frappe.get_doc(
+				{
+					"doctype": "Issue",
+					"issue_name": f"Archive Test Issue {self.counter}",
+					"status": "Identified",
+					"owner_user": manager,
+					"team": self.team_a.name,
+				}
+			).insert()
+			self.created.append(("Issue", issue.name))
+			issue.archive()
+			self.assertEqual(frappe.db.get_value("Issue", issue.name, "archived"), 1)
+			issue.restore()
+			self.assertEqual(frappe.db.get_value("Issue", issue.name, "archived"), 0)
+
+		with self.set_user(manager):
+			rock_for_link = frappe.get_doc(
+				{
+					"doctype": "Rock",
+					"rock_name": f"Linked Rock {self.counter}",
+					"status": "In Progress",
+					"owner_user": manager,
+					"team": self.team_a.name,
+					"duration_start": "2026-09-01",
+					"duration_end": "2026-11-30",
+				}
+			).insert()
+			self.created.append(("Rock", rock_for_link.name))
+			linked_todo = frappe.get_doc(
+				{
+					"doctype": "To Do",
+					"todo_name": f"Linked Archived Todo {self.counter}",
+					"status": "Not Started",
+					"owner_user": manager,
+					"team": self.team_a.name,
+					"rock": rock_for_link.name,
+				}
+			).insert()
+			self.created.append(("To Do", linked_todo.name))
+			linked_todo.archive()
+
+			fetched = frappe.get_doc("To Do", linked_todo.name)
+			self.assertEqual(fetched.rock, rock_for_link.name)
+			self.assertEqual(fetched.archived, 1)
+
 
 def _make_visibility_test(doctype, role, scoped):
 	def test(self):
