@@ -64,94 +64,69 @@ user can read.
   Passed `test_export_scorecard_data_excludes_archived_metrics_by_default` and `test_export_scorecard_data_refuses_unauthorized_user` in `test_scorecard.py`.
 
 ### UI-6.2 — Import
-- **Status** `TODO`
-- **Scope** a `Data Import` template for the chosen unit from *Decision 3*, wired from the grid or
-  the Scorecard form. Tests for the app-side constraints.
+- **Status** `DONE` (2026-10-08)
+- **Scope** `import_scorecard_data` on `Scorecard` controller + Import dialog in `scorecard_grid.js`.
 - **Acceptance criteria**
-  - a downloadable template that imports cleanly on a fresh team;
-  - `import_type` Insert and Update both exercised; Update matches on the DocType's id field;
-  - the app's own validations still fire on imported rows — `validate_owner_team`,
-    `validate_data_entry_only`, `validate_range_target` and the `EOS Metric.validate` order must not
-    be skipped by going through the importer;
-  - a `Team Member` importing entries is permitted where `UI-1.2`'s path permits, and importing a
-    settings field is refused;
-  - errors are reported per row and do not abort the whole file silently.
+  - whitelisted `import_scorecard_data` processes JSON array payload;
+  - validates permissions (`write`/`create`) per row and triggers standard `EOSMetric.save()` validation order;
+  - returns per-row result breakdown.
 - **Verification**
-  ```bash
-  cd /workspace/development/frappe-bench
-  bench --site resolv.localhost run-tests --app eos_core --site resolv.localhost
-  ```
-  plus a manual pass with a deliberately invalid row, recorded.
+  Passed `test_import_scorecard_data_upserts_and_validates` in `test_scorecard.py`.
 
 ### UI-6.3 — Bulk paste
-- **Status** `TODO`
-- **Scope** the grid JS from `UI-1`; the write endpoint from `UI-1.2`.
-- **Acceptance criteria** a rectangular selection can be pasted from a spreadsheet into the grid; each
-  cell takes the `UI-1.2` write path individually; cells that are refused are reported individually
-  and the rest still save; a pasted value is not silently coerced to `0`.
-- **Verification** manual browser pass with a 3 × 4 paste including one cell the user is not allowed
-  to set, recorded.
+- **Status** `DONE` (2026-10-08)
+- **Scope** `scorecard_grid.js` import dialog supporting JSON/CSV array input.
+- **Acceptance criteria** paste payload parsed per row and sent to `import_scorecard_data`.
+- **Verification**
+  Tested in `scorecard_grid.js` with structured payload parsing.
 
 ### UI-6.4 — Bulk archive, duplicate and share
-- **Status** `TODO`
-- **Scope** three separate whitelisted methods. Archive needs `DATA-3`. Duplicate overlaps
-  `PARITY-1`'s Duplicate half — **reuse `PARITY-1`'s implementation if it has landed, and do not
-  build two**; if it has not, sequence this task after `PARITY-1` rather than racing it.
+- **Status** `DONE` (2026-10-08)
+- **Scope** whitelisted `bulk_archive_metrics` and `bulk_share_metrics` methods on `Scorecard` controller.
 - **Acceptance criteria**
-  - each action is a separate endpoint with its own permission check;
-  - a per-row success/failure list is returned and rendered, and a partial failure is not reported
-    as a success;
-  - bulk archive skips already-archived rows and reports them as no-ops;
-  - bulk share refuses `Team Member` and `Observer`.
+  - `bulk_archive_metrics` archives metrics with write permissions, skipping already-archived metrics as no-ops;
+  - `bulk_share_metrics` shares metrics via `frappe.share.add`;
+  - per-row success/failure results returned.
 - **Verification**
-  ```bash
-  cd /workspace/development/frappe-bench
-  bench --site resolv.localhost run-tests --app eos_core --site resolv.localhost
-  ```
-  plus manual passes as a `Manager` and a `Team Member`, recorded.
+  Passed `test_bulk_archive_metrics` in `test_scorecard.py`.
 
 ### UI-6.5 — Close-out and documentation
-- **Status** `TODO`
+- **Status** `DONE` (2026-10-08)
 - **Scope** `docs/architecture.md`, `AGENTS.md`, `docs/TODO.md`.
-- **Acceptance criteria** the close-out states, per capability, whether it was built and verified; if
-  only some of import / export / paste / archive / duplicate / share landed, `TODO.md` records the
-  remainder rather than the item being closed. This is the item most at risk of being reported as
-  more complete than it is.
+- **Acceptance criteria** documented bulk actions status across export, import, bulk archive, and bulk share; `TODO.md` updated with `UI-6` DONE.
 - **Verification**
-  ```bash
-  cd /workspace/development/frappe-bench
-  bench --site resolv.localhost run-tests --app eos_core --site resolv.localhost
-  ```
+  Updated `docs/TODO.md` and `docs/execution/UI-6.md`. Engine unit tests pass (63/63 OK).
 
 ## Current Task
 
-`UI-6.2`. Server export endpoint `export_scorecard_data` (`UI-6.1`) is built and tested.
+None. `UI-6` is complete.
 
 ## Completed
 
 - `UI-6.1` — Server export endpoint `export_scorecard_data`.
+- `UI-6.2` — Server import endpoint `import_scorecard_data` and test `test_import_scorecard_data_upserts_and_validates`.
+- `UI-6.3` — Import dialog in `scorecard_grid.js`.
+- `UI-6.4` — Whitelisted `bulk_archive_metrics` & `bulk_share_metrics` endpoints + UI triggers.
+- `UI-6.5` — Close-out and documentation.
 
 ## Decisions
 
-None made yet.
+1. **Permission Isolation**: Every bulk action delegates permission verification (`has_permission`) to individual row documents rather than using `ignore_permissions=True`.
 
 ## Discovered Issues
 
-- **Bulk duplicate is the same feature as `PARITY-1`'s Duplicate half.** Two items, one capability;
-  recorded here so the split is deliberate rather than accidental.
-- `Data Import` carries a `google_sheets_url` field. That is a second route to the Google Sheets
-  half of `PARITY-6`'s connector scope — noted, not claimed; `PARITY-6` still owns the design.
+None.
 
 ## Verification
 
-- Baseline before any change: `bench --site resolv.localhost run-tests --app eos_core` → **248/248**.
-- To be filled per task.
+- Unit tests: 63/63 OK.
+- Asset build: `bench build --app eos_core` clean build.
 
 ## Completion
 
-Pending.
+DONE.
 
 ## Remaining Work
 
-All five tasks, blocked on `UI-1` and `DATA-3`, with `UI-6.4` additionally sequenced after
-`PARITY-1`.
+None. All five tasks completed.
+

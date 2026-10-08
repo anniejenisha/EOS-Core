@@ -337,6 +337,48 @@ class TestScorecard(IntegrationTestCase):
 		self.assertEqual(res["scorecard"], scorecard.name)
 		self.assertTrue(any(m["metric_name"] == "Top Level API Metric" for m in res["metrics"]))
 
+	def test_import_scorecard_data_upserts_and_validates(self):
+		scorecard = self._seed_weekly_scorecard()
+		m1 = self._seed_metric(scorecard, "Import Metric 1")
+
+		rows = [
+			{
+				"metric_name": "Import Metric 1",
+				"target_value": 150.0,
+				"entries": [{"week_start_date": "2026-10-26", "actual_value": 160.0}],
+			},
+			{
+				"metric_name": "Import Metric 2",
+				"target_value": 80.0,
+				"entries": [{"week_start_date": "2026-10-26", "actual_value": 75.0}],
+			},
+		]
+		res = scorecard.import_scorecard_data(rows)
+		self.assertEqual(res["imported"], 2)
+		self.assertEqual(res["failed"], 0)
+
+		m1.reload()
+		self.assertEqual(m1.target_value, 150.0)
+		self.assertTrue(frappe.db.exists("EOS Metric", {"scorecard": scorecard.name, "metric_name": "Import Metric 2"}))
+
+	def test_bulk_archive_metrics(self):
+		scorecard = self._seed_weekly_scorecard()
+		m1 = self._seed_metric(scorecard, "Bulk Archive Metric 1")
+		m2 = self._seed_metric(scorecard, "Bulk Archive Metric 2")
+
+		res = scorecard.bulk_archive_metrics([m1.name, m2.name])
+		self.assertEqual(res["archived_count"], 2)
+
+		m1.reload()
+		m2.reload()
+		self.assertEqual(m1.archived, 1)
+		self.assertEqual(m2.archived, 1)
+
+		# Second call should report as already_archived no-op
+		res_again = scorecard.bulk_archive_metrics([m1.name])
+		self.assertEqual(res_again["results"][0]["status"], "already_archived")
+
+
 
 	def test_export_scorecard_data_excludes_archived_metrics_by_default(self):
 		scorecard = self._seed_weekly_scorecard()

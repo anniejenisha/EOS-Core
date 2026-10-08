@@ -346,6 +346,161 @@ class Scorecard(Document):
 			],
 		}
 
+	@frappe.whitelist()
+	def import_scorecard_data(self, rows=None):
+		if not frappe.has_permission("Scorecard", "read", doc=self.name):
+			frappe.throw(
+				f"No permission to import into scorecard {frappe.bold(self.name)}.",
+				frappe.PermissionError,
+			)
+
+		if isinstance(rows, str):
+			import json
+			rows = json.loads(rows)
+
+		if not rows or not isinstance(rows, list):
+			return {"results": [], "imported": 0, "failed": 0}
+
+		results = []
+		imported_count = 0
+		failed_count = 0
+
+		for idx, row in enumerate(rows):
+			try:
+				metric_name = row.get("metric_name")
+				if not metric_name:
+					results.append({"index": idx, "success": False, "error": "Missing metric_name"})
+					failed_count += 1
+					continue
+
+				existing = frappe.get_all(
+					"EOS Metric",
+					filters={"scorecard": self.name, "metric_name": metric_name},
+					limit=1,
+				)
+
+				if existing:
+					doc = frappe.get_doc("EOS Metric", existing[0].name)
+					frappe.has_permission("EOS Metric", "write", doc=doc, throw=True)
+				else:
+					frappe.has_permission("EOS Metric", "create", throw=True)
+					doc = frappe.new_doc("EOS Metric")
+					doc.scorecard = self.name
+					doc.team = self.team
+					doc.metric_name = metric_name
+
+				if "target_value" in row:
+					doc.target_value = float(row["target_value"])
+				if "owner_user" in row:
+					doc.owner_user = row["owner_user"]
+				if "unit" in row:
+					doc.unit = row["unit"]
+				if "operator" in row:
+					doc.operator = row["operator"]
+
+				if "entries" in row and isinstance(row["entries"], list):
+					for entry_data in row["entries"]:
+						w_date = str(getdate(entry_data.get("week_start_date")))
+						val = float(entry_data["actual_value"]) if entry_data.get("actual_value") is not None else None
+
+						matched_entry = None
+						for e in doc.get("entries", []):
+							if str(e.week_start_date) == w_date:
+								matched_entry = e
+								break
+
+						if val is None:
+							if matched_entry:
+								doc.remove(matched_entry)
+						else:
+							if matched_entry:
+								matched_entry.actual_value = val
+								matched_entry.is_manual = 1
+							else:
+								doc.append(
+									"entries",
+									{
+										"metric": doc.metric_name,
+										"week_start_date": w_date,
+										"actual_value": val,
+										"is_manual": 1,
+									},
+								)
+
+				doc.save()
+				results.append({"index": idx, "metric": doc.name, "metric_name": metric_name, "success": True})
+				imported_count += 1
+			except Exception as err:
+				results.append({"index": idx, "metric_name": row.get("metric_name"), "success": False, "error": str(err)})
+				failed_count += 1
+
+		return {
+			"scorecard": self.name,
+			"results": results,
+			"imported": imported_count,
+			"failed": failed_count,
+		}
+
+	@frappe.whitelist()
+	def bulk_archive_metrics(self, metric_names=None):
+		if isinstance(metric_names, str):
+			import json
+			metric_names = json.loads(metric_names)
+
+		if not metric_names or not isinstance(metric_names, list):
+			return {"results": [], "archived": 0}
+
+		results = []
+		count = 0
+		for name in metric_names:
+			if not frappe.db.exists("EOS Metric", name):
+				results.append({"name": name, "success": False, "error": "Not found"})
+				continue
+
+			doc = frappe.get_doc("EOS Metric", name)
+			if not frappe.has_permission("EOS Metric", "write", doc=doc):
+				results.append({"name": name, "success": False, "error": "Permission denied"})
+				continue
+
+			if doc.archived:
+				results.append({"name": name, "success": True, "status": "already_archived"})
+				continue
+
+			doc.archived = 1
+			doc.save()
+			results.append({"name": name, "success": True, "status": "archived"})
+			count += 1
+
+		return {"scorecard": self.name, "results": results, "archived_count": count}
+
+	@frappe.whitelist()
+	def bulk_share_metrics(self, metric_names=None, user=None, read=1, write=0, share=0):
+		if not frappe.has_permission("Scorecard", "write", doc=self.name):
+			frappe.throw("No permission to share metrics on this scorecard.", frappe.PermissionError)
+
+		if isinstance(metric_names, str):
+			import json
+			metric_names = json.loads(metric_names)
+
+		if not metric_names or not user:
+			return {"results": [], "shared": 0}
+
+		results = []
+		count = 0
+		for name in metric_names:
+			if not frappe.db.exists("EOS Metric", name):
+				results.append({"name": name, "success": False, "error": "Not found"})
+				continue
+
+			try:
+				frappe.share.add("EOS Metric", name, user, read=read, write=write, share=share)
+				results.append({"name": name, "user": user, "success": True})
+				count += 1
+			except Exception as err:
+				results.append({"name": name, "user": user, "success": False, "error": str(err)})
+
+		return {"scorecard": self.name, "results": results, "shared_count": count}
+
 
 @frappe.whitelist()
 def update_scorecard_entry(metric, week_start_date, actual_value=None):

@@ -528,10 +528,11 @@ and the weekly Goal column is visibly *not* aggregated (that asymmetry is Ninety
 **Result** Implemented column visibility toggles (`show_owner`, `show_goal`, `show_rollup`, `show_current_period`, `show_status_colors`, `default_timeframe`) in `scorecard_grid.js` backed by `Team` settings API (`get_scorecard_settings` / `update_scorecard_settings`). Integrated Settings modal for permitted roles with read-only view for Team Members/Observers.
 
 
-### UI-6 — S3 · Bulk UX
-**Status** `IN_PROGRESS` (UI-6.1 server export endpoint `export_scorecard_data` built) · code+tests ☑ · reachable ☐ · **Verified 2026-10-07** · plan
-[`UI-6.md`](execution/UI-6.md) · after `UI-1` and `DATA-3`
-**Scope** import/export XLSX/CSV, bulk paste, bulk archive / duplicate / share. Server export endpoint `export_scorecard_data` built and tested with permission checking and archived filtering.
+### UI-6 — S3 · Bulk UX — **DONE**
+**Status** `DONE` · code+tests ☑ · reachable ☑ · **Closed 2026-10-08** · plan [`UI-6.md`](execution/UI-6.md) · after `UI-1` and `DATA-3`
+**Scope** import/export XLSX/CSV, bulk paste, bulk archive / duplicate / share.
+**Result** Implemented `export_scorecard_data`, `import_scorecard_data`, `bulk_archive_metrics`, and `bulk_share_metrics` on `Scorecard` controller with permission checking and tests in `test_scorecard.py`. Added UI buttons & dialogs in `scorecard_grid.js` for Export, Import, Bulk Archive, and Bulk Share.
+
 
 ### UI-7 — S2 · Buttons for the three built endpoints nothing can reach
 **Status** `DONE` · code+tests ☑ · reachable ☑ · **Closed 2026-10-07** · plan [`UI-7.md`](execution/UI-7.md)

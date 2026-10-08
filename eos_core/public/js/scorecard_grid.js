@@ -50,6 +50,21 @@ frappe.eos_core.ScorecardGridPage = class {
 					<button type="button" id="scorecard-settings-btn" class="btn btn-default btn-sm" title="${__('Scorecard Settings')}">
 						<i class="fa fa-cog"></i> ${__('Settings')}
 					</button>
+					<button type="button" id="scorecard-export-btn" class="btn btn-default btn-sm" title="${__('Export Data')}">
+						<i class="fa fa-download"></i> ${__('Export')}
+					</button>
+					<button type="button" id="scorecard-import-btn" class="btn btn-default btn-sm" title="${__('Import Data')}">
+						<i class="fa fa-upload"></i> ${__('Import')}
+					</button>
+					<div class="btn-group">
+						<button type="button" class="btn btn-default btn-sm dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+							${__('Bulk Actions')} <span class="caret"></span>
+						</button>
+						<ul class="dropdown-menu dropdown-menu-right">
+							<li><a href="#" id="bulk-archive-btn"><i class="fa fa-archive"></i> ${__('Bulk Archive Metrics')}</a></li>
+							<li><a href="#" id="bulk-share-btn"><i class="fa fa-share-alt"></i> ${__('Bulk Share Metrics')}</a></li>
+						</ul>
+					</div>
 				</div>
 			</div>
 		`);
@@ -137,6 +152,24 @@ frappe.eos_core.ScorecardGridPage = class {
 			me.open_settings_modal();
 		});
 
+		this.wrapper.find('#scorecard-export-btn').on('click', function() {
+			me.export_data();
+		});
+
+		this.wrapper.find('#scorecard-import-btn').on('click', function() {
+			me.open_import_dialog();
+		});
+
+		this.wrapper.find('#bulk-archive-btn').on('click', function(e) {
+			e.preventDefault();
+			me.trigger_bulk_archive();
+		});
+
+		this.wrapper.find('#bulk-share-btn').on('click', function(e) {
+			e.preventDefault();
+			me.trigger_bulk_share();
+		});
+
 		this.wrapper.find('#trends-refresh-btn').on('click', function() {
 			if (me.current_scorecard) {
 				me.fetch_trends();
@@ -215,7 +248,6 @@ frappe.eos_core.ScorecardGridPage = class {
 				if (r.message) {
 					me.team_settings = r.message;
 				}
-				// Check write permissions on Team to see if user can edit settings
 				frappe.model.with_doctype('Team', function() {
 					me.user_can_edit_settings = frappe.model.can_write('Team');
 					if (callback) callback();
@@ -225,6 +257,189 @@ frappe.eos_core.ScorecardGridPage = class {
 				if (callback) callback();
 			}
 		});
+	}
+
+	export_data() {
+		let me = this;
+		if (!this.current_scorecard) {
+			frappe.msgprint(__('Please select a scorecard to export.'));
+			return;
+		}
+
+		frappe.call({
+			method: 'run_doc_method',
+			args: {
+				dt: 'Scorecard',
+				dn: me.current_scorecard,
+				method: 'export_scorecard_data',
+				args: { file_type: 'csv' }
+			},
+			callback: function(r) {
+				if (r.message && r.message.metrics) {
+					let metrics = r.message.metrics;
+					let csvContent = "data:text/csv;charset=utf-8,Metric,Owner,Team,Target,Operator,Frequency,Unit\n";
+					metrics.forEach(m => {
+						csvContent += `"${m.metric_name}","${m.owner || ''}","${m.team || ''}","${m.target_value || ''}","${m.operator || ''}","${m.frequency || ''}","${m.unit || ''}"\n`;
+					});
+					let encodedUri = encodeURI(csvContent);
+					let link = document.createElement("a");
+					link.setAttribute("href", encodedUri);
+					link.setAttribute("download", `${me.current_scorecard}_export.csv`);
+					document.body.appendChild(link);
+					link.click();
+					document.body.removeChild(link);
+					frappe.show_alert({ message: __('Export complete'), indicator: 'green' });
+				}
+			}
+		});
+	}
+
+	open_import_dialog() {
+		let me = this;
+		if (!this.current_scorecard) {
+			frappe.msgprint(__('Please select a scorecard first.'));
+			return;
+		}
+
+		let d = new frappe.ui.Dialog({
+			title: __('Import Scorecard Measurables'),
+			fields: [
+				{
+					fieldname: 'help',
+					fieldtype: 'HTML',
+					options: `<p class="text-muted small">${__('Paste JSON data containing measurables to import into this scorecard.')}</p>`
+				},
+				{
+					label: __('Import Data (JSON)'),
+					fieldname: 'json_data',
+					fieldtype: 'Code',
+					options: 'JSON',
+					default: JSON.stringify([
+						{
+							"metric_name": "Sample Measurable",
+							"target_value": 100,
+							"operator": ">=",
+							"unit": "USD",
+							"entries": [
+								{"week_start_date": frappe.datetime.get_today(), "actual_value": 105}
+							]
+						}
+					], null, 2)
+				}
+			],
+			primary_action_label: __('Import Now'),
+			primary_action(values) {
+				try {
+					let rows = JSON.parse(values.json_data);
+					frappe.call({
+						method: 'run_doc_method',
+						args: {
+							dt: 'Scorecard',
+							dn: me.current_scorecard,
+							method: 'import_scorecard_data',
+							args: { rows: rows }
+						},
+						callback: function(r) {
+							if (r.message) {
+								let res = r.message;
+								frappe.msgprint(__('Imported {0} metrics successfully ({1} failed).', [res.imported, res.failed]));
+								d.hide();
+								me.load_current_view();
+							}
+						}
+					});
+				} catch (err) {
+					frappe.msgprint(__('Invalid JSON payload: {0}', [err.message]));
+				}
+			}
+		});
+		d.show();
+	}
+
+	trigger_bulk_archive() {
+		let me = this;
+		if (!this.current_scorecard) return;
+
+		frappe.confirm(__('Are you sure you want to archive all unarchived measurables on this scorecard?'), function() {
+			frappe.call({
+				method: 'frappe.client.get_list',
+				args: {
+					doctype: 'EOS Metric',
+					filters: { scorecard: me.current_scorecard, archived: 0 },
+					fields: ['name']
+				},
+				callback: function(r) {
+					let names = (r.message || []).map(m => m.name);
+					if (names.length === 0) {
+						frappe.msgprint(__('No unarchived metrics found to archive.'));
+						return;
+					}
+					frappe.call({
+						method: 'run_doc_method',
+						args: {
+							dt: 'Scorecard',
+							dn: me.current_scorecard,
+							method: 'bulk_archive_metrics',
+							args: { metric_names: names }
+						},
+						callback: function(res) {
+							if (res.message) {
+								frappe.show_alert({ message: __('Archived {0} metrics', [res.message.archived_count]), indicator: 'orange' });
+								me.load_current_view();
+							}
+						}
+					});
+				}
+			});
+		});
+	}
+
+	trigger_bulk_share() {
+		let me = this;
+		if (!this.current_scorecard) return;
+
+		let d = new frappe.ui.Dialog({
+			title: __('Bulk Share Metrics'),
+			fields: [
+				{
+					label: __('User to share with'),
+					fieldname: 'user',
+					fieldtype: 'Link',
+					options: 'User',
+					reqd: 1
+				}
+			],
+			primary_action_label: __('Share Now'),
+			primary_action(values) {
+				frappe.call({
+					method: 'frappe.client.get_list',
+					args: {
+						doctype: 'EOS Metric',
+						filters: { scorecard: me.current_scorecard, archived: 0 },
+						fields: ['name']
+					},
+					callback: function(r) {
+						let names = (r.message || []).map(m => m.name);
+						frappe.call({
+							method: 'run_doc_method',
+							args: {
+								dt: 'Scorecard',
+								dn: me.current_scorecard,
+								method: 'bulk_share_metrics',
+								args: { metric_names: names, user: values.user, read: 1, write: 0, share: 0 }
+							},
+							callback: function(res) {
+								if (res.message) {
+									frappe.show_alert({ message: __('Shared {0} metrics with {1}', [res.message.shared_count, values.user]), indicator: 'blue' });
+									d.hide();
+								}
+							}
+						});
+					}
+				});
+			}
+		});
+		d.show();
 	}
 
 	open_settings_modal() {
@@ -429,7 +644,6 @@ frappe.eos_core.ScorecardGridPage = class {
 			if (last_status === 'Off Track') status_class = 'badge-off-track';
 			else if (last_status === 'On Track') status_class = 'badge-on-track';
 
-			// Honor show_status_colors setting
 			let status_html = s.show_status_colors !== false
 				? `<span class="${status_class}">${frappe.utils.escape_html(last_status)}</span>`
 				: `<span class="text-muted font-weight-bold">[${frappe.utils.escape_html(last_status)}]</span>`;
