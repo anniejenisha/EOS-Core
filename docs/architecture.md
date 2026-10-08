@@ -769,9 +769,10 @@ Phase status is in `docs/roadmap.md`; the live work queue with stable IDs is in
   grant `delete` on `Issue` and `To Do` to Observer, because the tables are the specific statement
   and the summary is the general one. If Ninety meant Observers to be read-only everywhere, this is
   the one grant to take back.
-- **`To Do`, `Issue` and `Rock` cannot be archived at all.** Ninety gives every role but Observer an
-  `Archive a To-Do` row and ships an archive view for all three tools, but archiving is a write to an
-  `archived` flag and none of the three carries one. Six other DocTypes do: `EOS Metric`,
-  `Measurable Group`, `Organization`, `Player`, `Team` and `Scorecard`. Queued as `DATA-3`.
+- **`To Do`, `Issue` and `Rock` carry `archived` flags (`Check`, `default: 0`).** Ninety gives every role
+  but Observer an `Archive a To-Do` row and ships an archive view for all three tools. Archiving is a
+  write (`archived = 1`) via whitelisted `archive()` / `restore()` controller methods requiring `write`
+  permission (`DATA-3`, closed 2026-10-08). Six other DocTypes also carry `archived`: `EOS Metric`,
+  `Measurable Group`, `Organization`, `Player`, `Team` and `Scorecard`.
 - Known bugs and the full unwired list are queued in [`TODO.md`](TODO.md); the audit that produced
   them is `docs/roadmap.md` § "Known gaps in Phases 1–5".

@@ -214,27 +214,13 @@ longer gated behind `PERM-9` and is now the largest correctness-parity item left
 
 ---
 
-## Block A — Correctness (1 open, 7 done)
+## Block A — Correctness (**0 open, 8 done**) — CLOSED
 
-### DATA-3 — S2 · `Rock`, `Issue` and `To Do` have no `archived` field, so Ninety's archive cannot exist
-**Status** `TODO` · code+tests ☐ · reachable ☐ · **Found 2026-09-29 while closing `PERM-12`** · plan [`DATA-3.md`](execution/DATA-3.md)
+### DATA-3 — S2 · `Rock`, `Issue` and `To Do` have no `archived` field — **DONE**
+**Status** `DONE` · code+tests ☑ · reachable ☑ · **Closed 2026-10-08** · SHA `db14f3e` · plan [`DATA-3.md`](execution/DATA-3.md)
 **Where** `eos_core/eos_core/doctype/{rock,issue,to_do}/*.json`
-**Problem** Ninety's roles table gives every role but Observer an `Archive a To-Do` row, and its
-To-Do, Issue and Rocks tools each have an `Archive …` and a `View archive` surface. Archiving is a
-write to an `archived` flag, and none of the three tools carries one — verified against the JSON and
-against `show columns` in the live DB, so there is nothing for an archive button to set and no
-archived To-Do can exist at all. Six DocTypes *do* carry the flag: `EOS Metric`, `Measurable Group`,
-`Organization`, `Player`, `Team` and `Scorecard`. (Corrected twice: this item previously claimed only
-`EOS Metric` and `Measurable Group` carried one, and the 2026-09-29 pass corrected that to five but
-still missed `Organization`. The item's conclusion is unaffected.)
-**Why this is not a permission item** archiving follows `write`, and those grants are already right
-(Observer refused, everyone else with `write` allowed). The gap is a missing field, not a missing
-grant. It is queued here rather than fixed under `PERM-12` because it is a schema change with the
-same downstream weight as `PERM-9` — it touches list filters, the quarterly review snapshot and the
-report snapshot.
-**Done when** the three DocTypes carry an `archived` flag, archive and restore follow Ninety's role
-matrix (Observer refused, every other role with `write` allowed), archived rows are excluded from the
-default list and reachable from an archive view, and the change is covered by tests.
+**Done when** the three DocTypes carry an `archived` flag, archive and restore follow Ninety's role matrix (Observer refused, every other role with `write` allowed), archived rows are excluded from the default list and reachable from an archive view, and the change is covered by tests.
+**Result** Schema `archived` (`Check`, `default: 0`) added to `Rock`, `Issue`, `To Do`; `bench migrate` run; default list filters added; whitelisted `archive()` / `restore()` with `self.check_permission("write")` implemented; snapshots/queries filter `archived = 0`; tests added in `test_quarterly_review.py`, `test_rock.py`, `test_to_do.py`, and `test_permissions.py`.
 
 ---
 

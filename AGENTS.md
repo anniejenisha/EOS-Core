@@ -278,11 +278,7 @@ to `owner` implicitly. `Scorecard Report Metric` was renamed the same way for th
 `eos_core/patches/backfill_measurable_owner` backfills it on migrate. Full rationale in
 `docs/architecture.md` §3h.
 
-**Known gaps.** `To Do`, `Issue` and `Rock` have **no `archived` field**, so Ninety's archive and
-archive view cannot exist for them at all (`DATA-3`). Everything else in the roles article now
-matches the grants in the DB, row for row (`PERM-12`, closed 2026-09-29, `676fde8`). Do not
-"simplify" that by deleting the guard in `EOSMetric.on_trash`: Ninety scopes Measurable removal to the
-KPIs the user owns, so a bare `delete` DocPerm row over-grants.
+**Known gaps.** None in Block A (`DATA-3` closed 2026-10-08). `Rock`, `Issue`, and `To Do` carry `archived` fields (`Check`, `default: 0`) with whitelisted `archive()` and `restore()` controller methods enforcing `write` permissions. Everything else in the roles article matches the grants in the DB, row for row (`PERM-12`, closed 2026-09-29, `676fde8`). Do not "simplify" that by deleting the guard in `EOSMetric.on_trash`: Ninety scopes Measurable removal to the KPIs the user owns, so a bare `delete` DocPerm row over-grants.
 
 **A DocPerm cannot scope a role to *some* teams.** That is why `eos_core/permissions.py` exists, and
 it is the thing to remember before touching any grant: adding a flat role to a DocType without the
