@@ -530,9 +530,171 @@ frappe.eos_core.ScorecardGridPage = class {
 	}
 
 	load_current_view() {
-		if (this.current_view === 'trends') {
+		if (this.current_view === 'grid') {
+			this.fetch_grid();
+		} else if (this.current_view === 'trends') {
 			this.fetch_trends();
 		}
+	}
+
+	fetch_grid() {
+		let me = this;
+		if (!this.current_scorecard) return;
+
+		let $container = this.wrapper.find('#grid-view-container');
+		$container.empty().append(`
+			<div class="empty-state-card">
+				<h4>${__('Loading Scorecard Grid...')}</h4>
+				<p class="text-muted">${__('Fetching metrics and period entries...')}</p>
+			</div>
+		`);
+
+		frappe.call({
+			method: 'run_doc_method',
+			args: {
+				dt: 'Scorecard',
+				dn: me.current_scorecard,
+				method: 'get_grid_view'
+			},
+			callback: function(r) {
+				if (r.message) {
+					me.grid_data = r.message;
+					me.render_grid_table();
+				} else {
+					me.render_grid_empty_state(__('No grid data returned for this scorecard.'));
+				}
+			},
+			error: function() {
+				me.render_grid_empty_state(__('Unable to load scorecard grid view or access denied.'));
+			}
+		});
+	}
+
+	render_grid_table() {
+		if (!this.grid_data) return;
+
+		let metrics = this.grid_data.metrics || [];
+		let periods = this.grid_data.periods || [];
+		let summary = this.grid_data.summary || {};
+		let s = this.team_settings;
+		let $container = this.wrapper.find('#grid-view-container');
+		$container.empty();
+
+		if (metrics.length === 0) {
+			this.render_grid_empty_state(__('No measurables on this scorecard.'));
+			return;
+		}
+
+		let col_count = 2;
+		if (s.show_owner !== false) col_count++;
+		if (s.show_goal !== false) col_count++;
+		col_count += periods.length;
+
+		let $tableWrapper = $('<div class="grid-table-wrapper"></div>');
+		let $table = $(`<table class="grid-table"><thead><tr></tr></thead><tbody></tbody></table>`);
+		let $tr_head = $table.find('thead tr');
+
+		$tr_head.append(`<th style="width: 50px; text-align: center;">Status</th>`);
+		$tr_head.append(`<th>Measurable</th>`);
+		if (s.show_owner !== false) {
+			$tr_head.append(`<th>Owner</th>`);
+		}
+		if (s.show_goal !== false) {
+			$tr_head.append(`<th>Goal</th>`);
+		}
+
+		periods.forEach(p => {
+			let label = frappe.utils.escape_html(p.label || '');
+			let date_sub = (p.period_start && p.period_end)
+				? `<div class="period-sub-date">${frappe.datetime.str_to_user(p.period_start)} - ${frappe.datetime.str_to_user(p.period_end)}</div>`
+				: '';
+			$tr_head.append(`<th class="period-header-cell">${label}${date_sub}</th>`);
+		});
+
+		let group_map = new Map();
+		metrics.forEach(m => {
+			let grp_name = m.group || __('Ungrouped');
+			if (!group_map.has(grp_name)) {
+				group_map.set(grp_name, []);
+			}
+			group_map.get(grp_name).push(m);
+		});
+
+		let $tbody = $table.find('tbody');
+
+		group_map.forEach((grp_metrics, grp_name) => {
+			$tbody.append(`
+				<tr class="grid-group-row">
+					<td colspan="${col_count}">
+						<i class="fa fa-folder-open text-muted mr-1"></i> <strong>${frappe.utils.escape_html(grp_name)}</strong>
+						<span class="badge badge-secondary font-weight-normal ml-2">${grp_metrics.length}</span>
+					</td>
+				</tr>
+			`);
+
+			grp_metrics.forEach(m => {
+				let indicator = m.status_indicator || '⚪';
+				let name = m.metric_name || m.name;
+				let owner = m.owner || '-';
+				let target = m.target_value != null ? `${m.operator || ''} ${m.target_value} ${m.unit || ''}`.trim() : '-';
+
+				let indicator_html = s.show_status_colors !== false
+					? `<span style="font-size: 16px;">${indicator}</span>`
+					: `<span class="text-muted font-weight-bold">[${frappe.utils.escape_html(m.latest_status || 'No Data')}]</span>`;
+
+				let $tr = $(`<tr></tr>`);
+				$tr.append(`<td style="text-align: center;">${indicator_html}</td>`);
+				$tr.append(`<td class="font-weight-bold">${frappe.utils.escape_html(name)}</td>`);
+				if (s.show_owner !== false) {
+					$tr.append(`<td>${frappe.utils.escape_html(owner)}</td>`);
+				}
+				if (s.show_goal !== false) {
+					$tr.append(`<td>${frappe.utils.escape_html(target)}</td>`);
+				}
+
+				let period_vals = m.values || [];
+				periods.forEach((p, p_idx) => {
+					let val_item = period_vals[p_idx] || {};
+					let val_text = (val_item.value != null) ? val_item.value : '-';
+					let status = val_item.status || '';
+
+					let cell_class = 'grid-cell-value';
+					if (s.show_status_colors !== false) {
+						if (status === 'On Track') cell_class += ' grid-cell-ontrack';
+						else if (status === 'Off Track') cell_class += ' grid-cell-offtrack';
+					}
+
+					$tr.append(`<td class="${cell_class}">${frappe.utils.escape_html(String(val_text))}</td>`);
+				});
+
+				$tbody.append($tr);
+			});
+		});
+
+		$tableWrapper.append($table);
+		$container.append($tableWrapper);
+
+		if (summary && summary.total != null) {
+			let summary_html = `
+				<div class="scorecard-summary-bar">
+					<span class="summary-item"><strong>${__('Total Measurables:')}</strong> ${summary.total}</span>
+					<span class="summary-item text-success"><strong>${__('On Track:')}</strong> ${summary.on_track}</span>
+					<span class="summary-item text-danger"><strong>${__('Off Track:')}</strong> ${summary.off_track}</span>
+					<span class="summary-item"><strong>${__('% On Track:')}</strong> ${summary.percent_on_track}%</span>
+				</div>
+			`;
+			$container.append(summary_html);
+		}
+	}
+
+	render_grid_empty_state(message) {
+		let $container = this.wrapper.find('#grid-view-container');
+		$container.empty().append(`
+			<div class="empty-state-card">
+				<h4>${__('Scorecard Grid')}</h4>
+				<p class="text-muted">${frappe.utils.escape_html(message)}</p>
+			</div>
+		`);
 	}
 
 	fetch_trends() {

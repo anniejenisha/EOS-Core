@@ -96,6 +96,7 @@ class Scorecard(Document):
 				"name",
 				"metric_name",
 				"owner",
+				"owner_user",
 				"team",
 				"target_value",
 				"operator",
@@ -167,6 +168,7 @@ class Scorecard(Document):
 				latest_statuses.append(latest_status)
 
 			m_copy = dict(metric)
+			m_copy["owner"] = metric.get("owner_user") or metric.get("owner")
 			m_copy["values"] = period_values
 			m_copy["latest_status"] = latest_status
 			m_copy["status_indicator"] = status_indicator

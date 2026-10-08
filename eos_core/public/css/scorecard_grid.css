@@ -273,3 +273,104 @@
 	margin-bottom: 8px;
 	color: var(--sc-text-main);
 }
+
+/* ==========================================================================
+   Grid Table & Period Cell Styling
+   ========================================================================== */
+.grid-table-wrapper {
+	background: var(--sc-card-bg);
+	border: 1px solid var(--sc-border);
+	border-radius: var(--sc-radius);
+	box-shadow: var(--sc-shadow-sm);
+	overflow-x: auto;
+	margin-top: 10px;
+}
+
+.grid-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 13px;
+	white-space: nowrap;
+}
+
+.grid-table th {
+	background: #f8fafc;
+	padding: 10px 14px;
+	text-align: left;
+	font-weight: 600;
+	font-size: 12px;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	color: var(--sc-text-muted);
+	border-bottom: 2px solid var(--sc-border);
+	border-right: 1px solid #f1f5f9;
+}
+
+.grid-table th.period-header-cell {
+	text-align: center;
+	min-width: 95px;
+}
+
+.period-sub-date {
+	font-size: 10px;
+	font-weight: 400;
+	text-transform: none;
+	color: var(--sc-text-muted);
+	margin-top: 2px;
+}
+
+.grid-table td {
+	padding: 10px 14px;
+	border-bottom: 1px solid #f1f5f9;
+	border-right: 1px solid #f1f5f9;
+	color: var(--sc-text-main);
+	vertical-align: middle;
+}
+
+.grid-table tr:hover {
+	background-color: #f8fafc;
+}
+
+.grid-group-row td {
+	background-color: #f1f5f9;
+	font-weight: 600;
+	font-size: 13px;
+	color: #334155;
+	border-top: 1px solid var(--sc-border);
+	border-bottom: 1px solid var(--sc-border);
+}
+
+.grid-cell-value {
+	text-align: center;
+	font-weight: 500;
+}
+
+.grid-cell-ontrack {
+	background-color: #f0fdf4;
+	color: #166534;
+	font-weight: 600;
+}
+
+.grid-cell-offtrack {
+	background-color: #fef2f2;
+	color: #991b1b;
+	font-weight: 600;
+}
+
+.scorecard-summary-bar {
+	display: flex;
+	gap: 24px;
+	background: var(--sc-card-bg);
+	border: 1px solid var(--sc-border);
+	border-radius: var(--sc-radius);
+	padding: 12px 20px;
+	margin-top: 16px;
+	box-shadow: var(--sc-shadow-sm);
+	font-size: 13px;
+}
+
+.summary-item {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+}

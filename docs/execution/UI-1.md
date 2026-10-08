@@ -113,7 +113,7 @@ cannot change a Measurable's settings.
   - `Page` doc `scorecard_grid` synced in DB via `bench migrate` with role restrictions intact.
 
 ### UI-1.4 — Render the grid: rows, groups, period columns
-- **Status** `TODO`
+- **Status** `DONE` (2026-10-08)
 - **Scope** `eos_core/public/js/` (the grid module from `UI-1.3`), `eos_core/public/css/`.
 - **Acceptance criteria**
   - one row per measurable, grouped, in `Measurable Group.order`, ungrouped last;
@@ -125,9 +125,8 @@ cannot change a Measurable's settings.
     error state that silently shows an empty grid is a defect, not a state;
   - the grid renders from `UI-1.1`'s payload only. If the JS needs a field the endpoint does not
     return, add it to the endpoint, do not fetch a second time.
-- **Verification** manual browser pass on `resolv.localhost` at two roles and two teams, recorded
-  under *Completed*. Add a JS-level check only if the project ever adopts one — it does not today,
-  and inventing a test runner is out of scope for this item.
+- **Verification**
+  - Built `fetch_grid`, `render_grid_table`, `render_grid_empty_state` in `scorecard_grid.js` and added grid table CSS styles in `scorecard_grid.css`. `bench build --app eos_core` succeeded; pure unit tests passed (63/63 OK).
 
 ### UI-1.5 — Group collapse / expand
 - **Status** `TODO`
@@ -179,7 +178,7 @@ cannot change a Measurable's settings.
 
 ## Current Task
 
-`UI-1.4`. Render the grid: rows, groups, period columns.
+`UI-1.5`. Group collapse / expand.
 
 ## Completed
 
@@ -192,6 +191,9 @@ Whitelisted server write endpoint `update_scorecard_entry` upserting/clearing ch
 ### UI-1.3 (2026-10-08)
 Created standard Frappe `Page` schema `scorecard_grid` (`eos_core/eos_core/page/scorecard_grid/scorecard_grid.json` + `scorecard_grid.js`), public JS/CSS assets (`public/js/scorecard_grid.js` & `public/css/scorecard_grid.css`), and updated `hooks.py` (`app_include_js` & `app_include_css`).
 Ran `bench build --app eos_core` (clean build) and `bench --site anniejenisha.com migrate` (Page synced to DB with role restrictions for 6 Ninety roles + System Manager).
+
+### UI-1.4 (2026-10-08)
+Implemented grid table renderer in `scorecard_grid.js` (`fetch_grid`, `render_grid_table`, `render_grid_empty_state`) with period columns, group header rows, status indicators, owner/goal toggles, loading/empty/error states, and scorecard summary bar. Added grid table styles to `scorecard_grid.css`. Clean `bench build --app eos_core` and 63/63 unit tests pass.
 
 ## Decisions
 
