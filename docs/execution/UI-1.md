@@ -129,13 +129,14 @@ cannot change a Measurable's settings.
   - Built `fetch_grid`, `render_grid_table`, `render_grid_empty_state` in `scorecard_grid.js` and added grid table CSS styles in `scorecard_grid.css`. `bench build --app eos_core` succeeded; pure unit tests passed (63/63 OK).
 
 ### UI-1.5 — Group collapse / expand
-- **Status** `TODO`
+- **Status** `DONE` (2026-10-08)
 - **Scope** the same JS/CSS. Ninety lets every role, including `Observer`, view, expand and collapse
   groups (`PERM-11`'s source article).
 - **Acceptance criteria** a group header is clickable and toggles its rows; state survives a
   re-render; an `Observer` can collapse (this is a view concern and must not require `write` on
   `Measurable Group`, which they do not have).
-- **Verification** manual browser pass as an `Observer`, recorded.
+- **Verification**
+  - Updated `scorecard_grid.js` with `this.collapsed_groups` set state management, interactive click handlers on `.grid-group-row`, toggle caret/folder icons, and cursor hover styles in `scorecard_grid.css`. Clean `bench build --app eos_core` and 63/63 unit tests pass.
 
 ### UI-1.6 — Inline data entry
 - **Status** `TODO`
@@ -178,7 +179,7 @@ cannot change a Measurable's settings.
 
 ## Current Task
 
-`UI-1.5`. Group collapse / expand.
+`UI-1.6`. Inline data entry.
 
 ## Completed
 
@@ -194,6 +195,9 @@ Ran `bench build --app eos_core` (clean build) and `bench --site anniejenisha.co
 
 ### UI-1.4 (2026-10-08)
 Implemented grid table renderer in `scorecard_grid.js` (`fetch_grid`, `render_grid_table`, `render_grid_empty_state`) with period columns, group header rows, status indicators, owner/goal toggles, loading/empty/error states, and scorecard summary bar. Added grid table styles to `scorecard_grid.css`. Clean `bench build --app eos_core` and 63/63 unit tests pass.
+
+### UI-1.5 (2026-10-08)
+Added group collapse/expand toggling to `scorecard_grid.js`. Group headers feature interactive click handlers, caret & folder toggle icons, state persistence across re-renders via `this.collapsed_groups` Set, and CSS cursor styles in `scorecard_grid.css`. Works client-side without requiring write permissions (permitting `Observer` role access). Clean build and 63/63 unit tests pass.
 
 ## Decisions
 

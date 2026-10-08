@@ -23,6 +23,7 @@ frappe.eos_core.ScorecardGridPage = class {
 			is_override: false
 		};
 		this.user_can_edit_settings = false;
+		this.collapsed_groups = new Set();
 		this.make();
 	}
 
@@ -623,10 +624,16 @@ frappe.eos_core.ScorecardGridPage = class {
 		let $tbody = $table.find('tbody');
 
 		group_map.forEach((grp_metrics, grp_name) => {
+			let is_collapsed = me.collapsed_groups.has(grp_name);
+			let caret_icon = is_collapsed ? 'fa-caret-right' : 'fa-caret-down';
+			let folder_icon = is_collapsed ? 'fa-folder' : 'fa-folder-open';
+
 			$tbody.append(`
-				<tr class="grid-group-row">
+				<tr class="grid-group-row" data-group="${frappe.utils.escape_html(grp_name)}">
 					<td colspan="${col_count}">
-						<i class="fa fa-folder-open text-muted mr-1"></i> <strong>${frappe.utils.escape_html(grp_name)}</strong>
+						<i class="fa ${caret_icon} mr-1 text-muted"></i>
+						<i class="fa ${folder_icon} text-muted mr-1"></i>
+						<strong>${frappe.utils.escape_html(grp_name)}</strong>
 						<span class="badge badge-secondary font-weight-normal ml-2">${grp_metrics.length}</span>
 					</td>
 				</tr>
@@ -642,7 +649,8 @@ frappe.eos_core.ScorecardGridPage = class {
 					? `<span style="font-size: 16px;">${indicator}</span>`
 					: `<span class="text-muted font-weight-bold">[${frappe.utils.escape_html(m.latest_status || 'No Data')}]</span>`;
 
-				let $tr = $(`<tr></tr>`);
+				let display_attr = is_collapsed ? 'style="display: none;"' : '';
+				let $tr = $(`<tr ${display_attr}></tr>`);
 				$tr.append(`<td style="text-align: center;">${indicator_html}</td>`);
 				$tr.append(`<td class="font-weight-bold">${frappe.utils.escape_html(name)}</td>`);
 				if (s.show_owner !== false) {
@@ -669,6 +677,16 @@ frappe.eos_core.ScorecardGridPage = class {
 
 				$tbody.append($tr);
 			});
+		});
+
+		$table.find('.grid-group-row').on('click', function() {
+			let group = $(this).attr('data-group');
+			if (me.collapsed_groups.has(group)) {
+				me.collapsed_groups.delete(group);
+			} else {
+				me.collapsed_groups.add(group);
+			}
+			me.render_grid_table();
 		});
 
 		$tableWrapper.append($table);

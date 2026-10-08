@@ -331,6 +331,11 @@
 	background-color: #f8fafc;
 }
 
+.grid-group-row {
+	cursor: pointer;
+	user-select: none;
+}
+
 .grid-group-row td {
 	background-color: #f1f5f9;
 	font-weight: 600;
@@ -338,6 +343,11 @@
 	color: #334155;
 	border-top: 1px solid var(--sc-border);
 	border-bottom: 1px solid var(--sc-border);
+	transition: background-color 0.15s ease;
+}
+
+.grid-group-row:hover td {
+	background-color: #e2e8f0;
 }
 
 .grid-cell-value {
