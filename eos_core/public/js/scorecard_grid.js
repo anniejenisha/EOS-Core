@@ -10,7 +10,19 @@ frappe.eos_core.ScorecardGridPage = class {
 		});
 		this.current_view = 'grid'; // 'grid' | 'trends'
 		this.current_scorecard = null;
+		this.current_team = null;
 		this.trends_data = null;
+		this.scorecards_list = [];
+		this.team_settings = {
+			show_owner: true,
+			show_goal: true,
+			show_rollup: true,
+			show_current_period: true,
+			show_status_colors: true,
+			default_timeframe: 'Weekly',
+			is_override: false
+		};
+		this.user_can_edit_settings = false;
 		this.make();
 	}
 
@@ -35,6 +47,9 @@ frappe.eos_core.ScorecardGridPage = class {
 						<button type="button" class="btn btn-default btn-sm active" data-view="grid">${__('Scorecard Grid')}</button>
 						<button type="button" class="btn btn-default btn-sm" data-view="trends">${__('Trends View')}</button>
 					</div>
+					<button type="button" id="scorecard-settings-btn" class="btn btn-default btn-sm" title="${__('Scorecard Settings')}">
+						<i class="fa fa-cog"></i> ${__('Settings')}
+					</button>
 				</div>
 			</div>
 		`);
@@ -111,7 +126,15 @@ frappe.eos_core.ScorecardGridPage = class {
 
 		this.wrapper.find('#scorecard-select').on('change', function() {
 			me.current_scorecard = $(this).val();
-			me.load_current_view();
+			let selected_sc = me.scorecards_list.find(sc => sc.name === me.current_scorecard);
+			me.current_team = selected_sc ? selected_sc.team : null;
+			me.load_team_settings(function() {
+				me.load_current_view();
+			});
+		});
+
+		this.wrapper.find('#scorecard-settings-btn').on('click', function() {
+			me.open_settings_modal();
 		});
 
 		this.wrapper.find('#trends-refresh-btn').on('click', function() {
@@ -157,19 +180,137 @@ frappe.eos_core.ScorecardGridPage = class {
 				let $select = me.wrapper.find('#scorecard-select');
 				$select.empty();
 				$select.append(`<option value="">${__('Select Scorecard...')}</option>`);
+				me.scorecards_list = r.message || [];
 
-				if (r.message && r.message.length > 0) {
-					r.message.forEach(sc => {
+				if (me.scorecards_list.length > 0) {
+					me.scorecards_list.forEach(sc => {
 						let label = sc.title || sc.name;
 						if (sc.team) label += ` (${sc.team})`;
 						$select.append(`<option value="${sc.name}">${label}</option>`);
 					});
-					me.current_scorecard = r.message[0].name;
+					me.current_scorecard = me.scorecards_list[0].name;
+					me.current_team = me.scorecards_list[0].team;
 					$select.val(me.current_scorecard);
-					me.load_current_view();
+					me.load_team_settings(function() {
+						me.load_current_view();
+					});
 				}
 			}
 		});
+	}
+
+	load_team_settings(callback) {
+		let me = this;
+		if (!this.current_team) {
+			if (callback) callback();
+			return;
+		}
+
+		frappe.call({
+			method: 'eos_core.eos_core.doctype.team.team.get_scorecard_settings',
+			args: {
+				team_name: me.current_team
+			},
+			callback: function(r) {
+				if (r.message) {
+					me.team_settings = r.message;
+				}
+				// Check write permissions on Team to see if user can edit settings
+				frappe.model.with_doctype('Team', function() {
+					me.user_can_edit_settings = frappe.model.can_write('Team');
+					if (callback) callback();
+				});
+			},
+			error: function() {
+				if (callback) callback();
+			}
+		});
+	}
+
+	open_settings_modal() {
+		let me = this;
+		let s = me.team_settings;
+
+		let is_read_only = !me.user_can_edit_settings;
+		let override_badge = s.is_override
+			? `<span class="badge badge-info">${__('Team Override')}</span>`
+			: `<span class="badge badge-secondary">${__('Company Default')}</span>`;
+
+		let dialog = new frappe.ui.Dialog({
+			title: __('Scorecard Column & View Settings') + ' ' + override_badge,
+			fields: [
+				{
+					fieldname: 'info_section',
+					fieldtype: 'HTML',
+					options: is_read_only
+						? `<p class="text-muted small">${__('Settings are read-only for Team Members and Observers.')}</p>`
+						: `<p class="text-muted small">${__('Configure default column visibility and period settings for this team scorecard.')}</p>`
+				},
+				{
+					label: __('Show Owner Column'),
+					fieldname: 'show_owner',
+					fieldtype: 'Check',
+					default: s.show_owner ? 1 : 0,
+					read_only: is_read_only ? 1 : 0
+				},
+				{
+					label: __('Show Goal Column'),
+					fieldname: 'show_goal',
+					fieldtype: 'Check',
+					default: s.show_goal ? 1 : 0,
+					read_only: is_read_only ? 1 : 0
+				},
+				{
+					label: __('Show Rollup / Total / Average Column'),
+					fieldname: 'show_rollup',
+					fieldtype: 'Check',
+					default: s.show_rollup ? 1 : 0,
+					read_only: is_read_only ? 1 : 0
+				},
+				{
+					label: __('Show Current (In-Progress) Period'),
+					fieldname: 'show_current_period',
+					fieldtype: 'Check',
+					default: s.show_current_period ? 1 : 0,
+					read_only: is_read_only ? 1 : 0
+				},
+				{
+					label: __('Show Status Colors'),
+					fieldname: 'show_status_colors',
+					fieldtype: 'Check',
+					default: s.show_status_colors ? 1 : 0,
+					read_only: is_read_only ? 1 : 0
+				},
+				{
+					label: __('Default Timeframe'),
+					fieldname: 'default_timeframe',
+					fieldtype: 'Select',
+					options: ['Weekly', 'Monthly', 'Quarterly', 'Annual'],
+					default: s.default_timeframe || 'Weekly',
+					read_only: is_read_only ? 1 : 0
+				}
+			],
+			primary_action_label: is_read_only ? null : __('Save Settings'),
+			primary_action(values) {
+				frappe.call({
+					method: 'eos_core.eos_core.doctype.team.team.update_scorecard_settings',
+					args: {
+						team_name: me.current_team,
+						settings: values
+					},
+					callback: function(r) {
+						if (r.message) {
+							me.team_settings = r.message;
+							frappe.show_alert({ message: __('Scorecard settings updated'), indicator: 'green' });
+							dialog.hide();
+							me.load_current_view();
+						}
+					}
+				});
+			}
+		});
+
+		dialog.show();
 	}
 
 	load_current_view() {
@@ -227,6 +368,7 @@ frappe.eos_core.ScorecardGridPage = class {
 		let metrics = this.trends_data.metrics || [];
 		let summary = this.trends_data.summary || {};
 		let threshold = this.trends_data.threshold || 3;
+		let s = this.team_settings;
 
 		// Summary stats
 		this.wrapper.find('#stat-total').text(summary.total || metrics.length || 0);
@@ -262,11 +404,11 @@ frappe.eos_core.ScorecardGridPage = class {
 					<tr>
 						<th style="width: 50px;">Status</th>
 						<th>Measurable</th>
-						<th>Owner</th>
+						${s.show_owner !== false ? `<th>Owner</th>` : ''}
 						<th>Group</th>
 						<th>Trailing Off-Track</th>
 						<th>Last Status</th>
-						<th>Goal</th>
+						${s.show_goal !== false ? `<th>Goal</th>` : ''}
 					</tr>
 				</thead>
 				<tbody></tbody>
@@ -287,15 +429,24 @@ frappe.eos_core.ScorecardGridPage = class {
 			if (last_status === 'Off Track') status_class = 'badge-off-track';
 			else if (last_status === 'On Track') status_class = 'badge-on-track';
 
+			// Honor show_status_colors setting
+			let status_html = s.show_status_colors !== false
+				? `<span class="${status_class}">${frappe.utils.escape_html(last_status)}</span>`
+				: `<span class="text-muted font-weight-bold">[${frappe.utils.escape_html(last_status)}]</span>`;
+
+			let indicator_html = s.show_status_colors !== false
+				? indicator
+				: (last_status === 'Off Track' ? '▲' : (last_status === 'On Track' ? '●' : '○'));
+
 			let $tr = $(`
 				<tr>
-					<td style="text-align: center; font-size: 16px;">${indicator}</td>
+					<td style="text-align: center; font-size: 16px;">${indicator_html}</td>
 					<td class="font-weight-bold">${frappe.utils.escape_html(m.metric_name || m.name)}</td>
-					<td>${frappe.utils.escape_html(owner)}</td>
+					${s.show_owner !== false ? `<td>${frappe.utils.escape_html(owner)}</td>` : ''}
 					<td>${frappe.utils.escape_html(group)}</td>
 					<td><span class="badge-off-track">${consecutive} ${__('weeks')}</span></td>
-					<td><span class="${status_class}">${frappe.utils.escape_html(last_status)}</span></td>
-					<td>${frappe.utils.escape_html(target)}</td>
+					<td>${status_html}</td>
+					${s.show_goal !== false ? `<td>${frappe.utils.escape_html(target)}</td>` : ''}
 				</tr>
 			`);
 			$tbody.append($tr);

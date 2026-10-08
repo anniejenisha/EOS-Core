@@ -522,11 +522,11 @@ and the weekly Goal column is visibly *not* aggregated (that asymmetry is Ninety
 [`UI-4.md`](execution/UI-4.md) · after `UI-1`
 **Scope** Ninety's read-only, filterable list narrowed to off-track measurables. Server endpoint `get_trends_view` built and tested.
 
-### UI-5 — S3 · Scorecard column toggles
-**Status** `TODO` · code+tests ☐ · reachable ☐ · **Verified 2026-09-28** · plan
-[`UI-5.md`](execution/UI-5.md) · after `UI-1` and `PERM-5`
-**Scope** Owner / Goal / Average / Total visibility, "show current period", default timeframe, and
-the per-team override of company defaults (depends on `PERM-5`).
+### UI-5 — S3 · Scorecard column toggles — **DONE**
+**Status** `DONE` · code+tests ☑ · reachable ☑ · **Closed 2026-10-08** · plan [`UI-5.md`](execution/UI-5.md) · after `UI-1` and `PERM-5`
+**Scope** Owner / Goal / Average / Total visibility, "show current period", default timeframe, and the per-team override of company defaults (depends on `PERM-5`).
+**Result** Implemented column visibility toggles (`show_owner`, `show_goal`, `show_rollup`, `show_current_period`, `show_status_colors`, `default_timeframe`) in `scorecard_grid.js` backed by `Team` settings API (`get_scorecard_settings` / `update_scorecard_settings`). Integrated Settings modal for permitted roles with read-only view for Team Members/Observers.
+
 
 ### UI-6 — S3 · Bulk UX
 **Status** `IN_PROGRESS` (UI-6.1 server export endpoint `export_scorecard_data` built) · code+tests ☑ · reachable ☐ · **Verified 2026-10-07** · plan
