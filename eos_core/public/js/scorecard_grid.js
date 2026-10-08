@@ -206,8 +206,8 @@ frappe.eos_core.ScorecardGridPage = class {
 			method: 'frappe.client.get_list',
 			args: {
 				doctype: 'Scorecard',
-				fields: ['name', 'title', 'team', 'timeframe'],
-				order_by: 'title asc'
+				fields: ['name', 'team', 'timeframe'],
+				order_by: 'name asc'
 			},
 			callback: function(r) {
 				let $select = me.wrapper.find('#scorecard-select');
@@ -217,8 +217,8 @@ frappe.eos_core.ScorecardGridPage = class {
 
 				if (me.scorecards_list.length > 0) {
 					me.scorecards_list.forEach(sc => {
-						let label = sc.title || sc.name;
-						if (sc.team) label += ` (${sc.team})`;
+						let label = sc.name;
+						if (sc.team && !sc.name.includes(sc.team)) label += ` (${sc.team})`;
 						$select.append(`<option value="${sc.name}">${label}</option>`);
 					});
 					me.current_scorecard = me.scorecards_list[0].name;
