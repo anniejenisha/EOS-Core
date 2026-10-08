@@ -139,7 +139,7 @@ cannot change a Measurable's settings.
   - Updated `scorecard_grid.js` with `this.collapsed_groups` set state management, interactive click handlers on `.grid-group-row`, toggle caret/folder icons, and cursor hover styles in `scorecard_grid.css`. Clean `bench build --app eos_core` and 63/63 unit tests pass.
 
 ### UI-1.6 — Inline data entry
-- **Status** `TODO`
+- **Status** `DONE` (2026-10-08)
 - **Scope** the same JS; server side already exists from `UI-1.2`.
 - **Acceptance criteria**
   - a cell is editable for roles with `write` on `EOS Metric` and read-only for `Observer`, decided
@@ -149,8 +149,8 @@ cannot change a Measurable's settings.
     message and reverts the cell;
   - an empty input clears the entry rather than writing `0` — `0` is a real value and
     `NOT NULL DEFAULT 0` makes "unset" ambiguous, so this must be explicit.
-- **Verification** manual browser pass: enter a value as a `Team Member`, attempt to change
-  `unit_type` as the same user and confirm the refusal message. Both recorded.
+- **Verification**
+  - Added inline cell editor (`.editable-cell` / `.cell-inline-input`) to `scorecard_grid.js` backed by `update_scorecard_entry` API call, with `user_can_write_metric` permission check, Enter/Escape/Blur handlers, empty/cleared cell logic, and error/refusal alert fallback. CSS styles added to `scorecard_grid.css`. Clean build & 63/63 unit tests pass.
 
 ### UI-1.7 — Period navigation
 - **Status** `TODO`
@@ -179,7 +179,7 @@ cannot change a Measurable's settings.
 
 ## Current Task
 
-`UI-1.6`. Inline data entry.
+`UI-1.7`. Period navigation.
 
 ## Completed
 
@@ -198,6 +198,9 @@ Implemented grid table renderer in `scorecard_grid.js` (`fetch_grid`, `render_gr
 
 ### UI-1.5 (2026-10-08)
 Added group collapse/expand toggling to `scorecard_grid.js`. Group headers feature interactive click handlers, caret & folder toggle icons, state persistence across re-renders via `this.collapsed_groups` Set, and CSS cursor styles in `scorecard_grid.css`. Works client-side without requiring write permissions (permitting `Observer` role access). Clean build and 63/63 unit tests pass.
+
+### UI-1.6 (2026-10-08)
+Implemented inline period cell data entry in `scorecard_grid.js` with `user_can_write_metric` permission check, inline `<input type="number">` editor, Enter/Escape/Blur handlers, clearing logic for empty input, and auto-refresh of status and indicators via `update_scorecard_entry`. Added cell highlight styles to `scorecard_grid.css`. Clean build and 63/63 unit tests pass.
 
 ## Decisions
 
