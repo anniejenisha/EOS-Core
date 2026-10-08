@@ -9,12 +9,11 @@ frappe.pages['scorecard_grid'].on_page_load = function(wrapper) {
 	}
 
 	frappe.require('/assets/eos_core/js/scorecard_grid.js', function() {
-		if (frappe.eos_core && frappe.eos_core.ScorecardGridPage) {
+		if (window.EOSUIPage) {
+			wrapper.eos_ui_page = new window.EOSUIPage(wrapper);
+		} else if (frappe.eos_core && frappe.eos_core.ScorecardGridPage) {
 			$(page.body).empty();
 			wrapper.scorecard_grid_page = new frappe.eos_core.ScorecardGridPage(wrapper);
 		}
 	});
 };
-
-
-

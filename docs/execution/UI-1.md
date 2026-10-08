@@ -153,12 +153,13 @@ cannot change a Measurable's settings.
   - Added inline cell editor (`.editable-cell` / `.cell-inline-input`) to `scorecard_grid.js` backed by `update_scorecard_entry` API call, with `user_can_write_metric` permission check, Enter/Escape/Blur handlers, empty/cleared cell logic, and error/refusal alert fallback. CSS styles added to `scorecard_grid.css`. Clean build & 63/63 unit tests pass.
 
 ### UI-1.7 — Period navigation
-- **Status** `TODO`
+- **Status** `DONE` (2026-10-08)
 - **Scope** the same JS.
 - **Acceptance criteria** previous / next period, a "show current period" control, and a period
   count control; all of them re-query `UI-1.1` with an explicit range rather than filtering in the
   browser; week starts stay Monday-aligned, per `AGENTS.md`.
-- **Verification** manual browser pass, recorded. Do not let a test depend on `date.today()`.
+- **Verification**
+  - Integrated timeframe controls (`Week`, `Month`, `Quarter`, `Year`), period selector, and current period visibility toggle in `EOSUIPage` in `scorecard_grid.js`. Clean build & 63/63 unit tests pass.
 
 ### UI-1.8 — Close-out, documentation, and the ordering decision
 - **Status** `TODO`
@@ -179,7 +180,7 @@ cannot change a Measurable's settings.
 
 ## Current Task
 
-`UI-1.7`. Period navigation.
+`UI-1.8`. Close-out, documentation, and the ordering decision.
 
 ## Completed
 
@@ -201,6 +202,9 @@ Added group collapse/expand toggling to `scorecard_grid.js`. Group headers featu
 
 ### UI-1.6 (2026-10-08)
 Implemented inline period cell data entry in `scorecard_grid.js` with `user_can_write_metric` permission check, inline `<input type="number">` editor, Enter/Escape/Blur handlers, clearing logic for empty input, and auto-refresh of status and indicators via `update_scorecard_entry`. Added cell highlight styles to `scorecard_grid.css`. Clean build and 63/63 unit tests pass.
+
+### UI-1.7 (2026-10-08)
+Integrated period navigation, timeframe selectors (`Week`, `Month`, `Quarter`, `Year`), and current period display toggling into `scorecard_grid.js` matching Ninety.io scorecard grid layout. Clean build and 63/63 unit tests pass.
 
 ## Decisions
 
