@@ -146,6 +146,79 @@ class TestRock(IntegrationTestCase):
 		summary = rock.get_rock_summary()
 		self.assertIsInstance(summary["progress"], float)
 
+	def test_mark_complete_ignores_archived_todos(self):
+		rock = frappe.get_doc(
+			{
+				"doctype": "Rock",
+				"rock_name": "QR Arch Cascade",
+				"status": "Not Started",
+				"owner_user": "Administrator",
+				"duration_start": "2026-09-01",
+				"duration_end": "2026-11-30",
+			}
+		)
+		rock.append("milestones", {"milestone_name": "M1", "completed": 1})
+		rock.insert()
+		active_todo = frappe.get_doc(
+			{
+				"doctype": "To Do",
+				"todo_name": "Active Task",
+				"status": "Not Started",
+				"owner_user": "Administrator",
+				"rock": rock.name,
+			}
+		).insert()
+		archived_todo = frappe.get_doc(
+			{
+				"doctype": "To Do",
+				"todo_name": "Archived Task",
+				"status": "Not Started",
+				"owner_user": "Administrator",
+				"rock": rock.name,
+				"archived": 1,
+			}
+		).insert()
+		rock.mark_complete()
+		self.assertEqual(active_todo.reload().status, "Complete")
+		self.assertEqual(archived_todo.reload().status, "Not Started")
+
+	def test_get_rock_summary_excludes_archived_todos(self):
+		rock = frappe.get_doc(
+			{
+				"doctype": "Rock",
+				"rock_name": "QR Arch Summary",
+				"status": "In Progress",
+				"owner_user": "Administrator",
+				"duration_start": "2026-09-01",
+				"duration_end": "2026-11-30",
+			}
+		).insert()
+		frappe.get_doc(
+			{
+				"doctype": "To Do",
+				"todo_name": "Active Summary Task",
+				"status": "In Progress",
+				"owner_user": "Administrator",
+				"rock": rock.name,
+				"due_date": "2026-10-15",
+			}
+		).insert()
+		frappe.get_doc(
+			{
+				"doctype": "To Do",
+				"todo_name": "Archived Summary Task",
+				"status": "In Progress",
+				"owner_user": "Administrator",
+				"rock": rock.name,
+				"due_date": "2026-10-15",
+				"archived": 1,
+			}
+		).insert()
+
+		summary = rock.get_rock_summary(as_of="2026-09-28")
+		self.assertEqual(summary["linked_todos"], 1)
+		self.assertEqual(summary["todos"]["total"], 1)
+
 	def tearDown(self):
 		frappe.db.delete("To Do")
 		frappe.db.delete("Rock")

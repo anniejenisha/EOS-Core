@@ -46,6 +46,7 @@ class QuarterlyReview(Document):
 		company_rocks = frappe.get_all(
 			"Rock",
 			filters={
+				"archived": 0,
 				"scope": "Company",
 				"duration_start": ["<=", self.period_end],
 				"duration_end": [">=", self.period_start],
@@ -55,6 +56,7 @@ class QuarterlyReview(Document):
 		team_rocks = frappe.get_all(
 			"Rock",
 			filters={
+				"archived": 0,
 				"team": self.team,
 				"duration_start": ["<=", self.period_end],
 				"duration_end": [">=", self.period_start],
@@ -83,6 +85,7 @@ class QuarterlyReview(Document):
 		return frappe.get_all(
 			"To Do",
 			filters=[
+				["archived", "=", 0],
 				["team", "in", (self.team, None)],
 				["due_date", ">=", self.period_start],
 				["due_date", "<=", self.period_end],

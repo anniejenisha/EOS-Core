@@ -46,6 +46,7 @@ class Rock(Document):
 			for todo in frappe.get_all(
 				"To Do",
 				filters={
+					"archived": 0,
 					"rock": self.name,
 					"status": ["in", ("Not Started", "In Progress")],
 				},
@@ -62,7 +63,7 @@ class Rock(Document):
 	@frappe.whitelist()
 	def get_rock_summary(self, as_of=None):
 		todos = frappe.get_all(
-			"To Do", filters={"rock": self.name}, fields=["status", "due_date"]
+			"To Do", filters={"archived": 0, "rock": self.name}, fields=["status", "due_date"]
 		)
 		return {
 			"progress": self.progress,

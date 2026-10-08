@@ -245,6 +245,68 @@ class TestQuarterlyReview(IntegrationTestCase):
 				}
 			).insert()
 
+	def test_archived_rocks_and_todos_excluded(self):
+		org = frappe.get_doc({"doctype": "Organization", "organization_name": "QR Arch Org"}).insert()
+		team = frappe.get_doc({"doctype": "Team", "team_name": "QR Arch Team", "organization": org.name}).insert()
+
+		frappe.get_doc(
+			{
+				"doctype": "Rock",
+				"rock_name": "QR Active Rock",
+				"status": "In Progress",
+				"owner_user": "Administrator",
+				"scope": "Company",
+				"duration_start": "2026-10-01",
+				"duration_end": "2026-12-31",
+			}
+		).insert()
+		frappe.get_doc(
+			{
+				"doctype": "Rock",
+				"rock_name": "QR Archived Rock",
+				"status": "In Progress",
+				"owner_user": "Administrator",
+				"scope": "Company",
+				"duration_start": "2026-10-01",
+				"duration_end": "2026-12-31",
+				"archived": 1,
+			}
+		).insert()
+
+		frappe.get_doc(
+			{
+				"doctype": "To Do",
+				"todo_name": "QR Active Todo",
+				"status": "In Progress",
+				"owner_user": "Administrator",
+				"team": team.name,
+				"due_date": "2026-11-15",
+			}
+		).insert()
+		frappe.get_doc(
+			{
+				"doctype": "To Do",
+				"todo_name": "QR Archived Todo",
+				"status": "In Progress",
+				"owner_user": "Administrator",
+				"team": team.name,
+				"due_date": "2026-11-15",
+				"archived": 1,
+			}
+		).insert()
+
+		review = frappe.get_doc(
+			{
+				"doctype": "Quarterly Review",
+				"team": team.name,
+				"period_start": "2026-10-01",
+				"period_end": "2026-12-31",
+			}
+		).insert()
+
+		self.assertEqual(review.rock_total, 1)
+		self.assertEqual(review.todo_total, 1)
+
 	def tearDown(self):
 		frappe.db.delete("VTO Quarterly Rocks")
 		frappe.db.delete("To Do")

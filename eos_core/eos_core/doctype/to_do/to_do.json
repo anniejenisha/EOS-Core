@@ -84,6 +84,13 @@
    "label": "Archived"
   }
  ],
+ "filters": [
+  [
+   "archived",
+   "=",
+   0
+  ]
+ ],
  "index_web_search_results": 0,
  "istable": 0,
  "links": [],

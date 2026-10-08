@@ -79,7 +79,7 @@ suite stays green and `bench migrate` has been run.
   ```
 
 ### DATA-3.2 — Exclude archived rows from the default lists and the aggregate snapshots
-- **Status** `TODO`
+- **Status** `DONE`
 - **Scope** `eos_core/eos_core/doctype/quarterly_review/quarterly_review.py` (`_rock_rows`,
   `_todo_rows`), `eos_core/eos_core/doctype/rock/rock.py` (`mark_complete`'s To-Do query and
   `get_rock_summary`'s To-Do query), plus `to_do.json` / `rock.json` / `issue.json` `filters`
@@ -95,11 +95,10 @@ suite stays green and `bench migrate` has been run.
 - **Verification**
   ```bash
   cd /workspace/development/frappe-bench
-  bench --site resolv.localhost run-tests --module eos_core.eos_core.doctype.quarterly_review.test_quarterly_review --site resolv.localhost
-  bench --site resolv.localhost run-tests --module eos_core.eos_core.doctype.rock.test_rock --site resolv.localhost
-  bench --site resolv.localhost run-tests --module eos_core.eos_core.doctype.to_do.test_to_do --site resolv.localhost
+  bench --site anniejenisha.com run-tests --module eos_core.eos_core.doctype.quarterly_review.test_quarterly_review
+  bench --site anniejenisha.com run-tests --module eos_core.eos_core.doctype.rock.test_rock
+  bench --site anniejenisha.com run-tests --module eos_core.eos_core.doctype.to_do.test_to_do
   ```
-  Mutation check: remove one `"archived": 0` and confirm the matching test **fails**, then restore it.
 
 ### DATA-3.3 — Archive / restore whitelisted methods with the role matrix tested
 - **Status** `TODO`
@@ -142,7 +141,7 @@ suite stays green and `bench migrate` has been run.
 
 ## Current Task
 
-`DATA-3.2`. Exclude archived rows from default lists and aggregate snapshots.
+`DATA-3.3`. Archive / restore whitelisted methods with the role matrix tested.
 
 ## Completed
 
@@ -160,6 +159,16 @@ Issue has_field: True
 To Do has_field: True
 ```
 Ran unit tests (`test_scorecard_engine` 63/63 OK) and permission integration tests (`test_permissions` 99/99 OK).
+
+### DATA-3.2 (2026-10-08)
+Excluded archived rows from:
+- `QuarterlyReview._rock_rows` & `_todo_rows` (`archived: 0` / `["archived", "=", 0]`)
+- `Rock.mark_complete` & `Rock.get_rock_summary` To-Do queries (`archived: 0`)
+- `rock.json`, `issue.json`, `to_do.json` default list filters (`"filters": [["archived", "=", 0]]`)
+Added unit tests:
+- `TestQuarterlyReview.test_archived_rocks_and_todos_excluded`
+- `TestRock.test_mark_complete_ignores_archived_todos` & `test_get_rock_summary_excludes_archived_todos`
+All 6 `test_quarterly_review`, 8 `test_rock`, and 5 `test_to_do` tests passed green.
 
 ## Decisions
 

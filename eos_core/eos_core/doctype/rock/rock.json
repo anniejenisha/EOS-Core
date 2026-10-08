@@ -121,6 +121,13 @@
    "label": "Archived"
   }
  ],
+ "filters": [
+  [
+   "archived",
+   "=",
+   0
+  ]
+ ],
  "index_web_search_results": 0,
  "is_submittable": 0,
  "links": [],
