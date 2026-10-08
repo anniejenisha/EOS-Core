@@ -386,3 +386,10 @@ def update_scorecard_entry(metric, week_start_date, actual_value=None):
 		"saved": True,
 		"entries_count": len(doc.get("entries", [])),
 	}
+
+
+@frappe.whitelist()
+def get_scorecard_trends(scorecard, threshold=None, as_of=None):
+	doc = frappe.get_doc("Scorecard", scorecard)
+	return doc.get_trends_view(as_of=as_of, threshold=threshold)
+

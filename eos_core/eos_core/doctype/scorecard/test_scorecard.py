@@ -328,6 +328,16 @@ class TestScorecard(IntegrationTestCase):
 		self.assertEqual(trends["scorecard"], scorecard_a.name)
 		self.assertTrue(isinstance(trends["metrics"], list))
 
+	def test_get_scorecard_trends_top_level_api(self):
+		from eos_core.eos_core.doctype.scorecard.scorecard import get_scorecard_trends
+
+		scorecard = self._seed_weekly_scorecard()
+		self._seed_metric(scorecard, "Top Level API Metric")
+		res = get_scorecard_trends(scorecard.name, threshold=0, as_of="2026-10-26")
+		self.assertEqual(res["scorecard"], scorecard.name)
+		self.assertTrue(any(m["metric_name"] == "Top Level API Metric" for m in res["metrics"]))
+
+
 	def test_export_scorecard_data_excludes_archived_metrics_by_default(self):
 		scorecard = self._seed_weekly_scorecard()
 		m1 = self._seed_metric(scorecard, "Export Active Metric")

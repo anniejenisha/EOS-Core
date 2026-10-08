@@ -1,3 +1,149 @@
 .scorecard-grid-container {
-	padding: 15px;
+	padding: 15px 20px;
 }
+
+.scorecard-header-bar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 20px;
+	padding-bottom: 12px;
+	border-bottom: 1px solid var(--border-color, #e2e8f0);
+}
+
+.scorecard-controls {
+	display: flex;
+	gap: 12px;
+	align-items: center;
+}
+
+.view-switcher .btn.active {
+	background-color: var(--primary, #2b6cb0);
+	color: #fff;
+	font-weight: 600;
+}
+
+.trends-filter-bar {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+	align-items: center;
+	background: var(--bg-light-gray, #f7fafc);
+	padding: 12px 16px;
+	border-radius: 8px;
+	border: 1px solid var(--border-color, #e2e8f0);
+	margin-bottom: 20px;
+}
+
+.trends-filter-item {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 13px;
+}
+
+.trends-summary-card {
+	display: flex;
+	gap: 20px;
+	margin-bottom: 20px;
+}
+
+.trends-stat-box {
+	background: var(--card-bg, #ffffff);
+	border: 1px solid var(--border-color, #e2e8f0);
+	border-radius: 8px;
+	padding: 12px 18px;
+	min-width: 140px;
+}
+
+.trends-stat-title {
+	font-size: 11px;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	color: var(--text-muted, #718096);
+	margin-bottom: 4px;
+}
+
+.trends-stat-value {
+	font-size: 20px;
+	font-weight: 700;
+	color: var(--text-color, #2d3748);
+}
+
+.trends-table-wrapper {
+	background: var(--card-bg, #ffffff);
+	border: 1px solid var(--border-color, #e2e8f0);
+	border-radius: 8px;
+	overflow: hidden;
+}
+
+.trends-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 13px;
+}
+
+.trends-table th {
+	background: var(--bg-light-gray, #f8fafc);
+	padding: 10px 14px;
+	text-align: left;
+	font-weight: 600;
+	color: var(--text-muted, #4a5568);
+	border-bottom: 1px solid var(--border-color, #e2e8f0);
+}
+
+.trends-table td {
+	padding: 12px 14px;
+	border-bottom: 1px solid var(--border-color, #edf2f7);
+	vertical-align: middle;
+}
+
+.trends-table tr:last-child td {
+	border-bottom: none;
+}
+
+.trends-table tr:hover {
+	background-color: var(--hover-color, #f7fafc);
+}
+
+.badge-off-track {
+	background-color: #fed7d7;
+	color: #9b2c2c;
+	font-weight: 600;
+	padding: 3px 8px;
+	border-radius: 12px;
+	font-size: 12px;
+}
+
+.badge-on-track {
+	background-color: #c6f6d5;
+	color: #22543d;
+	font-weight: 600;
+	padding: 3px 8px;
+	border-radius: 12px;
+	font-size: 12px;
+}
+
+.badge-no-status {
+	background-color: #edf2f7;
+	color: #4a5568;
+	padding: 3px 8px;
+	border-radius: 12px;
+	font-size: 12px;
+}
+
+.empty-state-card {
+	text-align: center;
+	padding: 40px 20px;
+	background: var(--card-bg, #ffffff);
+	border: 1px dashed var(--border-color, #cbd5e0);
+	border-radius: 8px;
+	color: var(--text-muted, #718096);
+	margin-top: 15px;
+}
+
+.empty-state-card h4 {
+	margin-bottom: 8px;
+	color: var(--text-color, #2d3748);
+}
+

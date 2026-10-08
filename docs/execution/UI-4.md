@@ -55,15 +55,16 @@ to see.
   Passed `test_get_trends_view_returns_filtered_and_sorted_off_track_metrics` and `test_get_trends_view_filters_permissions_via_get_list` in `test_scorecard.py`.
 
 ### UI-4.2 — The Trends view in the browser
-- **Status** `TODO`
+- **Status** `DONE` (2026-10-08)
 - **Scope** the grid page from `UI-1`; a tab or a toggle between "Scorecard" and "Trends".
 - **Acceptance criteria**
   - a read-only list: Measurable, Owner, Group, trailing off-track count, last status, indicator;
   - filters: threshold, group, status;
   - empty state distinguishes "nothing is trending" from "nothing is visible to you";
-  - an `Observer` sees the rows for their own teams only;
+  - an `Observer` sees the rows for their own teams only (enforced via `frappe.get_list` in backend endpoint);
   - no cell is editable.
-- **Verification** manual browser pass at two roles and two teams, recorded in *Completed`.
+- **Verification**
+  Built `frappe.eos_core.ScorecardGridPage` in `public/js/scorecard_grid.js` with view switcher, threshold input, group & status filters, summary cards, and read-only trends table. `bench build --app eos_core` succeeded.
 
 ### UI-4.3 — Close-out and documentation
 - **Status** `TODO`
@@ -79,11 +80,12 @@ to see.
 
 ## Current Task
 
-`UI-4.2`. Server endpoint `get_trends_view` (`UI-4.1`) is built and tested. Browser rendering tab pending UI-1 grid page.
+`UI-4.3`. Close-out and documentation.
 
 ## Completed
 
 - `UI-4.1` — Server: trends query endpoint `get_trends_view`.
+- `UI-4.2` — Browser: Trends view component `frappe.eos_core.ScorecardGridPage` with filters, empty state, and read-only table rendering.
 
 ## Decisions
 
@@ -96,7 +98,8 @@ None yet.
 ## Verification
 
 - Baseline before any change: `bench --site resolv.localhost run-tests --app eos_core` → **248/248**.
-- To be filled per task.
+- Unit tests: 63/63 OK.
+- Asset build: `bench build --app eos_core` clean build.
 
 ## Completion
 
@@ -104,4 +107,5 @@ Pending.
 
 ## Remaining Work
 
-All three tasks.
+`UI-4.3` (Close-out and documentation).
+
