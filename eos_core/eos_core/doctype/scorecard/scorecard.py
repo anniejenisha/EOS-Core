@@ -59,12 +59,14 @@ class Scorecard(Document):
 				f"Only the Weekly Scorecard can be rolled up. Open the team's "
 				f"{frappe.bold(self.timeframe)} Scorecard to read its own data."
 			)
-		period_end = getdate(range_end) if range_end else nowdate()
+		period_end = getdate(range_end) if range_end else getdate(nowdate())
 		period_start = (
 			getdate(range_start)
 			if range_start
-			else add_days(period_end, -ROLLUP_RANGE_WEEKS * 7)
+			else getdate(add_days(period_end, -ROLLUP_RANGE_WEEKS * 7))
 		)
+		period_start = getdate(period_start)
+		period_end = getdate(period_end)
 		if period_start > period_end:
 			frappe.throw("The start of the date range must not be after its end.")
 		periods = rollup_periods(view, period_start, period_end)
@@ -319,8 +321,19 @@ class Scorecard(Document):
 		return frappe.get_all(
 			"EOS Metric",
 			filters={"scorecard": self.name, "archived": 0},
-			fields=["name", "owner_user", "group", "target_value", "rollup"],
-			order_by="name asc",
+			fields=[
+				"name",
+				"metric_name",
+				"owner_user",
+				"team",
+				"target_value",
+				"operator",
+				"unit",
+				"unit_type",
+				"rollup",
+				"group",
+			],
+			order_by="metric_name asc",
 		)
 
 	def _rollup_metric(self, metric, periods):
@@ -330,18 +343,27 @@ class Scorecard(Document):
 			fields=["week_start_date", "actual_value"],
 			order_by="week_start_date asc",
 		)
+		m_name = metric.get("metric_name") or metric.name
 		return {
+			"id": metric.name,
 			"name": metric.name,
-			"owner": metric.owner_user,
-			"group": metric.group,
-			"goal": metric.target_value,
-			"rollup": metric.rollup,
+			"title": m_name,
+			"metric_name": m_name,
+			"owner": metric.get("owner_user"),
+			"team": metric.get("team") or "",
+			"goal": metric.get("target_value"),
+			"goal_op": metric.get("operator") or ">=",
+			"unit": metric.get("unit") or "",
+			"rollup": metric.get("rollup") or "Total",
+			"group": metric.get("group"),
 			"values": [
 				{
 					"period_start": period["period_start"],
 					"period_end": period["period_end"],
+					"label": period.get("label"),
+					"key": period.get("period_start"),
 					"value": aggregate_entries_for_period(
-						entries, period["period_start"], period["period_end"], metric.rollup
+						entries, period["period_start"], period["period_end"], metric.get("rollup") or "Total"
 					),
 				}
 				for period in periods
@@ -400,6 +422,9 @@ class Scorecard(Document):
 				if "operator" in row:
 					doc.operator = row["operator"]
 
+				if doc.is_new():
+					doc.save()
+
 				if "entries" in row and isinstance(row["entries"], list):
 					for entry_data in row["entries"]:
 						w_date = str(getdate(entry_data.get("week_start_date")))
@@ -422,7 +447,7 @@ class Scorecard(Document):
 								doc.append(
 									"entries",
 									{
-										"metric": doc.metric_name,
+										"metric": doc.name,
 										"week_start_date": w_date,
 										"actual_value": val,
 										"is_manual": 1,
@@ -549,4 +574,50 @@ def update_scorecard_entry(metric, week_start_date, actual_value=None):
 def get_scorecard_trends(scorecard, threshold=None, as_of=None):
 	doc = frappe.get_doc("Scorecard", scorecard)
 	return doc.get_trends_view(as_of=as_of, threshold=threshold)
+
+
+@frappe.whitelist()
+def get_grid_view(scorecard=None, team=None, timeframe=None, as_of=None, range_weeks=None, periods=None):
+	num_weeks = int(range_weeks or periods or ROLLUP_RANGE_WEEKS)
+	if not scorecard:
+		filters = {}
+		if team and team != "All Teams":
+			filters["team"] = team
+		if timeframe:
+			filters["timeframe"] = timeframe
+		scorecards = frappe.get_list("Scorecard", filters=filters, limit=1)
+		if not scorecards and team and team != "All Teams":
+			scorecards = frappe.get_list("Scorecard", filters={"team": team}, limit=1)
+		if not scorecards:
+			scorecards = frappe.get_list("Scorecard", limit=1)
+		if not scorecards:
+			return {"metrics": [], "periods": [], "summary": {}}
+		scorecard = scorecards[0].name
+
+	doc = frappe.get_doc("Scorecard", scorecard)
+	return doc.get_grid_view(as_of=as_of, range_weeks=num_weeks)
+
+
+@frappe.whitelist()
+def get_rollup_view(scorecard=None, team=None, timeframe=None, view_by=None, range_start=None, range_end=None, range_weeks=None, periods=None):
+	target_view = normalise_view_by(view_by or timeframe or "Month")
+	if target_view not in READ_ONLY_VIEW_BY:
+		target_view = "Month"
+
+	if not scorecard:
+		filters = {"timeframe": "Weekly"}
+		if team and team != "All Teams":
+			filters["team"] = team
+		scorecards = frappe.get_list("Scorecard", filters=filters, limit=1)
+		if not scorecards and team and team != "All Teams":
+			scorecards = frappe.get_list("Scorecard", filters={"team": team}, limit=1)
+		if not scorecards:
+			scorecards = frappe.get_list("Scorecard", limit=1)
+		if not scorecards:
+			return {"metrics": [], "periods": [], "view_by": target_view}
+		scorecard = scorecards[0].name
+
+	doc = frappe.get_doc("Scorecard", scorecard)
+	return doc.get_rollup_view(view_by=target_view, range_start=range_start, range_end=range_end)
+
 

@@ -1,14 +1,5 @@
 {
- "actions": [
-  {
-   "action": "mark_complete",
-   "label": "Mark Complete"
-  },
-  {
-   "action": "get_rock_summary",
-   "label": "Rock Summary"
-  }
- ],
+ "actions": [],
  "autoname": "format:R-{rock_name}",
  "creation": "2026-09-15 10:00:00",
  "doctype": "DocType",
@@ -27,7 +18,8 @@
   "section_notes",
   "notes",
   "amended_from",
-  "archived"
+  "archived",
+  "is_company_rock"
  ],
  "fields": [
   {
@@ -115,25 +107,24 @@
    "read_only": 1
   },
   {
-   "default": 0,
+   "default": "0",
    "fieldname": "archived",
    "fieldtype": "Check",
    "label": "Archived"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_company_rock",
+   "fieldtype": "Check",
+   "label": "Is Company"
   }
  ],
- "filters": [
-  [
-   "archived",
-   "=",
-   0
-  ]
- ],
- "index_web_search_results": 0,
- "is_submittable": 0,
  "links": [],
- "modified": "2026-09-15 10:00:00",
+ "modified": "2026-10-08 15:56:41.615425",
+ "modified_by": "Administrator",
  "module": "Eos Core",
  "name": "Rock",
+ "naming_rule": "Expression (old style)",
  "owner": "Administrator",
  "permissions": [
   {
@@ -200,6 +191,7 @@
    "role": "Observer"
   }
  ],
+ "row_format": "Dynamic",
  "sort_field": "creation",
  "sort_order": "DESC",
  "states": [],
