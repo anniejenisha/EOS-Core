@@ -1,8 +1,7 @@
 /*
  * Ninety.io Core Dashboard Page (Scorecard & Rocks) for EOS Core
- * Matches design specifications for:
- * 1. Scorecard Grid (13-week KPI scorecard with BEL BPO data & Create Measurable drawer)
- * 2. Rocks View (Company Rocks, Individual Rocks, Milestones, V/TO card, & Create Rock drawer)
+ * Dynamically fetches Teams from Team doctype for filter dropdowns.
+ * Provides interactive Team, Owner, Status filters and live Rock management.
  */
 (function () {
 	"use strict";
@@ -64,11 +63,12 @@
 				view: "rocks",
 				timeframe: "Week",
 				range: 13,
-				team: "BEL BPO",
+				team: "Leadership Team",
 				rock_team: "Leadership Team",
 				rock_owner: "Taher Jivanji",
 				rock_status: "All",
 				rock_tab: "List",
+				show_no_rocks: false,
 				search: "",
 				attention: false,
 				banner_off: false,
@@ -79,7 +79,9 @@
 			this.data = { periods: [], metrics: [] };
 			this.rocks = [];
 			this.users = [];
-			this.current_scorecard_id = "BEL BPO-Weekly";
+			this.players = [];
+			this.all_teams = ["All Teams", "Leadership Team", "BEL BPO", "Test"];
+			this.current_scorecard_id = "Leadership Team-Weekly";
 			this.current_group_id = "";
 
 			this.css();
@@ -113,9 +115,105 @@
 			});
 		}
 
+		async fetch_all_teams() {
+			try {
+				let team_names = [];
+				if (frappe.db && frappe.db.get_list) {
+					const res = await frappe.db.get_list("Team", {
+						fields: ["name", "team_name", "archived"],
+						limit: 200,
+						order_by: "team_name asc"
+					});
+					if (res && res.length) {
+						team_names = res.map(t => t.team_name || t.name).filter(Boolean);
+					}
+				}
+				if (!team_names.length) {
+					const res = await this.list("Team", ["name", "team_name"], {}, "team_name asc", 200);
+					if (res.ok && res.data && res.data.length) {
+						team_names = res.data.map(t => t.team_name || t.name).filter(Boolean);
+					}
+				}
+				if (!team_names.length) {
+					team_names = ["Leadership Team", "BEL BPO", "Test"];
+				}
+				const unique_teams = Array.from(new Set(team_names));
+				this.all_teams = ["All Teams", ...unique_teams];
+			} catch (e) {
+				console.warn("fetch_all_teams failed", e);
+				if (!this.all_teams || !this.all_teams.length) {
+					this.all_teams = ["All Teams", "Leadership Team", "BEL BPO", "Test"];
+				}
+			}
+		}
+
+		async fetch_players() {
+			try {
+				let p_list = [];
+				if (frappe.db && frappe.db.get_list) {
+					p_list = await frappe.db.get_list("Player", {
+						fields: ["name", "player_name", "user", "team"],
+						limit: 200
+					}) || [];
+				}
+				if (!p_list.length) {
+					const res = await this.list("Player", ["name", "player_name", "user", "team"], {}, "creation asc", 200);
+					if (res.ok && res.data) p_list = res.data;
+				}
+				this.players = p_list || [];
+			} catch (e) {
+				console.warn("fetch_players failed", e);
+				this.players = [];
+			}
+		}
+
+		get_user_display_name(u) {
+			if (!u) return "";
+			const player = (this.players || []).find(p => p.user === u || p.player_name === u || p.name === u);
+			if (player && player.player_name) return player.player_name;
+
+			const user_obj = (this.users || []).find(x => x.name === u || x.email === u);
+			if (user_obj && (user_obj.full_name || user_obj.first_name)) {
+				return user_obj.full_name || `${user_obj.first_name} ${user_obj.last_name || ""}`.trim();
+			}
+			if (u === "taher@burhani.com") return "Taher Jivanji";
+			if (u === "jd@example.com") return "John Doe";
+			if (u === "anniejenisha.p@gmail.com") return "Jenisha";
+			return u;
+		}
+
+		get_available_owners() {
+			const list = new Set();
+			list.add("Taher Jivanji");
+			if (this.s.rock_team && this.s.rock_team !== "All Teams") {
+				(this.players || []).forEach(p => {
+					if (p.team === this.s.rock_team && p.player_name) list.add(p.player_name);
+				});
+				(this.rocks || []).forEach(r => {
+					if (r.team === this.s.rock_team) {
+						const name = this.get_user_display_name(r.owner_user);
+						if (name) list.add(name);
+					}
+				});
+			} else {
+				(this.players || []).forEach(p => {
+					if (p.player_name) list.add(p.player_name);
+				});
+				(this.rocks || []).forEach(r => {
+					const name = this.get_user_display_name(r.owner_user);
+					if (name) list.add(name);
+				});
+				(this.users || []).forEach(u => {
+					const name = u.full_name || u.first_name || u.name;
+					if (name && name !== "Administrator" && !name.includes("@")) list.add(name);
+				});
+			}
+			return Array.from(list);
+		}
+
 		/* ================= styling ================= */
 		css() {
-			$("#nn-css, #nn-css-v2, #nn-scorecard-style").remove();
+			$("#nn-scorecard-style").remove();
 			$("head").append(`<style id="nn-scorecard-style">
 			.nn { display: flex; width: 100%; min-height: 100vh; background: #ffffff; color: #111827; font-size: 13px; font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; position: relative; }
 			.nn * { box-sizing: border-box; }
@@ -144,164 +242,138 @@
 			.nn button { font-family: inherit; }
 
 			/* Top Bar */
-			.nn-top-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 28px 12px; border-bottom: 1px solid #f1f3f5; }
-			.nn-title { font-size: 22px; font-weight: 700; color: #111827; line-height: 1.2; letter-spacing: -0.01em; }
-			.nn-sub { font-size: 12.5px; color: #6b7280; margin-top: 3px; }
+			.nn-top-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 28px 12px; border-bottom: 1px solid #f1f3f5; }
+			.nn-title { font-size: 20px; font-weight: 700; color: #111827; letter-spacing: -0.01em; }
+			.nn-sub { font-size: 12px; color: #6b7280; margin-top: 2px; }
 			.nn-top-right { display: flex; align-items: center; gap: 10px; }
-			
-			.nn-badge-maz { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 9999px; background: #ecfdf5; border: 1px solid #a7f3d0; color: #047857; font-size: 12px; font-weight: 600; cursor: pointer; text-decoration: none; }
-			.nn-badge-new { background: #059669; color: #fff; font-size: 9.5px; padding: 1px 5px; border-radius: 4px; font-weight: 700; text-transform: uppercase; }
-			
-			.nn-top-search { position: relative; display: inline-flex; align-items: center; }
-			.nn-top-search .nn-svg { position: absolute; left: 9px; color: #9ca3af; }
-			.nn-top-search input { height: 32px; width: 160px; padding: 0 10px 0 28px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 12.5px; outline: none; background: #fff; color: #374151; }
-			.nn-top-search input:focus { border-color: #064e3b; }
-			
-			.nn-btn-icon { width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid #e5e7eb; border-radius: 6px; background: #fff; color: #6b7280; cursor: pointer; position: relative; }
-			.nn-btn-icon:hover { background: #f9fafb; color: #111827; }
-			.nn-dot-red { position: absolute; top: 7px; right: 7px; width: 6px; height: 6px; border-radius: 50%; background: #ef4444; }
 
-			.nn-btn-create { display: inline-flex; align-items: center; gap: 4px; height: 32px; padding: 0 14px; border-radius: 6px; background: #064e3b; color: #ffffff; font-size: 12.5px; font-weight: 600; border: none; cursor: pointer; transition: background 0.15s; }
+			.nn-badge-maz { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 20px; border: 1px solid #e5e7eb; font-size: 12px; color: #374151; font-weight: 500; text-decoration: none; }
+			.nn-badge-new { background: #dbeafe; color: #1d4ed8; font-size: 9.5px; font-weight: 700; padding: 1px 5px; border-radius: 4px; }
+			.nn-top-search { position: relative; display: flex; align-items: center; }
+			.nn-top-search input { width: 140px; height: 32px; border-radius: 6px; border: 1px solid #e5e7eb; padding: 0 10px 0 28px; font-size: 12px; color: #111827; outline: none; }
+			.nn-top-search .nn-svg { position: absolute; left: 8px; color: #9ca3af; }
+			.nn-btn-icon { width: 32px; height: 32px; border-radius: 6px; border: 1px solid #e5e7eb; background: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #4b5563; position: relative; }
+			.nn-dot-red { position: absolute; top: 6px; right: 6px; width: 6px; height: 6px; border-radius: 50%; background: #ef4444; }
+			.nn-btn-create { height: 32px; padding: 0 14px; border-radius: 6px; background: #064e3b; color: #ffffff; font-size: 12.5px; font-weight: 600; border: none; cursor: pointer; display: flex; align-items: center; gap: 6px; }
 			.nn-btn-create:hover { background: #04392b; }
 
 			/* Tabs */
-			.nn-tabs { display: flex; gap: 24px; padding: 0 28px; margin-top: 4px; border-bottom: 1px solid #f1f3f5; }
-			.nn-tab { padding: 10px 0; font-size: 13px; font-weight: 500; color: #6b7280; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; display: inline-flex; align-items: center; gap: 6px; }
-			.nn-tab:hover { color: #111827; }
+			.nn-tabs { display: flex; align-items: center; gap: 24px; padding: 0 28px; border-bottom: 1px solid #f1f3f5; }
+			.nn-tab { padding: 12px 2px; font-size: 13px; font-weight: 500; color: #6b7280; cursor: pointer; border-bottom: 2px solid transparent; display: flex; align-items: center; gap: 6px; }
 			.nn-tab.on { color: #064e3b; font-weight: 600; border-bottom-color: #064e3b; }
 
 			/* Filter Bar */
-			.nn-filter-bar { display: flex; align-items: center; justify-content: space-between; padding: 12px 28px; gap: 10px; flex-wrap: wrap; }
+			.nn-filter-bar { display: flex; align-items: center; justify-content: space-between; padding: 12px 28px; gap: 10px; flex-wrap: wrap; background: #ffffff; }
 			.nn-filter-left { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-			.nn-filter-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-
-			.nn-pill-select { display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; height: 32px; border: 1px solid #e5e7eb; border-radius: 6px; background: #fff; font-size: 12.5px; color: #374151; cursor: pointer; white-space: nowrap; }
-			.nn-pill-select:hover { background: #f9fafb; }
-			.nn-pill-select .k { color: #6b7280; font-weight: 400; }
+			.nn-pill-select { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 6px; border: 1px solid #e5e7eb; background: #ffffff; font-size: 12.5px; color: #111827; cursor: pointer; transition: all 0.15s ease; }
+			.nn-pill-select:hover { border-color: #cbd5e1; background: #f9fafb; }
+			.nn-pill-select .k { color: #6b7280; font-weight: 500; }
 			.nn-pill-select b { font-weight: 600; color: #111827; }
+			.nn-pill-select .nn-svg { color: #6b7280; }
 
-			.nn-btn-bar { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border: 1px solid #e5e7eb; border-radius: 6px; background: #fff; color: #374151; font-size: 12.5px; font-weight: 500; cursor: pointer; white-space: nowrap; }
-			.nn-btn-bar:hover { background: #f9fafb; color: #111827; }
-			.nn-ibtn-bar { width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid #e5e7eb; border-radius: 6px; background: #fff; color: #6b7280; cursor: pointer; }
-			.nn-ibtn-bar:hover { background: #f9fafb; color: #111827; }
-
-			.nn-search-input-wrap { position: relative; display: inline-flex; align-items: center; }
-			.nn-search-input-wrap .nn-svg { position: absolute; left: 9px; color: #9ca3af; }
-			.nn-search-input-wrap input { height: 32px; width: 190px; padding: 0 10px 0 28px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 12.5px; outline: none; background: #fff; color: #374151; }
-			.nn-search-input-wrap input:focus { border-color: #064e3b; }
-
-			/* ================= ROCKS VIEW STYLES ================= */
-			.nn-rocks-body { padding: 10px 28px 48px; }
-
-			/* V/TO Accordion Card */
-			.nn-vto-card { border: 1px solid #e5e7eb; border-radius: 8px; background: #fff; padding: 12px 18px; margin-bottom: 18px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; transition: border-color 0.15s; }
-			.nn-vto-card:hover { border-color: #d1d5db; }
-			.nn-vto-left { display: flex; align-items: center; gap: 12px; }
-			.nn-vto-icon { width: 32px; height: 32px; border-radius: 50%; background: #ccfbf1; color: #0f766e; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; }
-			.nn-vto-title { font-size: 14px; font-weight: 600; color: #111827; }
-
-			/* Rocks Cards */
-			.nn-rock-card { border: 1px solid #e5e7eb; border-radius: 8px; background: #fff; margin-bottom: 22px; box-shadow: 0 1px 2px rgba(0,0,0,0.02); overflow: hidden; }
-			.nn-rock-header { padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #f1f3f5; }
-			.nn-rock-title-group { display: flex; align-items: center; gap: 10px; }
-			.nn-rock-icon-circle { width: 30px; height: 30px; border-radius: 50%; background: #f3f4f6; color: #6b7280; display: inline-flex; align-items: center; justify-content: center; }
-			.nn-rock-owner-av { width: 30px; height: 30px; border-radius: 50%; background: #4b5563; color: #fff; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
-			.nn-rock-title { font-size: 15px; font-weight: 700; color: #111827; }
-			.nn-badge-cnt { background: #f3f4f6; color: #374151; font-size: 12.5px; font-weight: 600; padding: 2px 8px; border-radius: 6px; }
-
-			/* Attention Banner inside Rocks */
-			.nn-rock-banner { margin: 16px 20px 8px; padding: 12px 18px; border-radius: 8px; background: #f0fdf4; border: 1px solid #dcfce7; display: flex; align-items: center; justify-content: space-between; }
-			.nn-rock-banner-t { font-size: 13px; font-weight: 600; color: #111827; }
-			.nn-rock-banner-r { display: flex; align-items: center; gap: 12px; }
-			.nn-btn-check { display: inline-flex; align-items: center; gap: 6px; padding: 0 16px; height: 30px; border-radius: 9999px; background: #064e3b; color: #fff; font-size: 12px; font-weight: 600; border: none; cursor: pointer; }
-
-			/* Rocks Table */
-			.nn-rock-tbl { width: 100%; border-collapse: collapse; margin: 0; }
-			.nn-rock-tbl th { font-size: 11px; font-weight: 500; color: #6b7280; padding: 8px 12px; border-bottom: 1px solid #f1f3f5; text-align: left; }
-			.nn-rock-tbl td { padding: 10px 12px; border-bottom: 1px solid #f8f9fa; font-size: 12.5px; vertical-align: middle; }
-			.nn-rock-row:hover td { background: #fafbfa; }
-
-			/* Status Badge */
-			.nn-status-badge { display: inline-flex; align-items: center; gap: 5px; border-radius: 6px; padding: 3px 8px; font-size: 11.5px; font-weight: 500; }
-			.nn-status-badge.on-track { background: #e0f2fe; color: #0284c7; }
-			.nn-status-badge.off-track { background: #fee2e2; color: #dc2626; }
-			.nn-status-badge.complete { background: #dcfce7; color: #166534; }
-
-			.nn-badge-company { font-size: 10.5px; color: #6b7280; border: 1px solid #e5e7eb; border-radius: 4px; padding: 1px 6px; margin-left: 8px; font-weight: 400; }
-
-			/* Progress Bar */
-			.nn-progress-wrap { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
-			.nn-prog-bar { width: 64px; height: 5px; background: #e5e7eb; border-radius: 4px; overflow: hidden; }
-			.nn-prog-fill { height: 100%; background: #064e3b; }
-			.nn-prog-txt { font-size: 11px; color: #9ca3af; font-weight: 500; min-width: 22px; text-align: right; }
-
-			/* Milestone Child Rows */
-			.nn-ms-row { background: #fbfcfb; }
-			.nn-ms-row td { padding: 8px 12px; font-size: 12px; color: #4b5563; border-bottom: 1px solid #f1f3f5; }
-			.nn-ms-chk { width: 15px; height: 15px; border: 1.5px solid #9ca3af; border-radius: 50%; display: inline-block; cursor: pointer; vertical-align: middle; margin-right: 8px; }
-			.nn-ms-chk.done { background: #064e3b; border-color: #064e3b; }
-
-			.nn-rock-add { padding: 12px 20px; color: #064e3b; font-weight: 600; font-size: 12.5px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
-			.nn-rock-add:hover { text-decoration: underline; }
-
-			/* ================= SCORECARD SPECIFIC STYLES ================= */
-			.nn-card-wrap { border: 1px solid #e5e7eb; border-radius: 8px; background: #fff; margin: 0 28px 40px; box-shadow: 0 1px 2px rgba(0,0,0,0.02); overflow: hidden; }
-			.nn-card-header { padding: 14px 18px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #f1f3f5; }
-			.nn-table-scroll { overflow-x: auto; width: 100%; }
-			.nn-tbl { width: 100%; border-collapse: collapse; min-width: 1450px; }
-			.nn-tbl th { font-size: 11.5px; font-weight: 500; color: #6b7280; text-align: center; padding: 7px 6px; border: 1px solid #eceff1; background: #fff; white-space: nowrap; vertical-align: middle; }
-			.nn-tbl th.l { text-align: left; }
-			.nn-tbl td { border: 1px solid #eceff1; padding: 0 8px; height: 33px; font-size: 12px; text-align: center; white-space: nowrap; vertical-align: middle; }
-			.nn-tbl td.t { text-align: left; min-width: 270px; color: #111827; font-weight: 500; padding-left: 12px; }
-			.nn-tbl td.r { text-align: right; padding-right: 14px; font-weight: 500; color: #111827; }
-			.nn-tbl tr:hover td { background: #fafbfa; }
-
-			.nn-tbl td.c { padding: 0; min-width: 96px; }
-			.nn-tbl td.c.ok { background: #ebfaef !important; color: #111827 !important; }
-			.nn-tbl td.c.bad { background: #fdeeee !important; color: #b91c1c !important; }
-
-			.nn-in { width: 100%; height: 32px; border: 0; background: transparent; text-align: center; color: inherit; font-size: 11.5px; outline: none; box-shadow: none; padding: 0 4px; }
-			.nn-in:focus { background: #ffffff !important; box-shadow: inset 0 0 0 2px #064e3b !important; color: #111827 !important; }
-
-			.nn-av-circle { display: inline-flex; width: 24px; height: 24px; border-radius: 50%; background: #9ca3af; color: #fff; font-size: 9.5px; font-weight: 600; align-items: center; justify-content: center; }
-			.nn-trend-alert { color: #ea580c; display: inline-flex; align-items: center; justify-content: center; }
-			.nn-trend-good { color: #16a34a; display: inline-flex; align-items: center; justify-content: center; }
-			.nn-trend-nod { color: #9ca3af; display: inline-flex; align-items: center; justify-content: center; }
-
-			/* ================= DRAWER ================= */
-			.nn-drawer-backdrop { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.25); z-index: 1040; opacity: 0; pointer-events: none; transition: opacity 0.2s ease; }
-			.nn-drawer-backdrop.show { opacity: 1; pointer-events: auto; }
-
-			.nn-drawer { position: fixed; top: 0; right: 0; bottom: 0; width: 440px; max-width: 92vw; background: #ffffff; z-index: 1050; display: flex; flex-direction: column; box-shadow: -4px 0 28px rgba(0, 0, 0, 0.12); transform: translateX(100%); transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1); font-family: inherit; }
-			.nn-drawer.show { transform: translateX(0); }
-
-			.nn-drawer-header { padding: 16px 20px; border-bottom: 1px solid #f1f3f5; display: flex; align-items: center; justify-content: space-between; }
-			.nn-drawer-title { font-size: 16px; font-weight: 700; color: #111827; }
-			.nn-drawer-header-actions { display: flex; align-items: center; gap: 8px; }
-			.nn-drawer-btn-icon { background: none; border: none; color: #6b7280; cursor: pointer; padding: 5px; display: inline-flex; align-items: center; justify-content: center; border-radius: 4px; }
-			.nn-drawer-btn-icon:hover { color: #111827; background: #f3f4f6; }
-
-			.nn-drawer-body { padding: 20px 22px; overflow-y: auto; flex: 1; }
-			.nn-field-group { margin-bottom: 18px; }
-			.nn-field-label { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 600; color: #374151; margin-bottom: 6px; }
-			.nn-input-text { width: 100%; height: 36px; border: 1px solid #d1d5db; border-radius: 6px; padding: 0 12px; font-size: 13px; color: #111827; outline: none; background: #fff; }
-			.nn-input-text:focus { border-color: #064e3b; box-shadow: 0 0 0 1px #064e3b; }
-			.nn-select { width: 100%; height: 36px; border: 1px solid #d1d5db; border-radius: 6px; padding: 0 12px; font-size: 13px; color: #111827; outline: none; background: #fff; cursor: pointer; }
+			.nn-filter-right { display: flex; align-items: center; gap: 6px; }
+			.nn-ibtn-bar { width: 32px; height: 32px; border-radius: 6px; border: 1px solid #e5e7eb; background: #fff; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; color: #4b5563; transition: all 0.15s; }
+			.nn-ibtn-bar:hover { background: #f9fafb; border-color: #cbd5e1; }
+			.nn-ibtn-bar.spin .nn-svg { animation: nn-spin 0.6s linear infinite; }
+			@keyframes nn-spin { 100% { transform: rotate(360deg); } }
 			
-			.nn-switch { position: relative; width: 36px; height: 20px; background: #d1d5db; border-radius: 20px; cursor: pointer; flex-shrink: 0; transition: background 0.15s; margin-top: 2px; }
-			.nn-switch.on { background: #064e3b; }
-			.nn-switch:after { content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: left 0.15s; }
+			.nn-search-input-wrap { position: relative; display: inline-flex; align-items: center; }
+			.nn-search-input-wrap input { width: 170px; height: 32px; border-radius: 6px; border: 1px solid #e5e7eb; padding: 0 10px 0 28px; font-size: 12px; color: #111827; outline: none; }
+			.nn-search-input-wrap .nn-svg { position: absolute; left: 8px; color: #9ca3af; }
+
+			/* Switch */
+			.nn-switch { position: relative; display: inline-block; width: 36px; height: 20px; background: #e5e7eb; border-radius: 20px; cursor: pointer; transition: background 0.2s; vertical-align: middle; }
+			.nn-switch.on { background: #10b981; }
+			.nn-switch:after { content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: #ffffff; transition: left 0.18s ease; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
 			.nn-switch.on:after { left: 19px; }
 
+			/* V/TO Card */
+			.nn-rocks-body { padding: 4px 28px 40px; }
+			.nn-vto-card { display: flex; align-items: center; justify-content: space-between; padding: 12px 18px; border: 1px solid #e5e7eb; border-radius: 8px; background: #ffffff; margin-bottom: 16px; cursor: pointer; user-select: none; }
+			.nn-vto-left { display: flex; align-items: center; gap: 10px; }
+			.nn-vto-icon { width: 28px; height: 28px; border-radius: 6px; background: #ecfdf5; color: #059669; display: flex; align-items: center; justify-content: center; }
+			.nn-vto-title { font-weight: 600; font-size: 13.5px; color: #111827; }
+
+			/* Rocks Table Card */
+			.nn-rock-card { border: 1px solid #e5e7eb; border-radius: 8px; background: #ffffff; margin-bottom: 20px; overflow: hidden; }
+			.nn-rock-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid #f1f3f5; }
+			.nn-rock-title-group { display: flex; align-items: center; gap: 10px; }
+			.nn-rock-icon-circle { width: 26px; height: 26px; border-radius: 50%; background: #f3f4f6; color: #4b5563; display: inline-flex; align-items: center; justify-content: center; }
+			.nn-rock-owner-av { width: 26px; height: 26px; border-radius: 50%; background: #064e3b; color: #ffffff; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+			.nn-rock-title { font-size: 14px; font-weight: 700; color: #111827; }
+			.nn-badge-cnt { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: #f3f4f6; font-size: 11px; font-weight: 700; color: #374151; }
+
+			.nn-rock-tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+			.nn-rock-tbl th { text-align: left; padding: 8px 14px; font-size: 11px; font-weight: 600; color: #6b7280; border-bottom: 1px solid #f1f3f5; background: #fafafa; }
+			.nn-rock-tbl td { padding: 11px 14px; border-bottom: 1px solid #f3f4f6; color: #1f2937; vertical-align: middle; }
+			.nn-rock-row:hover { background: #f9fafb; }
+
+			.nn-status-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 6px; font-size: 11.5px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+			.nn-status-badge.on-track { background: #e0f2fe; color: #0284c7; }
+			.nn-status-badge.off-track { background: #fee2e2; color: #dc2626; }
+			.nn-status-badge.complete { background: #dcfce7; color: #16a34a; }
+
+			.nn-progress-wrap { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+			.nn-prog-bar { width: 80px; height: 6px; background: #e5e7eb; border-radius: 3px; overflow: hidden; }
+			.nn-prog-fill { height: 100%; background: #059669; }
+			.nn-prog-txt { font-size: 11.5px; color: #6b7280; font-weight: 500; min-width: 24px; text-align: right; }
+
+			.nn-av-circle { width: 24px; height: 24px; border-radius: 50%; background: #6b7280; color: #ffffff; font-size: 10px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+
+			.nn-ms-row { background: #ffffff; }
+			.nn-ms-row:hover { background: #f9fafb; }
+			.nn-ms-row td { padding: 8px 14px; font-size: 12px; color: #4b5563; }
+			.nn-ms-chk { display: inline-block; width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid #9ca3af; cursor: pointer; vertical-align: middle; margin-right: 8px; }
+			.nn-ms-chk.done { background: #059669; border-color: #059669; position: relative; }
+			.nn-ms-chk.done:after { content: ""; position: absolute; left: 4px; top: 1px; width: 4px; height: 8px; border: solid white; border-width: 0 1.5px 1.5px 0; transform: rotate(45deg); }
+
+			.nn-rock-banner { background: #f9fafb; border-bottom: 1px solid #f1f3f5; padding: 10px 18px; display: flex; align-items: center; justify-content: space-between; }
+			.nn-rock-banner-t { font-size: 12.5px; color: #374151; font-weight: 500; }
+			.nn-rock-banner-r { display: flex; align-items: center; gap: 10px; }
+			.nn-btn-check { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 6px; background: #ffffff; border: 1px solid #d1d5db; color: #111827; font-size: 12px; font-weight: 600; cursor: pointer; }
+			.nn-rock-add { padding: 12px 18px; color: #059669; font-size: 12.5px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; border-top: 1px solid #f1f3f5; }
+			.nn-rock-add:hover { background: #f9fafb; }
+			.nn-badge-company { font-size: 10px; font-weight: 600; background: #e0f2fe; color: #0369a1; padding: 1px 6px; border-radius: 4px; margin-left: 8px; vertical-align: middle; }
+
+			/* Scorecard Grid Table */
+			.nn-card-wrap { border: 1px solid #e5e7eb; border-radius: 8px; background: #ffffff; overflow: hidden; }
+			.nn-card-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid #f1f3f5; }
+			.nn-table-scroll { overflow-x: auto; max-width: 100%; }
+			.nn-sc-tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; white-space: nowrap; }
+			.nn-sc-tbl th { padding: 8px 12px; background: #fafafa; border-bottom: 1px solid #e5e7eb; border-right: 1px solid #f1f3f5; font-size: 11px; font-weight: 600; color: #6b7280; text-align: right; }
+			.nn-sc-tbl th.left { text-align: left; }
+			.nn-sc-tbl td { padding: 10px 12px; border-bottom: 1px solid #f1f3f5; border-right: 1px solid #f8fafc; text-align: right; vertical-align: middle; }
+			.nn-sc-tbl td.left { text-align: left; }
+			.nn-sc-cell { min-width: 68px; text-align: center; }
+			.nn-cell-badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+			.nn-cell-badge.pass { background: #dcfce7; color: #15803d; }
+			.nn-cell-badge.fail { background: #fee2e2; color: #b91c1c; }
+			.nn-btn-bar { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 6px; border: 1px solid #e5e7eb; background: #fff; font-size: 12px; font-weight: 500; color: #374151; cursor: pointer; }
+			.nn-btn-bar:hover { background: #f9fafb; border-color: #cbd5e1; }
+
+			/* Menu Dropdown */
+			.nn-menu { position: fixed; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.14); z-index: 99999 !important; padding: 6px; min-width: 190px; max-height: 340px; overflow-y: auto; }
+			.nn-mi { padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 12.5px; color: #374151; display: flex; align-items: center; justify-content: space-between; transition: background 0.1s; }
+			.nn-mi:hover { background: #f3f4f6; color: #111827; }
+			.nn-mi.on { font-weight: 600; color: #064e3b; background: #f0fdf4; }
+
+			/* Slide-out Drawer */
+			.nn-drawer-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.45); z-index: 1040; display: none; }
+			.nn-drawer-backdrop.show { display: block; }
+			.nn-drawer { position: fixed; top: 0; right: -480px; width: 440px; max-width: 100vw; height: 100vh; background: #fff; z-index: 1050; box-shadow: -4px 0 24px rgba(0,0,0,0.15); display: flex; flex-direction: column; transition: right 0.22s ease-in-out; }
+			.nn-drawer.show { right: 0; }
+			.nn-drawer-header { padding: 18px 22px; border-bottom: 1px solid #f1f3f5; display: flex; align-items: center; justify-content: space-between; }
+			.nn-drawer-title { font-size: 16px; font-weight: 700; color: #111827; }
+			.nn-drawer-btn-icon { width: 28px; height: 28px; border-radius: 6px; border: 1px solid #e5e7eb; background: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #6b7280; }
+			.nn-drawer-body { flex: 1 1 0%; overflow-y: auto; padding: 22px; display: flex; flex-direction: column; gap: 16px; }
+			.nn-field-group { display: flex; flex-direction: column; gap: 6px; }
+			.nn-field-label { font-size: 12px; font-weight: 600; color: #374151; }
+			.nn-input-text, .nn-select { width: 100%; height: 36px; border: 1px solid #d1d5db; border-radius: 6px; padding: 0 10px; font-size: 13px; color: #111827; outline: none; background: #fff; }
+			.nn-input-text:focus, .nn-select:focus { border-color: #064e3b; }
 			.nn-drawer-footer { padding: 14px 22px; border-top: 1px solid #f1f3f5; display: flex; align-items: center; gap: 10px; background: #fff; }
 			.nn-btn-save { height: 36px; padding: 0 20px; border-radius: 6px; background: #064e3b; color: #ffffff; font-size: 13px; font-weight: 600; border: none; cursor: pointer; }
 			.nn-btn-save:hover { background: #04392b; }
 			.nn-btn-cancel { height: 36px; padding: 0 16px; border-radius: 6px; background: #fff; border: 1px solid #d1d5db; color: #374151; font-size: 13px; font-weight: 500; cursor: pointer; }
-
-			.nn-menu { position: fixed; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.12); z-index: 1050; padding: 6px; min-width: 180px; }
-			.nn-mi { padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 12.5px; color: #374151; }
-			.nn-mi:hover { background: #f3f4f6; color: #111827; }
-			.nn-mi.on { font-weight: 600; color: #064e3b; background: #f0fdf4; }
 			</style>`);
 		}
 
@@ -319,53 +391,49 @@
 						<div class="nn-nav-item" data-view="scorecard">
 							${ic("scorecard-icon", 16)} <span>${__("Scorecard")}</span>
 						</div>
-						<div class="nn-nav-item" data-view="rocks">
+						<div class="nn-nav-item on" data-view="rocks">
 							${ic("rock-icon", 16)} <span>${__("Rocks")}</span>
 						</div>
 						<div class="nn-nav-item" data-view="todos">
 							${ic("todo-icon", 16)} <span>${__("To-Dos")}</span>
 						</div>
-						<div class="nn-nav-item" style="opacity:0.65">
-							${ic("info", 16)} <span>${__("Issues")}</span>
-						</div>
-						<div class="nn-nav-item" style="opacity:0.65">
-							${ic("users", 16)} <span>${__("Meetings")}</span>
-						</div>
-						<div class="nn-nav-item" style="opacity:0.65">
-							${ic("book", 16)} <span>${__("V/TO®")}</span>
-						</div>
-						<div class="nn-nav-item" style="opacity:0.65">
-							${ic("target", 16)} <span>${__("Accountability Chart™")}</span>
-						</div>
 
 						<div class="nn-side-footer">
 							<div class="nn-side-foot-item">+ ${__("Add Teammates")}</div>
-							<div class="nn-side-foot-item">${__("Provide Feedback")}</div>
-							<div class="nn-side-foot-item">${__("Learning and Support")}</div>
 							<div class="nn-user-bar">
 								<span class="nn-user-av">TJ</span>
-								<span class="nn-user-name">Taher Jivanji</span>
+								<div class="nn-user-name">Taher Jivanji</div>
 							</div>
 						</div>
 					</div>
 
-					<!-- Main Body -->
+					<!-- Main Panel -->
 					<div class="nn-main" id="nn-main"></div>
 
-					<!-- Drawers -->
+					<!-- Global Drawer -->
 					<div class="nn-drawer-backdrop" id="nn-drawer-backdrop"></div>
 					<div class="nn-drawer" id="nn-drawer"></div>
 				</div>
 			`);
-			$(this.page.main).empty().append(this.$root);
+
+			$(this.wrapper).empty().append(this.$root);
 
 			const self = this;
-			this.$root.find(".nn-nav-item[data-view]").on("click", function () {
-				self.go($(this).attr("data-view"));
+			this.$root.find(".nn-nav-item").on("click", function () {
+				const view = $(this).attr("data-view");
+				if (view === "todos") {
+					frappe.set_route("List", "ToDo");
+					return;
+				}
+				self.go(view);
 			});
+
 			this.$root.find("#nn-drawer-backdrop").on("click", () => self.close_drawer());
+
 			$(document).off("click.nnmenu").on("click.nnmenu", e => {
-				if (!$(e.target).closest(".nn-menu, [data-menu]").length) this.close_menu();
+				if (!$(e.target).closest(".nn-menu, [data-menu], .nn-pill-select").length) {
+					this.close_menu();
+				}
 			});
 		}
 
@@ -380,33 +448,53 @@
 		}
 
 		close_menu() { $(".nn-menu").remove(); }
+
 		place_menu($m, anchor) {
 			this.close_menu();
 			$("body").append($m);
 			const r = anchor.getBoundingClientRect();
-			const w = $m.outerWidth();
-			const left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8));
-			$m.css({ top: r.bottom + 4, left });
+			const w = $m.outerWidth() || 200;
+			const left = Math.max(8, Math.min(r.left, window.innerWidth - w - 16));
+			const top = r.bottom + 4;
+			$m.css({ top: `${top}px`, left: `${left}px`, zIndex: 99999 });
 		}
+
 		pick_menu(anchor, options, current, cb) {
-			const $m = $(`<div class="nn-menu"></div>`);
+			const existing = $(".nn-menu");
+			if (existing.length && existing.data("anchor") === anchor) {
+				this.close_menu();
+				return;
+			}
+			this.close_menu();
+			const $m = $(`<div class="nn-menu"></div>`).data("anchor", anchor);
 			options.forEach(o => {
 				const [val, label] = Array.isArray(o) ? o : [o, o];
-				$(`<div class="nn-mi ${val === current ? "on" : ""}">${this.esc(label)}</div>`)
-					.on("click", () => { this.close_menu(); cb(val); }).appendTo($m);
+				const is_sel = String(val).toLowerCase() === String(current).toLowerCase();
+				$(`<div class="nn-mi ${is_sel ? "on" : ""}">
+					<span>${this.esc(label)}</span>
+					${is_sel ? '<span style="color:#059669;font-weight:700">✓</span>' : ''}
+				</div>`)
+					.on("click", (e) => {
+						e.stopPropagation();
+						this.close_menu();
+						cb(val);
+					})
+					.appendTo($m);
 			});
 			this.place_menu($m, anchor);
 		}
 
 		/* =========================================================================
-		   ROCKS VIEW IMPLEMENTATION (matching media_1791630440250.png)
+		   ROCKS VIEW IMPLEMENTATION
 		   ========================================================================= */
 		async load_rocks() {
 			this.$main.html(`<div style="padding:48px;text-align:center;color:#6b7280;font-size:14px">${__("Loading Rocks…")}</div>`);
 			try {
+				await this.fetch_all_teams();
+				await this.fetch_players();
 				await this.fetch_rocks_data();
 			} catch (e) {
-				console.error("Rocks error:", e);
+				console.error("Rocks load error:", e);
 			}
 			this.render_rocks();
 		}
@@ -416,11 +504,15 @@
 				"name", "rock_name as title", "status", "owner_user", "team", "is_company_rock", "scope", "duration_end as due"
 			], { archived: 0 }, "creation asc", 100);
 
-			const rocks = r_res.ok ? r_res.data : [];
-			for (let r of rocks) {
-				const full = await this.call("frappe.client.get", { doctype: "Rock", name: r.name });
-				r.milestones = (full.ok && full.data && full.data.milestones) ? full.data.milestones : [];
-			}
+			const rocks = r_res.ok ? (r_res.data || []) : [];
+			await Promise.all(rocks.map(async r => {
+				try {
+					const full = await this.call("frappe.client.get", { doctype: "Rock", name: r.name });
+					r.milestones = (full.ok && full.data && full.data.milestones) ? full.data.milestones : [];
+				} catch (_) {
+					r.milestones = [];
+				}
+			}));
 			this.rocks = rocks;
 
 			const u_res = await this.list("User", ["name", "full_name", "first_name", "last_name", "email"], { enabled: 1 }, "full_name asc", 200);
@@ -429,17 +521,6 @@
 
 		render_rocks() {
 			const s = this.s;
-			const all_rocks = this.rocks || [];
-			const q = (s.search || "").toLowerCase().trim();
-
-			const filtered = all_rocks.filter(r => {
-				if (q && !(r.title || "").toLowerCase().includes(q)) return false;
-				if (s.rock_status !== "All" && r.status !== s.rock_status) return false;
-				return true;
-			});
-
-			const company_rocks = filtered.filter(r => r.is_company_rock || r.scope === "Company");
-			const user_rocks = filtered.filter(r => r.owner_user === "taher@burhani.com" || !r.is_company_rock);
 
 			this.$main.html(`
 				<div class="nn-top-header">
@@ -456,75 +537,117 @@
 				</div>
 
 				<div class="nn-tabs">
-					<div class="nn-tab on" data-rtab="List"><span style="font-size:14px">≡</span> ${__("List")}</div>
-					<div class="nn-tab" data-rtab="Planning"><span style="font-size:14px">⊞</span> ${__("Planning Board")}</div>
-					<div class="nn-tab" data-rtab="Archive"><span style="font-size:14px">📁</span> ${__("Archive")}</div>
+					<div class="nn-tab ${s.rock_tab === "List" ? "on" : ""}" data-rtab="List"><span style="font-size:14px">≡</span> ${__("List")}</div>
+					<div class="nn-tab ${s.rock_tab === "Planning" ? "on" : ""}" data-rtab="Planning"><span style="font-size:14px">⊞</span> ${__("Planning Board")}</div>
+					<div class="nn-tab ${s.rock_tab === "Archive" ? "on" : ""}" data-rtab="Archive"><span style="font-size:14px">📁</span> ${__("Archive")}</div>
 				</div>
 
 				<div class="nn-filter-bar">
 					<div class="nn-filter-left">
-						<button class="nn-pill-select" id="nn-rteam" data-menu><span class="k">${__("Team")}:</span> <b>${this.esc(s.rock_team)}</b> ${ic("chevron-down", 12)}</button>
-						<button class="nn-pill-select" id="nn-rowner" data-menu><span class="k">${__("Owner")}:</span> <b>${this.esc(s.rock_owner)}</b> ${ic("chevron-down", 12)}</button>
-						<button class="nn-pill-select" id="nn-rstatus" data-menu><span class="k">${__("Status")}:</span> <b>${this.esc(s.rock_status)}</b> ${ic("chevron-down", 12)}</button>
+						<button class="nn-pill-select" id="nn-rteam" data-menu>
+							<span class="k">${__("Team")}:</span> <b>${this.esc(s.rock_team)}</b> ${ic("chevron-down", 12)}
+						</button>
+						<button class="nn-pill-select" id="nn-rowner" data-menu>
+							<span class="k">${__("Owner")}:</span> <b>${this.esc(s.rock_owner)}</b> ${ic("chevron-down", 12)}
+						</button>
+						<button class="nn-pill-select" id="nn-rstatus" data-menu>
+							<span class="k">${__("Status")}:</span> <b>${this.esc(s.rock_status)}</b> ${ic("chevron-down", 12)}
+						</button>
 						<div style="display:inline-flex;align-items:center;gap:8px;margin-left:6px;font-size:12.5px;color:#374151">
-							<span class="nn-switch" id="nn-sw-norocks"></span>
+							<span class="nn-switch ${s.show_no_rocks ? "on" : ""}" id="nn-sw-norocks"></span>
 							<span>${__("Show people without Rocks")}</span>
 						</div>
 					</div>
 					<div class="nn-filter-right">
-						<button class="nn-ibtn-bar">${ic("box", 14)}</button>
-						<button class="nn-ibtn-bar" id="nn-r-refresh">${ic("refresh", 14)}</button>
-						<button class="nn-ibtn-bar">${ic("dots", 14)}</button>
+						<button class="nn-ibtn-bar" title="${__("3D View")}">${ic("box", 14)}</button>
+						<button class="nn-ibtn-bar" id="nn-r-refresh" title="${__("Refresh Rocks")}">${ic("refresh", 14)}</button>
+						<button class="nn-ibtn-bar" title="${__("More Options")}">${ic("dots", 14)}</button>
 						<div class="nn-search-input-wrap">${ic("search", 13)}<input id="nn-rock-search" placeholder="${__("Search Rocks…")}" value="${this.esc(s.search)}"></div>
 					</div>
 				</div>
 
-				<div class="nn-rocks-body">
-					<!-- V/TO Accordion Card -->
-					<div class="nn-vto-card" id="nn-vto-toggle">
-						<div class="nn-vto-left">
-							<span class="nn-vto-icon">${ic("book", 15)}</span>
-							<span class="nn-vto-title">V/TO® | Revenue, Profit, Measurables</span>
-						</div>
-						<div style="color:#9ca3af">${ic("chevron-down", 14)}</div>
-					</div>
+				<div class="nn-rocks-body" id="nn-rocks-body-wrap"></div>
+			`);
 
-					<!-- Section: Company Rocks -->
+			this.render_rocks_tables();
+			this.bind_rocks_events();
+		}
+
+		render_rocks_tables() {
+			const s = this.s;
+			const all_rocks = this.rocks || [];
+			const q = (s.search || "").toLowerCase().trim();
+
+			const filtered = all_rocks.filter(r => {
+				if (q && !(r.title || "").toLowerCase().includes(q)) return false;
+
+				// Team filter (showing from Team doctype)
+				if (s.rock_team && s.rock_team !== "All Teams") {
+					if (r.team && r.team !== s.rock_team) return false;
+				}
+
+				// Owner filter
+				if (s.rock_owner && s.rock_owner !== "All") {
+					const owner_name = this.get_user_display_name(r.owner_user);
+					if (owner_name !== s.rock_owner && r.owner_user !== s.rock_owner) return false;
+				}
+
+				// Status filter
+				if (s.rock_status && s.rock_status !== "All") {
+					const norm = (r.status === "In Progress" || r.status === "On-track") ? "On-track" : (r.status === "Not Started" || r.status === "Off-track") ? "Off-track" : r.status;
+					if (norm !== s.rock_status) return false;
+				}
+
+				return true;
+			});
+
+			const company_rocks = filtered.filter(r => r.is_company_rock || r.scope === "Company");
+			const non_company_rocks = filtered.filter(r => !r.is_company_rock && r.scope !== "Company");
+
+			// Group non-company rocks by owner
+			const user_groups = {};
+			non_company_rocks.forEach(r => {
+				const owner_name = this.get_user_display_name(r.owner_user) || "Taher Jivanji";
+				if (!user_groups[owner_name]) user_groups[owner_name] = [];
+				user_groups[owner_name].push(r);
+			});
+
+			let owners_to_show = [];
+			if (s.rock_owner && s.rock_owner !== "All") {
+				owners_to_show = [s.rock_owner];
+			} else {
+				owners_to_show = Object.keys(user_groups);
+				if (!owners_to_show.length) {
+					owners_to_show = ["Taher Jivanji"];
+				}
+			}
+
+			// If "Show people without Rocks" is enabled, include team members who have 0 rocks
+			if (s.show_no_rocks) {
+				const team_players = (this.players || []).filter(p => {
+					if (s.rock_team && s.rock_team !== "All Teams") return p.team === s.rock_team;
+					return true;
+				});
+				team_players.forEach(p => {
+					const name = p.player_name || p.name;
+					if (!owners_to_show.includes(name)) {
+						owners_to_show.push(name);
+					}
+				});
+			}
+
+			let user_cards_html = "";
+			owners_to_show.forEach(owner_name => {
+				const rocks_for_owner = user_groups[owner_name] || [];
+				const initials = (owner_name || "TJ").split(/\s+/).slice(0, 2).map(w => w[0] || "").join("").toUpperCase();
+
+				user_cards_html += `
 					<div class="nn-rock-card">
 						<div class="nn-rock-header">
 							<div class="nn-rock-title-group">
-								<span class="nn-rock-icon-circle">${ic("users", 15)}</span>
-								<span class="nn-rock-title">${__("Company Rocks")}</span>
-								<span class="nn-badge-cnt">${company_rocks.length}</span>
-							</div>
-							<div style="color:#059669;cursor:pointer">${ic("arrow-up-right", 16)}</div>
-						</div>
-
-						<table class="nn-rock-tbl">
-							<thead>
-								<tr>
-									<th style="width:24px"></th>
-									<th style="width:90px">${__("Status")}</th>
-									<th>${__("Title")}</th>
-									<th style="text-align:right;width:150px">${__("Milestone progress")}</th>
-									<th style="text-align:center;width:60px">${__("Owner")}</th>
-									<th style="text-align:center;width:90px">${__("Due by")}</th>
-									<th style="width:30px"></th>
-								</tr>
-							</thead>
-							<tbody>
-								${this.render_rock_rows(company_rocks, true)}
-							</tbody>
-						</table>
-					</div>
-
-					<!-- Section: Individual User Rocks (Taher Jivanji) -->
-					<div class="nn-rock-card">
-						<div class="nn-rock-header">
-							<div class="nn-rock-title-group">
-								<span class="nn-rock-owner-av">TJ</span>
-								<span class="nn-rock-title">Taher Jivanji</span>
-								<span class="nn-badge-cnt">${user_rocks.length || 4}</span>
+								<span class="nn-rock-owner-av">${initials}</span>
+								<span class="nn-rock-title">${this.esc(owner_name)}</span>
+								<span class="nn-badge-cnt">${rocks_for_owner.length}</span>
 							</div>
 							<div style="display:flex;align-items:center;gap:8px;color:#9ca3af">
 								<span style="cursor:pointer">${ic("chevron-up", 15)}</span>
@@ -551,16 +674,59 @@
 								</tr>
 							</thead>
 							<tbody>
-								${this.render_user_rock_rows(user_rocks)}
+								${this.render_user_rock_rows(rocks_for_owner)}
 							</tbody>
 						</table>
 
-						<div class="nn-rock-add" id="nn-add-rock-btn">+ ${__("Add Rock")}</div>
+						<div class="nn-rock-add nn-add-rock-user-btn" data-owner="${this.esc(owner_name)}">+ ${__("Add Rock")}</div>
 					</div>
+				`;
+			});
+
+			this.$main.find("#nn-rocks-body-wrap").html(`
+				<!-- V/TO Accordion Card -->
+				<div class="nn-vto-card" id="nn-vto-toggle">
+					<div class="nn-vto-left">
+						<span class="nn-vto-icon">${ic("book", 15)}</span>
+						<span class="nn-vto-title">V/TO® | Revenue, Profit, Measurables</span>
+					</div>
+					<div style="color:#9ca3af">${ic("chevron-down", 14)}</div>
 				</div>
+
+				<!-- Section: Company Rocks -->
+				<div class="nn-rock-card">
+					<div class="nn-rock-header">
+						<div class="nn-rock-title-group">
+							<span class="nn-rock-icon-circle">${ic("users", 15)}</span>
+							<span class="nn-rock-title">${__("Company Rocks")}</span>
+							<span class="nn-badge-cnt">${company_rocks.length}</span>
+						</div>
+						<div style="color:#059669;cursor:pointer">${ic("arrow-up-right", 16)}</div>
+					</div>
+
+					<table class="nn-rock-tbl">
+						<thead>
+							<tr>
+								<th style="width:24px"></th>
+								<th style="width:90px">${__("Status")}</th>
+								<th>${__("Title")}</th>
+								<th style="text-align:right;width:150px">${__("Milestone progress")}</th>
+								<th style="text-align:center;width:60px">${__("Owner")}</th>
+								<th style="text-align:center;width:90px">${__("Due by")}</th>
+								<th style="width:30px"></th>
+							</tr>
+						</thead>
+						<tbody>
+							${this.render_rock_rows(company_rocks, true)}
+						</tbody>
+					</table>
+				</div>
+
+				<!-- Section: Individual User Rocks -->
+				${user_cards_html}
 			`);
 
-			this.bind_rocks_events();
+			this.bind_table_actions();
 		}
 
 		render_rock_rows(rocks, is_company) {
@@ -573,7 +739,12 @@
 				const is_expanded = !!self.s.expanded_rocks[r.title];
 				const ms = r.milestones || [];
 				const done = ms.filter(m => m.completed).length;
-				const total = ms.length || (r.title.includes("portal") ? 8 : 2);
+				let total = ms.length;
+				if (!total) {
+					if (r.title.includes("EDMS") || r.title === "Test") total = 2;
+					else if (r.title.includes("portal")) total = 8;
+					else total = 2;
+				}
 				const pct = total ? Math.round((done / total) * 100) : 0;
 
 				let child_html = "";
@@ -625,12 +796,12 @@
 			}
 
 			return rocks.map(r => {
-				const is_comp = r.is_company_rock || r.scope === "Company" || r.title.includes("EDMS") || r.title.includes("portal");
+				const is_comp = r.is_company_rock || r.scope === "Company" || r.title.includes("EDMS") || r.title.includes("portal") || r.title === "Test";
 				const ms = r.milestones || [];
 				const done = ms.filter(m => m.completed).length;
 				let total = ms.length;
 				if (!total) {
-					if (r.title.includes("EDMS")) total = 2;
+					if (r.title.includes("EDMS") || r.title === "Test") total = 2;
 					else if (r.title.includes("portal")) total = 4;
 					else if (r.title.includes("incentive")) total = 9;
 					else total = 5;
@@ -661,13 +832,98 @@
 		bind_rocks_events() {
 			const self = this, $m = this.$main, s = this.s;
 
-			$m.find(".nn-rock-exp").on("click", function () {
-				const title = $(this).attr("data-title");
-				s.expanded_rocks[title] = !s.expanded_rocks[title];
+			// Teams dropdown menu from Team doctype
+			$m.find("#nn-rteam").off("click").on("click", async function (e) {
+				e.stopPropagation();
+				if (!self.all_teams || self.all_teams.length <= 1) {
+					await self.fetch_all_teams();
+				}
+				self.pick_menu(this, self.all_teams, s.rock_team, v => {
+					s.rock_team = v;
+					if (v !== "All Teams") s.team = v;
+					self.render_rocks();
+				});
+			});
+
+			// Owner dropdown menu
+			$m.find("#nn-rowner").off("click").on("click", function (e) {
+				e.stopPropagation();
+				const owners = ["All"].concat(self.get_available_owners());
+				self.pick_menu(this, owners, s.rock_owner, v => {
+					s.rock_owner = v;
+					self.render_rocks();
+				});
+			});
+
+			// Status dropdown menu
+			$m.find("#nn-rstatus").off("click").on("click", function (e) {
+				e.stopPropagation();
+				const statuses = ["All", "On-track", "Off-track", "Complete"];
+				self.pick_menu(this, statuses, s.rock_status, v => {
+					s.rock_status = v;
+					self.render_rocks();
+				});
+			});
+
+			// Show without rocks toggle
+			$m.find("#nn-sw-norocks").off("click").on("click", function () {
+				$(this).toggleClass("on");
+				s.show_no_rocks = $(this).hasClass("on");
 				self.render_rocks();
 			});
 
-			$m.find(".nn-ms-chk").on("click", async function (e) {
+			// Rock title real-time search
+			$m.find("#nn-rock-search").off("input").on("input", function () {
+				s.search = $(this).val();
+				self.render_rocks_tables();
+			});
+
+			// Refresh button
+			$m.find("#nn-r-refresh").off("click").on("click", async function () {
+				const $btn = $(this);
+				$btn.addClass("spin");
+				try {
+					await self.fetch_all_teams();
+					await self.fetch_players();
+					await self.fetch_rocks_data();
+					self.render_rocks();
+					frappe.show_alert({ message: __("Rocks updated"), indicator: "green" });
+				} finally {
+					setTimeout(() => $btn.removeClass("spin"), 400);
+				}
+			});
+
+			// Create Rock button in top bar
+			$m.find("#nn-create-rock-top").off("click").on("click", function () {
+				self.open_rock_drawer();
+			});
+
+			// Tabs
+			$m.find(".nn-tab[data-rtab]").off("click").on("click", function () {
+				$m.find(".nn-tab[data-rtab]").removeClass("on");
+				$(this).addClass("on");
+				s.rock_tab = $(this).attr("data-rtab");
+				frappe.show_alert({ message: __(`Switched to ${s.rock_tab} view`), indicator: "blue" });
+			});
+
+			// V/TO card toggle
+			$m.find("#nn-vto-toggle").off("click").on("click", function () {
+				$(this).toggleClass("collapsed");
+			});
+		}
+
+		bind_table_actions() {
+			const self = this, $m = this.$main, s = this.s;
+
+			// Expand / collapse company rocks milestones
+			$m.find(".nn-rock-exp").off("click").on("click", function () {
+				const title = $(this).attr("data-title");
+				s.expanded_rocks[title] = !s.expanded_rocks[title];
+				self.render_rocks_tables();
+			});
+
+			// Milestone checkbox completion
+			$m.find(".nn-ms-chk").off("click").on("click", async function (e) {
 				e.stopPropagation();
 				const rname = $(this).attr("data-rock");
 				const idx = +$(this).attr("data-idx");
@@ -679,34 +935,29 @@
 					await self.call("frappe.client.set_value", {
 						doctype: "Rock Milestone", name: m.name, fieldname: "completed", value: m.completed
 					});
-					self.render_rocks();
+					self.render_rocks_tables();
 				}
 			});
 
-			$m.find("#nn-rock-search").on("input", function () {
-				s.search = $(this).val();
-				self.render_rocks();
+			// Add Rock buttons
+			$m.find(".nn-add-rock-user-btn").off("click").on("click", function () {
+				const owner = $(this).attr("data-owner");
+				self.open_rock_drawer(null, owner);
 			});
 
-			$m.find("#nn-r-refresh").on("click", () => self.load_rocks());
-
-			$m.find("#nn-create-rock-top, #nn-add-rock-btn").on("click", (e) => {
-				e.preventDefault();
-				self.open_rock_drawer();
-			});
-
-			$m.find(".nn-rock-click").on("click", function () {
+			// Clicking rock row opens detail/edit drawer
+			$m.find(".nn-rock-click").off("click").on("click", function () {
 				self.open_rock_drawer($(this).attr("data-id"));
 			});
 		}
 
-		open_rock_drawer(rock_id = null) {
+		open_rock_drawer(rock_id = null, default_owner = null) {
 			const is_edit = !!rock_id;
 			const r = is_edit ? this.rocks.find(x => x.name === rock_id) : null;
 
 			const current_title = r ? r.title : "";
-			const current_owner = r ? r.owner_user : "taher@burhani.com";
-			const current_team = r ? (r.team || "Leadership Team") : "Leadership Team";
+			const current_owner = r ? r.owner_user : (default_owner === "Taher Jivanji" ? "taher@burhani.com" : "taher@burhani.com");
+			const current_team = r ? (r.team || "Leadership Team") : (this.s.rock_team !== "All Teams" ? this.s.rock_team : "Leadership Team");
 			const current_scope = r ? (r.scope || "Company") : "Company";
 			const current_is_comp = r ? !!r.is_company_rock : true;
 			const current_status = r ? r.status : "In Progress";
@@ -722,6 +973,12 @@
 				const label = u.full_name ? `${u.full_name} (${u.name})` : u.name;
 				const sel = val === current_owner ? "selected" : "";
 				owner_options += `<option value="${this.esc(val)}" ${sel}>${this.esc(label)}</option>`;
+			});
+
+			let team_options = "";
+			this.all_teams.filter(t => t !== "All Teams").forEach(t => {
+				const sel = t === current_team ? "selected" : "";
+				team_options += `<option value="${this.esc(t)}" ${sel}>${this.esc(t)}</option>`;
 			});
 
 			const drawer_html = `
@@ -745,10 +1002,7 @@
 
 					<div class="nn-field-group">
 						<div class="nn-field-label"><span>${__("Team")}</span></div>
-						<select class="nn-select" id="nn-r-team">
-							<option value="Leadership Team" ${current_team === "Leadership Team" ? "selected" : ""}>Leadership Team</option>
-							<option value="BEL BPO" ${current_team === "BEL BPO" ? "selected" : ""}>BEL BPO</option>
-						</select>
+						<select class="nn-select" id="nn-r-team">${team_options}</select>
 					</div>
 
 					<div class="nn-field-group">
@@ -760,15 +1014,15 @@
 					</div>
 
 					<div class="nn-field-group" style="display:flex;align-items:center;gap:10px">
-						<span class="nn-switch ${current_is_comp ? "on" : ""}" id="nn-r-iscomp"></span>
-						<span style="font-size:12.5px;font-weight:600">${__("Is Company Rock")}</span>
+						<input type="checkbox" id="nn-r-comp" ${current_is_comp ? "checked" : ""}>
+						<label for="nn-r-comp" style="font-size:12.5px;font-weight:500;cursor:pointer">${__("Mark as Company Rock")}</label>
 					</div>
 
 					<div class="nn-field-group">
 						<div class="nn-field-label"><span>${__("Status")}</span></div>
 						<select class="nn-select" id="nn-r-status">
-							<option value="In Progress" ${current_status === "In Progress" ? "selected" : ""}>On-track</option>
-							<option value="Not Started" ${current_status === "Not Started" ? "selected" : ""}>Off-track</option>
+							<option value="In Progress" ${current_status === "In Progress" || current_status === "On-track" ? "selected" : ""}>In Progress (On-track)</option>
+							<option value="Not Started" ${current_status === "Not Started" || current_status === "Off-track" ? "selected" : ""}>Not Started (Off-track)</option>
 							<option value="Complete" ${current_status === "Complete" ? "selected" : ""}>Complete</option>
 						</select>
 					</div>
@@ -780,8 +1034,8 @@
 				</div>
 
 				<div class="nn-drawer-footer">
-					<button class="nn-btn-save" id="nn-r-save">${is_edit ? __("Save changes") : __("Save")}</button>
-					<button class="nn-btn-cancel" id="nn-drawer-cancel">${__("Cancel")}</button>
+					<button class="nn-btn-save" id="nn-drawer-rock-save">${is_edit ? __("Save changes") : __("Save Rock")}</button>
+					<button class="nn-btn-cancel" id="nn-drawer-rock-cancel">${__("Cancel")}</button>
 				</div>
 			`;
 
@@ -789,40 +1043,339 @@
 			$drawer.html(drawer_html);
 
 			const self = this;
-			$drawer.find("#nn-drawer-close, #nn-drawer-cancel").on("click", () => self.close_drawer());
-			$drawer.find("#nn-r-iscomp").on("click", function () { $(this).toggleClass("on"); });
-
-			$drawer.find("#nn-r-save").on("click", async function () {
+			$drawer.find("#nn-drawer-close, #nn-drawer-rock-cancel").on("click", () => self.close_drawer());
+			$drawer.find("#nn-drawer-rock-save").on("click", async function () {
 				const title = $drawer.find("#nn-r-title").val().trim();
-				if (!title) return;
-
+				if (!title) {
+					frappe.msgprint(__("Please enter a Rock title."));
+					return;
+				}
 				const owner = $drawer.find("#nn-r-owner").val();
 				const team = $drawer.find("#nn-r-team").val();
 				const scope = $drawer.find("#nn-r-scope").val();
-				const is_comp = $drawer.find("#nn-r-iscomp").hasClass("on") ? 1 : 0;
+				const is_comp = $drawer.find("#nn-r-comp").is(":checked") ? 1 : 0;
 				const status = $drawer.find("#nn-r-status").val();
-				const due = $drawer.find("#nn-r-due").val() || "2026-12-31";
+				const due = $drawer.find("#nn-r-due").val();
 
 				if (is_edit && r) {
 					await self.call("frappe.client.set_value", {
 						doctype: "Rock", name: r.name,
-						fieldname: { rock_name: title, owner_user: owner, team: team, scope: scope, is_company_rock: is_comp, status: status, duration_end: due }
+						fieldname: {
+							rock_name: title,
+							owner_user: owner,
+							team: team,
+							scope: scope,
+							is_company_rock: is_comp,
+							status: status,
+							duration_end: due
+						}
 					});
 				} else {
 					await self.call("frappe.client.insert", {
-						doc: { doctype: "Rock", rock_name: title, owner_user: owner, team: team, scope: scope, is_company_rock: is_comp, status: status, duration_start: frappe.datetime.get_today(), duration_end: due, archived: 0 }
+						doc: {
+							doctype: "Rock",
+							rock_name: title,
+							owner_user: owner,
+							team: team,
+							scope: scope,
+							is_company_rock: is_comp,
+							status: status,
+							duration_end: due,
+							archived: 0
+						}
 					});
 				}
+
 				self.close_drawer();
 				await self.fetch_rocks_data();
 				self.render_rocks();
+				frappe.show_alert({ message: __("Rock saved successfully!"), indicator: "green" });
 			});
 
 			this.$root.find("#nn-drawer-backdrop").addClass("show");
 			$drawer.addClass("show");
+			$drawer.find("#nn-r-title").focus();
 		}
 
-		/* ================= CREATE / EDIT MEASURABLE DRAWER ================= */
+		/* =========================================================================
+		   SCORECARD VIEW IMPLEMENTATION
+		   ========================================================================= */
+		make_periods(tf, n) {
+			const out = [];
+			const now = new Date();
+			const base = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0);
+
+			for (let i = 0; i < n; i++) {
+				if (tf === "Week") {
+					const d = new Date(base);
+					const day = (d.getDay() + 6) % 7;
+					d.setDate(d.getDate() - day - 7 * i);
+					
+					const a = new Date(d);
+					const b = new Date(d);
+					b.setDate(d.getDate() + 6);
+
+					const pad = num => String(num).padStart(2, "0");
+					const key = `${a.getFullYear()}-${pad(a.getMonth() + 1)}-${pad(a.getDate())}`;
+					const end = `${b.getFullYear()}-${pad(b.getMonth() + 1)}-${pad(b.getDate())}`;
+					const label = `${a.getDate()} ${MONTHS[a.getMonth()]} - ${b.getDate()} ${MONTHS[b.getMonth()]}`;
+
+					out.push({ key, end, label, current: i === 0, year: a.getFullYear() });
+				}
+			}
+			return out;
+		}
+
+		async load_scorecard() {
+			this.$main.html(`<div style="padding:48px;text-align:center;color:#6b7280;font-size:14px">${__("Loading Scorecard…")}</div>`);
+			this.data = { periods: this.make_periods("Week", 13), metrics: [] };
+			try {
+				await this.fetch_all_teams();
+				await this.fetch_scorecard_data();
+			} catch (e) {
+				console.error("Scorecard error:", e);
+			}
+			this.render_scorecard();
+		}
+
+		async fetch_scorecard_data() {
+			const s = this.s, C = CFG, P = this.data.periods;
+
+			const sc_res = await this.list(C.scorecard.doctype, ["name", "team", "timeframe"], { archived: 0 });
+			const scs = sc_res.ok ? sc_res.data : [];
+			const sc_match = scs.find(x => x.team === s.team && (x.timeframe === "Weekly" || x.timeframe === "Week")) || scs[0];
+			this.current_scorecard_id = sc_match ? sc_match.name : `${s.team}-Weekly`;
+
+			const grp_res = await this.list(C.group.doctype, ["name", "group_name"], { scorecard: this.current_scorecard_id, archived: 0 });
+			if (grp_res.ok && grp_res.data.length) this.current_group_id = grp_res.data[0].name;
+
+			const u_res = await this.list("User", ["name", "full_name", "first_name", "last_name", "email"], { enabled: 1 }, "full_name asc", 200);
+			this.users = u_res.ok ? u_res.data : [];
+
+			const m_fields = ["name", "metric_name as title", "description", "target_value as goal", "operator as goal_op", "unit", "unit_type", "rollup", "frequency", "owner_user", "team", "scorecard", "group as grp"];
+			let m_res = await this.list(C.measurable.doctype, m_fields, { team: s.team, archived: 0 }, "creation asc", 100);
+			if (!m_res.ok || !m_res.data.length) {
+				m_res = await this.list(C.measurable.doctype, m_fields, { scorecard: this.current_scorecard_id, archived: 0 }, "creation asc", 100);
+			}
+
+			const raw_metrics = (m_res.ok ? m_res.data : []);
+			const metrics = raw_metrics.map(m => ({
+				id: m.name,
+				title: m.title || m.name,
+				desc: m.description || "",
+				owner: m.owner_user || "Administrator",
+				goal_op: m.goal_op || ">=",
+				goal: m.goal != null ? Number(m.goal) : 0,
+				unit: m.unit || "",
+				unit_type: m.unit_type || "Number",
+				rollup: m.rollup || "Average",
+				frequency: m.frequency || "Weekly",
+				values: {}
+			}));
+
+			if (metrics.length && P.length) {
+				const start_d = P[P.length - 1].key;
+				const end_d = P[0].end;
+				const e_res = await this.list(C.entry.doctype, [
+					"name", "metric", "week_start_date as d", "actual_value as v"
+				], {
+					metric: ["in", metrics.map(x => x.id)],
+					week_start_date: ["between", [start_d, end_d]]
+				}, "week_start_date asc", 2000);
+
+				if (e_res.ok && e_res.data) {
+					e_res.data.forEach(e => {
+						const met = metrics.find(x => x.id === e.metric);
+						if (met) {
+							const val = Number(e.v);
+							met.values[e.d] = isNaN(val) ? 0 : val;
+						}
+					});
+				}
+			}
+
+			this.data.metrics = metrics;
+		}
+
+		render_scorecard() {
+			const s = this.s;
+			const tabs = [
+				["Week", "Weekly KPIs"],
+				["Month", "Monthly KPIs"],
+				["Quarter", "Quarterly KPIs"],
+				["Annual", "Annual KPIs"]
+			];
+
+			this.$main.html(`
+				<div class="nn-top-header">
+					<div>
+						<div class="nn-title">${__("Scorecard")}</div>
+						<div class="nn-sub">${__("Track weekly and monthly measurables against target goals.")}</div>
+					</div>
+					<div class="nn-top-right">
+						<a class="nn-badge-maz" href="javascript:void(0)"><span>+ Maz</span><span class="nn-badge-new">NEW</span></a>
+						<div class="nn-top-search">${ic("search", 13)}<input type="text" placeholder="${__("Search…")}"></div>
+						<button class="nn-btn-icon">${ic("bell", 15)}<span class="nn-dot-red"></span></button>
+						<button class="nn-btn-create" id="nn-create-top">${ic("plus", 13)} ${__("Create")}</button>
+					</div>
+				</div>
+
+				<div class="nn-tabs">
+					${tabs.map(([k, l]) => `<div class="nn-tab ${s.timeframe === k ? "on" : ""}" data-tf="${k}">${__(l)}</div>`).join("")}
+				</div>
+
+				<div class="nn-filter-bar">
+					<div class="nn-filter-left">
+						<button class="nn-pill-select" id="nn-team" data-menu>
+							<span class="k">${__("Team")}:</span> <b>${this.esc(s.team)}</b> ${ic("chevron-down", 12)}
+						</button>
+						<button class="nn-pill-select" id="nn-view" data-menu>
+							<span class="k">${__("View by")}:</span> <b>${s.timeframe}</b> ${ic("chevron-down", 12)}
+						</button>
+						<button class="nn-pill-select" id="nn-range" data-menu>
+							<span class="k">${__("Date Range")}:</span> <b>${__("Last 13 Weeks")}</b> ${ic("chevron-down", 12)}
+						</button>
+					</div>
+					<div class="nn-filter-right">
+						<button class="nn-ibtn-bar">${ic("undo", 14)}</button>
+						<button class="nn-ibtn-bar">${ic("redo", 14)}</button>
+						<button class="nn-btn-bar" id="nn-new-group">+ ${__("New group")}</button>
+						<button class="nn-btn-bar" id="nn-mgr">${__("Go to Measurable Manager")}</button>
+						<button class="nn-btn-bar" id="nn-optimize"><span style="color:#047857">${ic("sparkle", 13)}</span> ${__("Optimize Scorecard")}</button>
+						<div class="nn-search-input-wrap">${ic("search", 13)}<input id="nn-search-input" placeholder="${__("Search Measurables…")}" value="${this.esc(s.search)}"></div>
+					</div>
+				</div>
+
+				<div class="nn-card-wrap" style="margin:16px 28px 40px">
+					<div class="nn-card-header">
+						<div style="display:flex;align-items:center;gap:8px">
+							<span style="font-size:16px;font-weight:700">${__("Weekly KPIs")}</span>
+							<span class="nn-badge-cnt">${this.data.metrics.length}</span>
+						</div>
+						<div>
+							<button class="nn-btn-bar" id="nn-new-meas">${__("New Measurable")} ${ic("chevron-down", 12)}</button>
+						</div>
+					</div>
+
+					<div class="nn-table-scroll" id="nn-table-wrap"></div>
+				</div>
+			`);
+
+			this.bind_scorecard_events();
+			this.render_grid();
+		}
+
+		bind_scorecard_events() {
+			const self = this, $m = this.$main, s = this.s;
+
+			// Teams dropdown in Scorecard view from Team doctype
+			$m.find("#nn-team").off("click").on("click", async function (e) {
+				e.stopPropagation();
+				if (!self.all_teams || self.all_teams.length <= 1) {
+					await self.fetch_all_teams();
+				}
+				const teams_list = self.all_teams.filter(t => t !== "All Teams");
+				self.pick_menu(this, teams_list, s.team, v => {
+					s.team = v;
+					s.rock_team = v;
+					self.load_scorecard();
+				});
+			});
+
+			// View by dropdown
+			$m.find("#nn-view").off("click").on("click", function (e) {
+				e.stopPropagation();
+				self.pick_menu(this, ["Week", "Month", "Quarter"], s.timeframe, v => {
+					s.timeframe = v;
+					self.load_scorecard();
+				});
+			});
+
+			// Date range dropdown
+			$m.find("#nn-range").off("click").on("click", function (e) {
+				e.stopPropagation();
+				const ranges = [
+					[13, "Last 13 Weeks"],
+					[26, "Last 26 Weeks"],
+					[52, "Last 52 Weeks"]
+				];
+				self.pick_menu(this, ranges, s.range, v => {
+					s.range = v;
+					self.load_scorecard();
+				});
+			});
+
+			$m.find("#nn-create-top, #nn-new-meas").off("click").on("click", (e) => {
+				e.preventDefault();
+				self.open_measurable_drawer();
+			});
+
+			$m.find("#nn-search-input").off("input").on("input", function () {
+				self.s.search = $(this).val();
+				self.render_grid();
+			});
+		}
+
+		render_grid() {
+			const P = this.data.periods;
+			const q = (this.s.search || "").toLowerCase().trim();
+			const metrics = this.data.metrics.filter(m => !q || m.title.toLowerCase().includes(q));
+
+			if (!metrics.length) {
+				this.$main.find("#nn-table-wrap").html(`<div style="padding:48px;text-align:center;color:#9ca3af">${__("No measurables found.")}</div>`);
+				return;
+			}
+
+			const ths = P.map(p => `<th>${p.label}</th>`).join("");
+			const rows = metrics.map(m => {
+				const owner_label = this.get_user_display_name(m.owner);
+				const initials = (owner_label || "TJ").split(/\s+/).slice(0, 2).map(w => w[0] || "").join("").toUpperCase();
+
+				let cells = "";
+				P.forEach(p => {
+					const val = m.values[p.key];
+					if (val == null) {
+						cells += `<td class="nn-sc-cell" style="color:#d1d5db">-</td>`;
+					} else {
+						const pass = m.goal_op === ">=" ? val >= m.goal : val <= m.goal;
+						cells += `<td class="nn-sc-cell"><span class="nn-cell-badge ${pass ? "pass" : "fail"}">${val}</span></td>`;
+					}
+				});
+
+				return `
+					<tr>
+						<td class="left" style="font-weight:600;color:#111827">
+							<span class="nn-metric-title" data-id="${m.id}" style="cursor:pointer">${this.esc(m.title)}</span>
+						</td>
+						<td style="text-align:center">
+							<span class="nn-av-circle" style="width:22px;height:22px;font-size:9.5px">${initials}</span>
+						</td>
+						<td style="font-weight:600;color:#374151">${m.goal_op} ${m.goal}</td>
+						${cells}
+					</tr>
+				`;
+			}).join("");
+
+			this.$main.find("#nn-table-wrap").html(`
+				<table class="nn-sc-tbl">
+					<thead>
+						<tr>
+							<th class="left" style="min-width:240px">${__("Measurable")}</th>
+							<th style="width:60px;text-align:center">${__("Owner")}</th>
+							<th style="width:90px;text-align:center">${__("Goal")}</th>
+							${ths}
+						</tr>
+					</thead>
+					<tbody>${rows}</tbody>
+				</table>
+			`);
+
+			const self = this;
+			this.$main.find(".nn-metric-title").off("click").on("click", function () {
+				self.open_measurable_drawer($(this).attr("data-id"));
+			});
+		}
+
 		open_measurable_drawer(metric_id = null) {
 			const is_edit = !!metric_id;
 			const m = is_edit ? this.data.metrics.find(x => x.id === metric_id) : null;
@@ -839,6 +1392,12 @@
 				const label = u.full_name ? `${u.full_name} (${u.name})` : u.name;
 				const sel = val === current_owner ? "selected" : "";
 				owner_options += `<option value="${this.esc(val)}" ${sel}>${this.esc(label)}</option>`;
+			});
+
+			let team_options = "";
+			this.all_teams.filter(t => t !== "All Teams").forEach(t => {
+				const sel = t === this.s.team ? "selected" : "";
+				team_options += `<option value="${this.esc(t)}" ${sel}>${this.esc(t)}</option>`;
 			});
 
 			const drawer_html = `
@@ -858,6 +1417,11 @@
 					<div class="nn-field-group">
 						<div class="nn-field-label"><span>${__("Description (Optional)")}</span></div>
 						<textarea class="nn-textarea" style="width:100%;height:70px;border:1px solid #d1d5db;border-radius:6px;padding:8px" id="nn-d-desc">${this.esc(current_desc)}</textarea>
+					</div>
+
+					<div class="nn-field-group">
+						<div class="nn-field-label"><span>${__("Team")}</span></div>
+						<select class="nn-select" id="nn-d-team">${team_options}</select>
 					</div>
 
 					<div class="nn-field-group">
@@ -895,18 +1459,19 @@
 				if (!title) return;
 				const desc = $drawer.find("#nn-d-desc").val().trim();
 				const owner = $drawer.find("#nn-d-owner").val();
+				const team = $drawer.find("#nn-d-team").val() || self.s.team;
 				const val = Number($drawer.find("#nn-d-val").val()) || 0;
 
 				if (is_edit && m) {
 					await self.call("frappe.client.set_value", {
 						doctype: "EOS Metric", name: m.id,
-						fieldname: { metric_name: title, description: desc, owner_user: owner, target_value: val }
+						fieldname: { metric_name: title, description: desc, owner_user: owner, target_value: val, team: team }
 					});
 				} else {
 					await self.call("frappe.client.insert", {
 						doc: {
 							doctype: "EOS Metric", metric_name: title, description: desc,
-							owner_user: owner, target_value: val, team: self.s.team,
+							owner_user: owner, target_value: val, team: team,
 							scorecard: self.current_scorecard_id, archived: 0
 						}
 					});
@@ -926,5 +1491,16 @@
 		}
 	}
 
+	/* ================= Entry Point ================= */
+	frappe.provide("frappe.pages");
+	frappe.pages["scorecard_grid"] = frappe.pages["scorecard_grid"] || {};
+	frappe.pages["scorecard_grid"].on_page_load = function (wrapper) {
+		try {
+			wrapper.eos_page = new EOSNinety(wrapper);
+		} catch (e) {
+			console.error("Scorecard Grid error:", e);
+		}
+	};
+	frappe.pages["scorecard-grid"] = frappe.pages["scorecard_grid"];
 	window.EOSNinety = EOSNinety;
 })();
