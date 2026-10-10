@@ -94,7 +94,10 @@ doctype_js = {
 # Role Provisioning
 # -----------------
 
-after_migrate = "eos_core.roles.ensure_roles"
+after_migrate = [
+	"eos_core.roles.ensure_roles",
+	"eos_core.seed_sample_data.seed_all",
+]
 
 # Uninstallation
 # ------------

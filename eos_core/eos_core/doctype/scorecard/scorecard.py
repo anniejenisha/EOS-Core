@@ -531,6 +531,13 @@ class Scorecard(Document):
 
 @frappe.whitelist()
 def update_scorecard_entry(metric, week_start_date, actual_value=None):
+	if not frappe.db.exists("EOS Metric", metric):
+		found = frappe.db.get_value("EOS Metric", {"metric_name": metric}, "name")
+		if found:
+			metric = found
+		else:
+			frappe.throw(f"EOS Metric {metric} not found.")
+
 	doc = frappe.get_doc("EOS Metric", metric)
 
 	frappe.has_permission("EOS Metric", "write", doc=doc, throw=True)
@@ -542,6 +549,7 @@ def update_scorecard_entry(metric, week_start_date, actual_value=None):
 			existing_entry = entry
 			break
 
+	val = None
 	if actual_value is None or str(actual_value).strip() == "":
 		if existing_entry:
 			doc.remove(existing_entry)
@@ -550,6 +558,9 @@ def update_scorecard_entry(metric, week_start_date, actual_value=None):
 		if existing_entry:
 			existing_entry.actual_value = val
 			existing_entry.is_manual = 1
+			existing_entry.parenttype = "EOS Metric"
+			existing_entry.parentfield = "entries"
+			existing_entry.parent = doc.name
 		else:
 			doc.append(
 				"entries",
@@ -558,14 +569,30 @@ def update_scorecard_entry(metric, week_start_date, actual_value=None):
 					"week_start_date": target_date,
 					"actual_value": val,
 					"is_manual": 1,
+					"parenttype": "EOS Metric",
+					"parentfield": "entries",
+					"parent": doc.name,
 				},
 			)
 
-	doc.save()
+	doc.save(ignore_permissions=True)
+	frappe.db.commit()
+
+	try:
+		frappe.db.sql("""
+			UPDATE `tabScorecard Entry`
+			SET parenttype = 'EOS Metric', parentfield = 'entries', parent = metric
+			WHERE parenttype IS NULL OR parenttype = '' OR parent IS NULL OR parent = ''
+		""")
+		frappe.db.commit()
+	except Exception:
+		pass
+
 	return {
 		"metric": doc.name,
 		"week_start_date": target_date,
 		"saved": True,
+		"actual_value": val,
 		"entries_count": len(doc.get("entries", [])),
 	}
 

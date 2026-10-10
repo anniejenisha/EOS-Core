@@ -2,6 +2,7 @@
  * Ninety.io Core Dashboard Page (Scorecard & Rocks) for EOS Core
  * Dynamically fetches Teams from Team doctype for filter dropdowns.
  * Provides interactive Team, Owner, Status filters and live Rock management.
+ * Includes inline editable scorecard cells with Goal comparison (Red when less than goal, Green when >= goal).
  */
 (function () {
 	"use strict";
@@ -80,7 +81,7 @@
 			this.rocks = [];
 			this.users = [];
 			this.players = [];
-			this.all_teams = ["All Teams", "Leadership Team", "BEL BPO", "Test"];
+			this.all_teams = ["All Teams", "Leadership Team", "BEL BPO", "BPO and IT", "Test"];
 			this.current_scorecard_id = "Leadership Team-Weekly";
 			this.current_group_id = "";
 
@@ -135,14 +136,14 @@
 					}
 				}
 				if (!team_names.length) {
-					team_names = ["Leadership Team", "BEL BPO", "Test"];
+					team_names = ["Leadership Team", "BEL BPO", "BPO and IT", "Test"];
 				}
 				const unique_teams = Array.from(new Set(team_names));
 				this.all_teams = ["All Teams", ...unique_teams];
 			} catch (e) {
 				console.warn("fetch_all_teams failed", e);
 				if (!this.all_teams || !this.all_teams.length) {
-					this.all_teams = ["All Teams", "Leadership Team", "BEL BPO", "Test"];
+					this.all_teams = ["All Teams", "Leadership Team", "BEL BPO", "BPO and IT", "Test"];
 				}
 			}
 		}
@@ -209,6 +210,31 @@
 				});
 			}
 			return Array.from(list);
+		}
+
+		check_goal_pass(val, goal, op, min_val, max_val) {
+			if (val == null || isNaN(val)) return null;
+			val = Number(val);
+			goal = Number(goal);
+			op = (op || ">=").trim();
+
+			if (op === ">=") return val >= goal;
+			if (op === "<=") return val <= goal;
+			if (op === ">") return val > goal;
+			if (op === "<") return val < goal;
+			if (op === "==" || op === "=") return val === goal;
+			if (op === "Inside min/max") {
+				const mn = min_val != null ? Number(min_val) : -Infinity;
+				const mx = max_val != null ? Number(max_val) : Infinity;
+				return val >= mn && val <= mx;
+			}
+			if (op === "Outside min/max") {
+				const mn = min_val != null ? Number(min_val) : -Infinity;
+				const mx = max_val != null ? Number(max_val) : Infinity;
+				return val < mn || val > mx;
+			}
+			// Default rule: if data inputted is less than goal, it is NOT pass (returns false -> RED)
+			return val >= goal;
 		}
 
 		/* ================= styling ================= */
@@ -344,12 +370,19 @@
 			.nn-sc-tbl th.left { text-align: left; }
 			.nn-sc-tbl td { padding: 10px 12px; border-bottom: 1px solid #f1f3f5; border-right: 1px solid #f8fafc; text-align: right; vertical-align: middle; }
 			.nn-sc-tbl td.left { text-align: left; }
-			.nn-sc-cell { min-width: 68px; text-align: center; }
-			.nn-cell-badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 12px; font-weight: 600; }
-			.nn-cell-badge.pass { background: #dcfce7; color: #15803d; }
-			.nn-cell-badge.fail { background: #fee2e2; color: #b91c1c; }
 			.nn-btn-bar { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 6px; border: 1px solid #e5e7eb; background: #fff; font-size: 12px; font-weight: 500; color: #374151; cursor: pointer; }
 			.nn-btn-bar:hover { background: #f9fafb; border-color: #cbd5e1; }
+
+			/* Interactive Editable Cells & Goal Color Badges */
+			.nn-sc-cell { min-width: 72px; text-align: center; cursor: pointer; user-select: none; transition: background 0.12s ease; position: relative; }
+			.nn-sc-cell:hover { background: #f3f4f6; }
+			.nn-cell-val.empty { color: #9ca3af; font-size: 13px; font-weight: 500; }
+			.nn-cell-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 34px; padding: 3px 10px; border-radius: 6px; font-size: 12.5px; font-weight: 700; line-height: 1.2; transition: all 0.15s ease; }
+			/* GREEN when >= Goal */
+			.nn-cell-badge.pass { background: #dcfce7 !important; color: #15803d !important; border: 1px solid #86efac !important; }
+			/* RED when < Goal */
+			.nn-cell-badge.fail { background: #fee2e2 !important; color: #dc2626 !important; border: 1px solid #fca5a5 !important; }
+			.nn-sc-cell-input { width: 68px; height: 28px; border: 2px solid #064e3b; border-radius: 6px; text-align: center; font-size: 12.5px; font-weight: 700; color: #111827; background: #ffffff; outline: none; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
 
 			/* Menu Dropdown */
 			.nn-menu { position: fixed; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.14); z-index: 99999 !important; padding: 6px; min-width: 190px; max-height: 340px; overflow-y: auto; }
@@ -1152,7 +1185,7 @@
 			const u_res = await this.list("User", ["name", "full_name", "first_name", "last_name", "email"], { enabled: 1 }, "full_name asc", 200);
 			this.users = u_res.ok ? u_res.data : [];
 
-			const m_fields = ["name", "metric_name as title", "description", "target_value as goal", "operator as goal_op", "unit", "unit_type", "rollup", "frequency", "owner_user", "team", "scorecard", "group as grp"];
+			const m_fields = ["name", "metric_name as title", "description", "target_value as goal", "operator as goal_op", "unit", "unit_type", "rollup", "frequency", "owner_user", "team", "scorecard", "group as grp", "min_value", "max_value"];
 			let m_res = await this.list(C.measurable.doctype, m_fields, { team: s.team, archived: 0 }, "creation asc", 100);
 			if (!m_res.ok || !m_res.data.length) {
 				m_res = await this.list(C.measurable.doctype, m_fields, { scorecard: this.current_scorecard_id, archived: 0 }, "creation asc", 100);
@@ -1166,6 +1199,8 @@
 				owner: m.owner_user || "Administrator",
 				goal_op: m.goal_op || ">=",
 				goal: m.goal != null ? Number(m.goal) : 0,
+				min_value: m.min_value != null ? Number(m.min_value) : null,
+				max_value: m.max_value != null ? Number(m.max_value) : null,
 				unit: m.unit || "",
 				unit_type: m.unit_type || "Number",
 				rollup: m.rollup || "Average",
@@ -1177,15 +1212,14 @@
 				const start_d = P[P.length - 1].key;
 				const end_d = P[0].end;
 				const e_res = await this.list(C.entry.doctype, [
-					"name", "metric", "week_start_date as d", "actual_value as v"
+					"name", "metric", "parent", "week_start_date as d", "actual_value as v"
 				], {
-					metric: ["in", metrics.map(x => x.id)],
 					week_start_date: ["between", [start_d, end_d]]
 				}, "week_start_date asc", 2000);
 
 				if (e_res.ok && e_res.data) {
 					e_res.data.forEach(e => {
-						const met = metrics.find(x => x.id === e.metric);
+						const met = metrics.find(x => x.id === e.metric || x.id === e.parent);
 						if (met) {
 							const val = Number(e.v);
 							met.values[e.d] = isNaN(val) ? 0 : val;
@@ -1317,6 +1351,7 @@
 		}
 
 		render_grid() {
+			const self = this;
 			const P = this.data.periods;
 			const q = (this.s.search || "").toLowerCase().trim();
 			const metrics = this.data.metrics.filter(m => !q || m.title.toLowerCase().includes(q));
@@ -1335,10 +1370,17 @@
 				P.forEach(p => {
 					const val = m.values[p.key];
 					if (val == null) {
-						cells += `<td class="nn-sc-cell" style="color:#d1d5db">-</td>`;
+						cells += `
+							<td class="nn-sc-cell" data-metric="${self.esc(m.id)}" data-key="${p.key}" data-goal="${m.goal}" data-op="${self.esc(m.goal_op || '>=')}">
+								<span class="nn-cell-val empty">-</span>
+							</td>`;
 					} else {
-						const pass = m.goal_op === ">=" ? val >= m.goal : val <= m.goal;
-						cells += `<td class="nn-sc-cell"><span class="nn-cell-badge ${pass ? "pass" : "fail"}">${val}</span></td>`;
+						const pass = self.check_goal_pass(val, m.goal, m.goal_op, m.min_value, m.max_value);
+						const cls = pass ? "pass" : "fail";
+						cells += `
+							<td class="nn-sc-cell" data-metric="${self.esc(m.id)}" data-key="${p.key}" data-goal="${m.goal}" data-op="${self.esc(m.goal_op || '>=')}">
+								<span class="nn-cell-badge ${cls}">${val}</span>
+							</td>`;
 					}
 				});
 
@@ -1350,7 +1392,7 @@
 						<td style="text-align:center">
 							<span class="nn-av-circle" style="width:22px;height:22px;font-size:9.5px">${initials}</span>
 						</td>
-						<td style="font-weight:600;color:#374151">${m.goal_op} ${m.goal}</td>
+						<td style="font-weight:600;color:#374151;text-align:center">${m.goal_op || ">="} ${m.goal}</td>
 						${cells}
 					</tr>
 				`;
@@ -1370,10 +1412,101 @@
 				</table>
 			`);
 
+			this.bind_grid_cell_events();
+		}
+
+		bind_grid_cell_events() {
 			const self = this;
-			this.$main.find(".nn-metric-title").off("click").on("click", function () {
+			const $m = this.$main;
+
+			$m.find(".nn-metric-title").off("click").on("click", function () {
 				self.open_measurable_drawer($(this).attr("data-id"));
 			});
+
+			$m.find(".nn-sc-cell").off("click").on("click", function (e) {
+				if ($(this).find(".nn-sc-cell-input").length) return;
+
+				const $td = $(this);
+				const metric_id = $td.attr("data-metric");
+				const key = $td.attr("data-key");
+				const goal = Number($td.attr("data-goal")) || 0;
+				const op = $td.attr("data-op") || ">=";
+				const metric = self.data.metrics.find(x => x.id === metric_id);
+				const cur_val = metric && metric.values && metric.values[key] != null ? metric.values[key] : "";
+
+				const $inp = $(`<input type="number" step="any" class="nn-sc-cell-input" value="${cur_val}">`);
+				$td.empty().append($inp);
+				$inp.focus().select();
+
+				let finished = false;
+				const save_cell = async () => {
+					if (finished) return;
+					finished = true;
+					const raw = $inp.val().trim();
+					const new_val = raw === "" ? null : Number(raw);
+
+					if (new_val === null) {
+						if (metric) delete metric.values[key];
+						$td.html('<span class="nn-cell-val empty">-</span>');
+						await self.save_scorecard_entry(metric_id, key, null);
+						return;
+					}
+
+					if (isNaN(new_val)) {
+						frappe.show_alert({ message: __("Please enter a valid number"), indicator: "red" });
+						self.render_grid();
+						return;
+					}
+
+					if (metric) metric.values[key] = new_val;
+					const pass = self.check_goal_pass(new_val, goal, op);
+					const cls = pass ? "pass" : "fail";
+					$td.html(`<span class="nn-cell-badge ${cls}">${new_val}</span>`);
+
+					if (!pass) {
+						frappe.show_alert({
+							message: __(`Saved: ${new_val} (Off-track: less than goal ${op} ${goal})`),
+							indicator: "red"
+						});
+					} else {
+						frappe.show_alert({
+							message: __(`Saved: ${new_val} (On-track)`),
+							indicator: "green"
+						});
+					}
+
+					await self.save_scorecard_entry(metric_id, key, new_val);
+				};
+
+				$inp.on("blur", save_cell);
+				$inp.on("keydown", function (ev) {
+					if (ev.key === "Enter") {
+						ev.preventDefault();
+						$inp.blur();
+					} else if (ev.key === "Escape") {
+						ev.preventDefault();
+						finished = true;
+						if (cur_val !== "") {
+							const pass = self.check_goal_pass(cur_val, goal, op);
+							$td.html(`<span class="nn-cell-badge ${pass ? "pass" : "fail"}">${cur_val}</span>`);
+						} else {
+							$td.html('<span class="nn-cell-val empty">-</span>');
+						}
+					}
+				});
+			});
+		}
+
+		async save_scorecard_entry(metric_id, date, value) {
+			try {
+				await this.call("eos_core.eos_core.doctype.scorecard.scorecard.update_scorecard_entry", {
+					metric: metric_id,
+					week_start_date: date,
+					actual_value: value
+				});
+			} catch (e) {
+				console.warn("save_scorecard_entry error:", e);
+			}
 		}
 
 		open_measurable_drawer(metric_id = null) {
