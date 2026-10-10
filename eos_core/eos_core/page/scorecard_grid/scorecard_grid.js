@@ -887,6 +887,30 @@
 			this.bind_table_actions();
 		}
 
+		get_rock_status_badge(st, rname = null) {
+			st = (st || "").trim();
+			const is_off = st === "Not Started" || st === "Off-track";
+			const is_complete = st === "Complete";
+			const is_dropped = st === "Dropped";
+
+			let cls = "on-track";
+			let label = "👍 " + __("On-track");
+
+			if (is_off) {
+				cls = "off-track";
+				label = "⚠️ " + __("Off-track");
+			} else if (is_complete) {
+				cls = "complete";
+				label = "✓ " + __("Complete");
+			} else if (is_dropped) {
+				cls = "dropped";
+				label = "✕ " + __("Dropped");
+			}
+
+			const data_attr = rname ? `data-rock="${this.esc(rname)}"` : "";
+			return `<span class="nn-status-badge ${cls}" ${data_attr} title="${__("Click to change status")}">${label}</span>`;
+		}
+
 		render_rock_rows(rocks, is_company) {
 			const self = this;
 			if (!rocks.length) {
@@ -928,7 +952,7 @@
 						<td style="text-align:center;cursor:pointer" class="nn-rock-exp" data-title="${self.esc(r.title)}">
 							${ic(is_expanded ? "chevron-down" : "chevron-right", 12)}
 						</td>
-						<td><span class="nn-status-badge on-track">👍 On-track</span></td>
+						<td>${self.get_rock_status_badge(r.status, r.name)}</td>
 						<td style="font-weight:500;color:#111827">
 							<span class="nn-rock-click" data-id="${self.esc(r.name)}" style="cursor:pointer">${self.esc(r.title)}</span>
 						</td>
@@ -969,7 +993,7 @@
 				return `
 					<tr class="nn-rock-row">
 						<td style="text-align:center;color:#9ca3af">${ic("chevron-right", 12)}</td>
-						<td><span class="nn-status-badge on-track">👍 On-track</span></td>
+						<td>${self.get_rock_status_badge(r.status, r.name)}</td>
 						<td style="font-weight:500;color:#111827">
 							<span class="nn-rock-click" data-id="${self.esc(r.name)}" style="cursor:pointer">${self.esc(r.title)}</span>
 							${is_comp ? `<span class="nn-badge-company">${__("Company Rock")}</span>` : ""}
@@ -1106,6 +1130,34 @@
 			// Clicking rock row opens detail/edit drawer
 			$m.find(".nn-rock-click").off("click").on("click", function () {
 				self.open_rock_drawer($(this).attr("data-id"));
+			});
+
+			// Status badge click to quickly change rock status
+			$m.find(".nn-status-badge[data-rock]").off("click").on("click", function (e) {
+				e.stopPropagation();
+				const rname = $(this).attr("data-rock");
+				const rock = self.rocks.find(x => x.name === rname);
+				if (!rock) return;
+
+				const options = [
+					["In Progress", "👍 " + __("On-track")],
+					["Not Started", "⚠️ " + __("Off-track")],
+					["Complete", "✓ " + __("Complete")]
+				];
+
+				const current_val = (rock.status === "Not Started" || rock.status === "Off-track") ? "Not Started" : (rock.status === "Complete" ? "Complete" : "In Progress");
+
+				self.pick_menu(this, options, current_val, async new_val => {
+					rock.status = new_val;
+					await self.call("frappe.client.set_value", {
+						doctype: "Rock",
+						name: rname,
+						fieldname: "status",
+						value: new_val
+					});
+					self.render_rocks_tables();
+					frappe.show_alert({ message: __("Rock status updated!"), indicator: "green" });
+				});
 			});
 		}
 
