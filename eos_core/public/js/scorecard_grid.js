@@ -67,9 +67,9 @@
 				view: "rocks",
 				timeframe: "Week",
 				range: 13,
-				team: "Leadership Team",
-				rock_team: "Leadership Team",
-				rock_owner: "Taher Jivanji",
+				team: "All Teams",
+				rock_team: "All Teams",
+				rock_owner: "All",
 				rock_status: "All",
 				rock_tab: "List",
 				show_no_rocks: false,
@@ -78,11 +78,11 @@
 				banner_off: false,
 				sc_collapsed: false,
 				view_mode: "chart",
-				expanded_rocks: { "EDMS implementation and go live": true },
+				expanded_rocks: {},
 
 				// To-Dos State
-				todo_team: "Leadership Team",
-				todo_owner: "Taher Jivanji",
+				todo_team: "All Teams",
+				todo_owner: "All",
 				todo_tab: "Team",
 				todo_archive: false,
 				todo_search: "",
@@ -93,13 +93,52 @@
 			this.todos = [];
 			this.users = [];
 			this.players = [];
-			this.all_teams = ["All Teams", "Leadership Team", "BEL BPO", "BPO and IT", "Test"];
-			this.current_scorecard_id = "Leadership Team-Weekly";
+			this.all_teams = ["All Teams"];
+			this.current_scorecard_id = "";
 			this.current_group_id = "";
 
+			this.preload_doctypes();
 			this.css();
 			this.shell();
 			this.go(this.s.view);
+		}
+
+		async preload_doctypes() {
+			const dtypes = ["Rock", "To Do", "EOS Metric", "Team", "Player"];
+			for (const dt of dtypes) {
+				if (frappe.model && frappe.model.with_doctype) {
+					try {
+						await frappe.model.with_doctype(dt);
+					} catch (_) {}
+				}
+			}
+		}
+
+		get_field_label(doctype, fieldname, fallback = "") {
+			try {
+				if (frappe.meta && frappe.meta.get_docfield) {
+					const df = frappe.meta.get_docfield(doctype, fieldname);
+					if (df && df.label) return __(df.label);
+				}
+				if (frappe.get_meta) {
+					const meta = frappe.get_meta(doctype);
+					if (meta && meta.fields) {
+						const df = meta.fields.find(f => f.fieldname === fieldname);
+						if (df && df.label) return __(df.label);
+					}
+				}
+			} catch (_) {}
+			return fallback ? __(fallback) : fieldname;
+		}
+
+		get_doctype_label(doctype, fallback = "") {
+			try {
+				if (frappe.get_meta) {
+					const meta = frappe.get_meta(doctype);
+					if (meta && meta.name) return __(meta.name);
+				}
+			} catch (_) {}
+			return fallback ? __(fallback) : doctype;
 		}
 
 		/* ================= helpers ================= */
@@ -147,15 +186,15 @@
 						team_names = res.data.map(t => t.team_name || t.name).filter(Boolean);
 					}
 				}
-				if (!team_names.length) {
-					team_names = ["Leadership Team", "BEL BPO", "BPO and IT", "Test"];
-				}
 				const unique_teams = Array.from(new Set(team_names));
 				this.all_teams = ["All Teams", ...unique_teams];
+				if (this.s.team === "All Teams" && unique_teams.length > 0) {
+					this.s.team = unique_teams[0];
+				}
 			} catch (e) {
 				console.warn("fetch_all_teams failed", e);
 				if (!this.all_teams || !this.all_teams.length) {
-					this.all_teams = ["All Teams", "Leadership Team", "BEL BPO", "BPO and IT", "Test"];
+					this.all_teams = ["All Teams"];
 				}
 			}
 		}
@@ -189,15 +228,11 @@
 			if (user_obj && (user_obj.full_name || user_obj.first_name)) {
 				return user_obj.full_name || `${user_obj.first_name} ${user_obj.last_name || ""}`.trim();
 			}
-			if (u === "taher@burhani.com") return "Taher Jivanji";
-			if (u === "jd@example.com") return "John Doe";
-			if (u === "anniejenisha.p@gmail.com") return "Jenisha";
 			return u;
 		}
 
 		get_available_owners(team = null) {
 			const list = new Set();
-			list.add("Taher Jivanji");
 			const active_team = team || (this.s.view === "todos" ? this.s.todo_team : this.s.rock_team);
 			if (active_team && active_team !== "All Teams") {
 				(this.players || []).forEach(p => {
@@ -236,7 +271,7 @@
 		}
 
 		get_initials(name) {
-			if (!name) return "TJ";
+			if (!name) return "—";
 			const clean = String(name).trim();
 			if (clean.includes("@")) {
 				return clean.substring(0, 2).toUpperCase();
@@ -264,20 +299,14 @@
 			const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 			const date_label = `${da} ${months[mo] || ""}`;
 
-			// Baseline date: 2026-10-10 or today
-			const now = new Date();
-			const now_str = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-			const ref_date = now_str > "2026-10-10" ? now_str : "2026-10-10";
+			const today_str = (frappe.datetime && frappe.datetime.get_today) ? frappe.datetime.get_today() : new Date().toISOString().slice(0, 10);
+			const diff = this.diff_days(due_str, today_str);
 
-			// Match screenshot:
-			// 6 Oct (or <= 2026-10-06): Red alert "!" badge
-			// 8 Oct (or <= 2026-10-08): Dark clock badge
-			// 9 Oct, 12 Oct, 13 Oct: normal text
-			if (due_str <= "2026-10-06" || (due_str < ref_date && this.diff_days(due_str, ref_date) <= -3)) {
+			if (diff < 0) {
 				return {
 					html: `<span class="nn-due-badge"><span class="nn-due-icon red">!</span><span class="nn-due-text red">${date_label}</span></span>`
 				};
-			} else if (due_str === "2026-10-08" || due_str === "2026-10-07" || (due_str <= ref_date && this.diff_days(due_str, ref_date) >= -2)) {
+			} else if (diff <= 2) {
 				return {
 					html: `<span class="nn-due-badge"><span class="nn-due-icon clock">${ic("clock", 11)}</span><span class="nn-due-text dark">${date_label}</span></span>`
 				};
@@ -539,6 +568,9 @@
 		}
 
 		shell() {
+			const cur_name = (frappe.session && (frappe.session.user_fullname || frappe.session.user)) || "User";
+			const cur_av = this.get_initials(cur_name);
+
 			this.$root = $(`
 				<div class="nn">
 					<!-- Dark Left Sidebar -->
@@ -562,8 +594,8 @@
 						<div class="nn-side-footer">
 							<div class="nn-side-foot-item">+ ${__("Add Teammates")}</div>
 							<div class="nn-user-bar">
-								<span class="nn-user-av">TJ</span>
-								<div class="nn-user-name">Taher Jivanji</div>
+								<span class="nn-user-av">${this.esc(cur_av)}</span>
+								<div class="nn-user-name">${this.esc(cur_name)}</div>
 							</div>
 						</div>
 					</div>
@@ -683,7 +715,7 @@
 			this.$main.html(`
 				<div class="nn-top-header">
 					<div>
-						<div class="nn-title">${__("Rocks")}</div>
+						<div class="nn-title">${this.get_doctype_label("Rock", "Rocks")}</div>
 						<div class="nn-sub">${__("Set and track quarterly goals to help your team consistently hit their targets.")}</div>
 					</div>
 					<div class="nn-top-right">
@@ -703,13 +735,13 @@
 				<div class="nn-filter-bar">
 					<div class="nn-filter-left">
 						<button class="nn-pill-select" id="nn-rteam" data-menu>
-							<span class="k">${__("Team")}:</span> <b>${this.esc(s.rock_team)}</b> ${ic("chevron-down", 12)}
+							<span class="k">${this.get_field_label("Rock", "team", "Team")}:</span> <b>${this.esc(s.rock_team)}</b> ${ic("chevron-down", 12)}
 						</button>
 						<button class="nn-pill-select" id="nn-rowner" data-menu>
-							<span class="k">${__("Owner")}:</span> <b>${this.esc(s.rock_owner)}</b> ${ic("chevron-down", 12)}
+							<span class="k">${this.get_field_label("Rock", "owner_user", "Owner")}:</span> <b>${this.esc(s.rock_owner)}</b> ${ic("chevron-down", 12)}
 						</button>
 						<button class="nn-pill-select" id="nn-rstatus" data-menu>
-							<span class="k">${__("Status")}:</span> <b>${this.esc(s.rock_status)}</b> ${ic("chevron-down", 12)}
+							<span class="k">${this.get_field_label("Rock", "status", "Status")}:</span> <b>${this.esc(s.rock_status)}</b> ${ic("chevron-down", 12)}
 						</button>
 						<div style="display:inline-flex;align-items:center;gap:8px;margin-left:6px;font-size:12.5px;color:#374151">
 							<span class="nn-switch ${s.show_no_rocks ? "on" : ""}" id="nn-sw-norocks"></span>
@@ -720,7 +752,7 @@
 						<button class="nn-ibtn-bar" title="${__("3D View")}">${ic("box", 14)}</button>
 						<button class="nn-ibtn-bar" id="nn-r-refresh" title="${__("Refresh Rocks")}">${ic("refresh", 14)}</button>
 						<button class="nn-ibtn-bar" title="${__("More Options")}">${ic("dots", 14)}</button>
-						<div class="nn-search-input-wrap">${ic("search", 13)}<input id="nn-rock-search" placeholder="${__("Search Rocks…")}" value="${this.esc(s.search)}"></div>
+						<div class="nn-search-input-wrap">${ic("search", 13)}<input id="nn-rock-search" placeholder="${__("Search")} ${this.get_doctype_label("Rock", "Rocks")}…" value="${this.esc(s.search)}"></div>
 					</div>
 				</div>
 
@@ -821,10 +853,10 @@
 							<thead>
 								<tr>
 									<th style="width:24px"></th>
-									<th style="width:90px">${__("Status")}</th>
-									<th>${__("Title")}</th>
-									<th style="text-align:right;width:150px">${__("Milestone progress")}</th>
-									<th style="text-align:center;width:90px">${__("Due by")}</th>
+									<th style="width:90px">${this.get_field_label("Rock", "status", "Status")}</th>
+									<th>${this.get_field_label("Rock", "rock_name", "Title")}</th>
+									<th style="text-align:right;width:150px">${this.get_field_label("Rock", "milestones", "Milestone progress")}</th>
+									<th style="text-align:center;width:90px">${this.get_field_label("Rock", "duration_end", "Due by")}</th>
 									<th style="width:30px"></th>
 								</tr>
 							</thead>
@@ -853,7 +885,7 @@
 					<div class="nn-rock-header">
 						<div class="nn-rock-title-group">
 							<span class="nn-rock-icon-circle">${ic("users", 15)}</span>
-							<span class="nn-rock-title">${__("Company Rocks")}</span>
+							<span class="nn-rock-title">${__("Company")} ${this.get_doctype_label("Rock", "Rocks")}</span>
 							<span class="nn-badge-cnt">${company_rocks.length}</span>
 						</div>
 						<div style="color:#059669;cursor:pointer">${ic("arrow-up-right", 16)}</div>
@@ -863,11 +895,11 @@
 						<thead>
 							<tr>
 								<th style="width:24px"></th>
-								<th style="width:90px">${__("Status")}</th>
-								<th>${__("Title")}</th>
-								<th style="text-align:right;width:150px">${__("Milestone progress")}</th>
-								<th style="text-align:center;width:60px">${__("Owner")}</th>
-								<th style="text-align:center;width:90px">${__("Due by")}</th>
+								<th style="width:90px">${this.get_field_label("Rock", "status", "Status")}</th>
+								<th>${this.get_field_label("Rock", "rock_name", "Title")}</th>
+								<th style="text-align:right;width:150px">${this.get_field_label("Rock", "milestones", "Milestone progress")}</th>
+								<th style="text-align:center;width:60px">${this.get_field_label("Rock", "owner_user", "Owner")}</th>
+								<th style="text-align:center;width:90px">${this.get_field_label("Rock", "duration_end", "Due by")}</th>
 								<th style="width:30px"></th>
 							</tr>
 						</thead>
@@ -1167,18 +1199,15 @@
 			const r = is_edit ? this.rocks.find(x => x.name === rock_id) : null;
 
 			const current_title = r ? r.title : "";
-			const current_owner = r ? r.owner_user : (default_owner === "Taher Jivanji" ? "taher@burhani.com" : "taher@burhani.com");
-			const current_team = r ? (r.team || "Leadership Team") : (this.s.rock_team !== "All Teams" ? this.s.rock_team : "Leadership Team");
+			const current_owner = r ? r.owner_user : (default_owner || (frappe.session && frappe.session.user) || "");
+			const current_team = r ? (r.team || "") : (this.s.rock_team !== "All Teams" ? this.s.rock_team : (this.all_teams.find(t => t !== "All Teams") || ""));
 			const current_scope = r ? (r.scope || "Company") : "Company";
 			const current_is_comp = r ? !!r.is_company_rock : true;
 			const current_status = r ? r.status : "In Progress";
-			const current_due = r && r.due ? r.due : "2026-12-31";
+			const current_due = r && r.due ? r.due : ((frappe.datetime && frappe.datetime.add_months) ? frappe.datetime.add_months(frappe.datetime.get_today(), 3) : "");
 
 			let owner_options = "";
-			const users_list = this.users.length ? this.users : [
-				{ name: "taher@burhani.com", full_name: "Taher Jivanji" },
-				{ name: "Administrator", full_name: "Administrator" }
-			];
+			const users_list = this.users.length ? this.users : (frappe.session && frappe.session.user ? [{ name: frappe.session.user, full_name: frappe.session.user_fullname || frappe.session.user }] : []);
 			users_list.forEach(u => {
 				const val = u.name;
 				const label = u.full_name ? `${u.full_name} (${u.name})` : u.name;
@@ -1202,22 +1231,22 @@
 
 				<div class="nn-drawer-body">
 					<div class="nn-field-group">
-						<div class="nn-field-label"><span>${__("Rock Title")}</span></div>
+						<div class="nn-field-label"><span>${this.get_field_label("Rock", "rock_name", "Rock Title")}</span></div>
 						<input type="text" class="nn-input-text" id="nn-r-title" value="${this.esc(current_title)}" placeholder="${__("e.g. EOS company portal go live")}">
 					</div>
 
 					<div class="nn-field-group">
-						<div class="nn-field-label"><span>${__("Owner")}</span></div>
+						<div class="nn-field-label"><span>${this.get_field_label("Rock", "owner_user", "Owner")}</span></div>
 						<select class="nn-select" id="nn-r-owner">${owner_options}</select>
 					</div>
 
 					<div class="nn-field-group">
-						<div class="nn-field-label"><span>${__("Team")}</span></div>
+						<div class="nn-field-label"><span>${this.get_field_label("Rock", "team", "Team")}</span></div>
 						<select class="nn-select" id="nn-r-team">${team_options}</select>
 					</div>
 
 					<div class="nn-field-group">
-						<div class="nn-field-label"><span>${__("Scope")}</span></div>
+						<div class="nn-field-label"><span>${this.get_field_label("Rock", "scope", "Scope")}</span></div>
 						<select class="nn-select" id="nn-r-scope">
 							<option value="Company" ${current_scope === "Company" ? "selected" : ""}>Company</option>
 							<option value="Individual" ${current_scope === "Individual" ? "selected" : ""}>Individual</option>
@@ -1226,11 +1255,11 @@
 
 					<div class="nn-field-group" style="display:flex;align-items:center;gap:10px">
 						<input type="checkbox" id="nn-r-comp" ${current_is_comp ? "checked" : ""}>
-						<label for="nn-r-comp" style="font-size:12.5px;font-weight:500;cursor:pointer">${__("Mark as Company Rock")}</label>
+						<label for="nn-r-comp" style="font-size:12.5px;font-weight:500;cursor:pointer">${this.get_field_label("Rock", "is_company_rock", "Mark as Company Rock")}</label>
 					</div>
 
 					<div class="nn-field-group">
-						<div class="nn-field-label"><span>${__("Status")}</span></div>
+						<div class="nn-field-label"><span>${this.get_field_label("Rock", "status", "Status")}</span></div>
 						<select class="nn-select" id="nn-r-status">
 							<option value="In Progress" ${current_status === "In Progress" || current_status === "On-track" ? "selected" : ""}>In Progress (On-track)</option>
 							<option value="Not Started" ${current_status === "Not Started" || current_status === "Off-track" ? "selected" : ""}>Not Started (Off-track)</option>
@@ -1239,7 +1268,7 @@
 					</div>
 
 					<div class="nn-field-group">
-						<div class="nn-field-label"><span>${__("Due Date")}</span></div>
+						<div class="nn-field-label"><span>${this.get_field_label("Rock", "duration_end", "Due Date")}</span></div>
 						<input type="date" class="nn-input-text" id="nn-r-due" value="${this.esc(current_due)}">
 					</div>
 				</div>
@@ -1348,7 +1377,7 @@
 			this.$main.html(`
 				<div class="nn-top-header">
 					<div>
-						<div class="nn-title">${__("To-Dos")}</div>
+						<div class="nn-title">${this.get_doctype_label("To Do", "To-Dos")}</div>
 						<div class="nn-sub">${__("Create, assign, and track deadlines for critical tasks.")}</div>
 					</div>
 					<div class="nn-top-right">
@@ -1367,20 +1396,20 @@
 				<div class="nn-filter-bar">
 					<div class="nn-filter-left">
 						<button class="nn-pill-select" id="nn-t-team" data-menu>
-							<span class="k">${__("Team")}:</span> <b>${this.esc(s.todo_team)}</b> ${ic("chevron-down", 12)}
+							<span class="k">${this.get_field_label("To Do", "team", "Team")}:</span> <b>${this.esc(s.todo_team)}</b> ${ic("chevron-down", 12)}
 						</button>
 						<button class="nn-pill-select" id="nn-t-owner" data-menu>
-							<span class="k">${__("Owner")}:</span> <b>${this.esc(s.todo_owner)}</b> ${ic("chevron-down", 12)}
+							<span class="k">${this.get_field_label("To Do", "owner_user", "Owner")}:</span> <b>${this.esc(s.todo_owner)}</b> ${ic("chevron-down", 12)}
 						</button>
 						<div style="display:inline-flex;align-items:center;gap:8px;margin-left:6px;font-size:12.5px;color:#374151">
 							<span class="nn-switch ${s.todo_archive ? "on" : ""}" id="nn-sw-t-archive"></span>
-							<span>${__("Archive")}</span>
+							<span>${this.get_field_label("To Do", "archived", "Archive")}</span>
 						</div>
 					</div>
 					<div class="nn-filter-right">
 						<button class="nn-ibtn-bar" id="nn-t-refresh" title="${__("Refresh To-Dos")}">${ic("refresh", 14)}</button>
 						<button class="nn-ibtn-bar" title="${__("More Options")}">${ic("dots", 14)}</button>
-						<div class="nn-search-input-wrap">${ic("search", 13)}<input id="nn-todo-search" placeholder="${__("Search To-Dos…")}" value="${this.esc(s.todo_search)}"></div>
+						<div class="nn-search-input-wrap">${ic("search", 13)}<input id="nn-todo-search" placeholder="${__("Search")} ${this.get_doctype_label("To Do", "To-Dos")}…" value="${this.esc(s.todo_search)}"></div>
 					</div>
 				</div>
 
@@ -1414,8 +1443,8 @@
 
 				// Private tab filter
 				if (s.todo_tab === "Private") {
-					const cur = (frappe.session && frappe.session.user) ? frappe.session.user : "taher@burhani.com";
-					if (td.owner_user !== cur && td.owner_user !== "taher@burhani.com") return false;
+					const cur = (frappe.session && frappe.session.user) ? frappe.session.user : "";
+					if (cur && td.owner_user !== cur) return false;
 				}
 
 				return true;
@@ -1432,7 +1461,7 @@
 				<div class="nn-todo-card">
 					<div class="nn-todo-card-header">
 						<div class="nn-todo-card-title">
-							<span>${s.todo_tab === "Private" ? __("Private To-Dos") : __("Team To-Dos")}</span>
+							<span>${s.todo_tab === "Private" ? __("Private") : __("Team")} ${this.get_doctype_label("To Do", "To-Dos")}</span>
 							<span class="nn-todo-count">${filtered.length}</span>
 						</div>
 						<button class="nn-todo-expand-btn" title="${__("Open in full view")}">${ic("arrow-up-right", 15)}</button>
@@ -1440,11 +1469,11 @@
 
 					<div class="nn-todo-table-head">
 						<div class="nn-todo-col-check"></div>
-						<div class="nn-todo-col-title">${__("Title")}</div>
+						<div class="nn-todo-col-title">${this.get_field_label("To Do", "todo_name", "Title")}</div>
 						<div class="nn-todo-col-due" id="nn-todo-sort-due" style="cursor:pointer;" title="${__("Sort by Due Date")}">
-							<span>${__("Due By")}</span> ${ic(s.todo_sort_dir === "desc" ? "chevron-up" : "arrow-down", 11)}
+							<span>${this.get_field_label("To Do", "due_date", "Due Date")}</span> ${ic(s.todo_sort_dir === "desc" ? "chevron-up" : "arrow-down", 11)}
 						</div>
-						<div class="nn-todo-col-owner">${__("Owner")}</div>
+						<div class="nn-todo-col-owner">${this.get_field_label("To Do", "owner_user", "Owner")}</div>
 						<div class="nn-todo-col-actions"></div>
 					</div>
 
@@ -1455,7 +1484,7 @@
 							const is_complete = td.status === "Complete";
 							const due_info = this.format_todo_due(td.due_date);
 							const owner_name = this.get_user_display_name(td.owner_user);
-							const initials = this.get_initials(owner_name || td.owner_user || "TJ");
+							const initials = this.get_initials(owner_name || td.owner_user || "");
 
 							return `
 								<div class="nn-todo-row" data-id="${this.esc(td.name)}">
@@ -1644,18 +1673,15 @@
 			const td = is_edit ? (this.todos || []).find(x => x.name === todo_id) : null;
 
 			const current_title = td ? td.todo_name : "";
-			const current_owner = td ? td.owner_user : "taher@burhani.com";
-			const current_team = td ? (td.team || "Leadership Team") : (this.s.todo_team !== "All Teams" ? this.s.todo_team : "Leadership Team");
+			const current_owner = td ? td.owner_user : ((frappe.session && frappe.session.user) || "");
+			const current_team = td ? (td.team || "") : (this.s.todo_team !== "All Teams" ? this.s.todo_team : (this.all_teams.find(t => t !== "All Teams") || ""));
 			const current_status = td ? td.status : "Not Started";
 			const current_priority = td ? (td.priority || "Medium") : "Medium";
-			const current_due = td && td.due_date ? td.due_date : "2026-10-15";
+			const current_due = td && td.due_date ? td.due_date : ((frappe.datetime && frappe.datetime.add_days) ? frappe.datetime.add_days(frappe.datetime.get_today(), 7) : "");
 			const current_notes = td && td.notes ? td.notes : "";
 
 			let owner_options = "";
-			const users_list = this.users.length ? this.users : [
-				{ name: "taher@burhani.com", full_name: "Taher Jivanji" },
-				{ name: "Administrator", full_name: "Administrator" }
-			];
+			const users_list = this.users.length ? this.users : (frappe.session && frappe.session.user ? [{ name: frappe.session.user, full_name: frappe.session.user_fullname || frappe.session.user }] : []);
 			users_list.forEach(u => {
 				const val = u.name;
 				const label = u.full_name ? `${u.full_name} (${u.name})` : u.name;
@@ -1679,27 +1705,27 @@
 
 				<div class="nn-drawer-body">
 					<div class="nn-field-group">
-						<div class="nn-field-label"><span>${__("To-Do Title")}</span> <span style="color:#ef4444">*</span></div>
+						<div class="nn-field-label"><span>${this.get_field_label("To Do", "todo_name", "To-Do Title")}</span> <span style="color:#ef4444">*</span></div>
 						<input type="text" class="nn-input-text" id="nn-td-title" value="${this.esc(current_title)}" placeholder="${__("e.g. Complete customer review meeting")}">
 					</div>
 
 					<div class="nn-field-group">
-						<div class="nn-field-label"><span>${__("Team")}</span></div>
+						<div class="nn-field-label"><span>${this.get_field_label("To Do", "team", "Team")}</span></div>
 						<select class="nn-select" id="nn-td-team">${team_options}</select>
 					</div>
 
 					<div class="nn-field-group">
-						<div class="nn-field-label"><span>${__("Owner")}</span></div>
+						<div class="nn-field-label"><span>${this.get_field_label("To Do", "owner_user", "Owner")}</span></div>
 						<select class="nn-select" id="nn-td-owner">${owner_options}</select>
 					</div>
 
 					<div class="nn-field-group">
-						<div class="nn-field-label"><span>${__("Due Date")}</span></div>
+						<div class="nn-field-label"><span>${this.get_field_label("To Do", "due_date", "Due Date")}</span></div>
 						<input type="date" class="nn-input-text" id="nn-td-due" value="${this.esc(current_due)}">
 					</div>
 
 					<div class="nn-field-group">
-						<div class="nn-field-label"><span>${__("Status")}</span></div>
+						<div class="nn-field-label"><span>${this.get_field_label("To Do", "status", "Status")}</span></div>
 						<select class="nn-select" id="nn-td-status">
 							<option value="Not Started" ${current_status === "Not Started" ? "selected" : ""}>Not Started</option>
 							<option value="In Progress" ${current_status === "In Progress" ? "selected" : ""}>In Progress</option>
@@ -1709,7 +1735,7 @@
 					</div>
 
 					<div class="nn-field-group">
-						<div class="nn-field-label"><span>${__("Priority")}</span></div>
+						<div class="nn-field-label"><span>${this.get_field_label("To Do", "priority", "Priority")}</span></div>
 						<select class="nn-select" id="nn-td-priority">
 							<option value="Low" ${current_priority === "Low" ? "selected" : ""}>Low</option>
 							<option value="Medium" ${current_priority === "Medium" ? "selected" : ""}>Medium</option>
@@ -1718,7 +1744,7 @@
 					</div>
 
 					<div class="nn-field-group">
-						<div class="nn-field-label"><span>${__("Notes")}</span></div>
+						<div class="nn-field-label"><span>${this.get_field_label("To Do", "notes", "Notes")}</span></div>
 						<textarea class="nn-input-text" id="nn-td-notes" style="height:80px;padding:8px 10px;resize:vertical;" placeholder="${__("Add details or notes…")}">${this.esc(current_notes)}</textarea>
 					</div>
 				</div>
@@ -1914,7 +1940,7 @@
 			this.$main.html(`
 				<div class="nn-top-header">
 					<div>
-						<div class="nn-title">${__("Scorecard")}</div>
+						<div class="nn-title">${this.get_doctype_label("Scorecard", "Scorecard")}</div>
 						<div class="nn-sub">${__("Track weekly and monthly measurables against target goals.")}</div>
 					</div>
 					<div class="nn-top-right">
@@ -1932,10 +1958,10 @@
 				<div class="nn-filter-bar">
 					<div class="nn-filter-left">
 						<button class="nn-pill-select" id="nn-team" data-menu>
-							<span class="k">${__("Team")}:</span> <b>${this.esc(s.team)}</b> ${ic("chevron-down", 12)}
+							<span class="k">${this.get_field_label("Scorecard", "team", "Team")}:</span> <b>${this.esc(s.team)}</b> ${ic("chevron-down", 12)}
 						</button>
 						<button class="nn-pill-select" id="nn-view" data-menu>
-							<span class="k">${__("View by")}:</span> <b>${s.timeframe}</b> ${ic("chevron-down", 12)}
+							<span class="k">${this.get_field_label("Scorecard", "timeframe", "View by")}:</span> <b>${s.timeframe}</b> ${ic("chevron-down", 12)}
 						</button>
 						<button class="nn-pill-select" id="nn-range" data-menu>
 							<span class="k">${__("Date Range")}:</span> <b>${__("Last 13 Weeks")}</b> ${ic("chevron-down", 12)}
@@ -1947,7 +1973,7 @@
 						<button class="nn-btn-bar" id="nn-new-group">+ ${__("New group")}</button>
 						<button class="nn-btn-bar" id="nn-mgr">${__("Go to Measurable Manager")}</button>
 						<button class="nn-btn-bar" id="nn-optimize"><span style="color:#047857">${ic("sparkle", 13)}</span> ${__("Optimize Scorecard")}</button>
-						<div class="nn-search-input-wrap">${ic("search", 13)}<input id="nn-search-input" placeholder="${__("Search Measurables…")}" value="${this.esc(s.search)}"></div>
+						<div class="nn-search-input-wrap">${ic("search", 13)}<input id="nn-search-input" placeholder="${__("Search")} ${this.get_doctype_label("EOS Metric", "Measurables")}…" value="${this.esc(s.search)}"></div>
 					</div>
 				</div>
 
@@ -2073,9 +2099,9 @@
 				<table class="nn-sc-tbl">
 					<thead>
 						<tr>
-							<th class="left" style="min-width:240px">${__("Measurable")}</th>
-							<th style="width:60px;text-align:center">${__("Owner")}</th>
-							<th style="width:90px;text-align:center">${__("Goal")}</th>
+							<th class="left" style="min-width:240px">${this.get_field_label("EOS Metric", "metric_name", "Measurable")}</th>
+							<th style="width:60px;text-align:center">${this.get_field_label("EOS Metric", "owner_user", "Owner")}</th>
+							<th style="width:90px;text-align:center">${this.get_field_label("EOS Metric", "target_value", "Goal")}</th>
 							${ths}
 						</tr>
 					</thead>
@@ -2214,22 +2240,22 @@
 
 				<div class="nn-drawer-body">
 					<div class="nn-field-group">
-						<div class="nn-field-label"><span>${__("Title")}</span></div>
+						<div class="nn-field-label"><span>${this.get_field_label("EOS Metric", "metric_name", "Title")}</span></div>
 						<input type="text" class="nn-input-text" id="nn-d-title" value="${this.esc(current_title)}" placeholder="${__("Enter measurable title…")}">
 					</div>
 
 					<div class="nn-field-group">
-						<div class="nn-field-label"><span>${__("Description (Optional)")}</span></div>
+						<div class="nn-field-label"><span>${this.get_field_label("EOS Metric", "description", "Description (Optional)")}</span></div>
 						<textarea class="nn-textarea" style="width:100%;height:70px;border:1px solid #d1d5db;border-radius:6px;padding:8px" id="nn-d-desc">${this.esc(current_desc)}</textarea>
 					</div>
 
 					<div class="nn-field-group">
-						<div class="nn-field-label"><span>${__("Team")}</span></div>
+						<div class="nn-field-label"><span>${this.get_field_label("EOS Metric", "team", "Team")}</span></div>
 						<select class="nn-select" id="nn-d-team">${team_options}</select>
 					</div>
 
 					<div class="nn-field-group">
-						<div class="nn-field-label"><span>${__("Period Interval")}</span></div>
+						<div class="nn-field-label"><span>${this.get_field_label("EOS Metric", "frequency", "Period Interval")}</span></div>
 						<select class="nn-select" id="nn-d-interval">
 							<option value="Weekly" ${current_freq === "Weekly" ? "selected" : ""}>Weekly</option>
 							<option value="Monthly" ${current_freq === "Monthly" ? "selected" : ""}>Monthly</option>
@@ -2237,12 +2263,12 @@
 					</div>
 
 					<div class="nn-field-group">
-						<div class="nn-field-label"><span>${__("Owner")}</span></div>
+						<div class="nn-field-label"><span>${this.get_field_label("EOS Metric", "owner_user", "Owner")}</span></div>
 						<select class="nn-select" id="nn-d-owner">${owner_options}</select>
 					</div>
 
 					<div class="nn-field-group">
-						<div class="nn-field-label"><span>${__("Value / Goal")}</span></div>
+						<div class="nn-field-label"><span>${this.get_field_label("EOS Metric", "target_value", "Value / Goal")}</span></div>
 						<input type="number" step="any" class="nn-input-text" id="nn-d-val" value="${this.esc(current_val)}">
 					</div>
 				</div>
