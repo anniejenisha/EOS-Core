@@ -17,6 +17,7 @@ def seed_all():
 		ensure_scorecards()
 		ensure_metrics_and_entries()
 		ensure_rocks()
+		ensure_todos()
 		frappe.db.commit()
 		print("EOS Core sample documents successfully ensured.")
 	except Exception as e:
@@ -382,3 +383,92 @@ def ensure_rocks():
 			doc.save(ignore_permissions=True)
 		except Exception:
 			pass
+
+
+def ensure_todos():
+	"""Ensure standard To-Dos exist from sample data (Ninety To-Dos)"""
+	todos = [
+		{
+			"todo_name": "Onboarding and Training for Open Projects - BEL TZ",
+			"team": "Leadership Team",
+			"owner_user": "taher@burhani.com",
+			"due_date": "2026-10-06",
+			"status": "Not Started",
+			"priority": "Medium"
+		},
+		{
+			"todo_name": "CIB and billing target dashboard visualisation deployed",
+			"team": "Leadership Team",
+			"owner_user": "taher@burhani.com",
+			"due_date": "2026-10-08",
+			"status": "Not Started",
+			"priority": "Medium"
+		},
+		{
+			"todo_name": "Build Scorecard AI skill: Pressure-test every measure before it's accepted",
+			"team": "Leadership Team",
+			"owner_user": "taher@burhani.com",
+			"due_date": "2026-10-09",
+			"status": "Not Started",
+			"priority": "Medium"
+		},
+		{
+			"todo_name": "System for L2 rollout - Core ninety functions replicated",
+			"team": "Leadership Team",
+			"owner_user": "taher@burhani.com",
+			"due_date": "2026-10-09",
+			"status": "Not Started",
+			"priority": "Medium"
+		},
+		{
+			"todo_name": "Structuring the data for Operations and Finance for EOS Scorecard",
+			"team": "Leadership Team",
+			"owner_user": "taher@burhani.com",
+			"due_date": "2026-10-12",
+			"status": "Not Started",
+			"priority": "Medium"
+		},
+		{
+			"todo_name": "Update Monthly Score Card on Ninety",
+			"team": "Leadership Team",
+			"owner_user": "taher@burhani.com",
+			"due_date": "2026-10-13",
+			"status": "Not Started",
+			"priority": "Medium"
+		},
+		{
+			"todo_name": "Update Quarterly Score Card - End of September 2026",
+			"team": "Leadership Team",
+			"owner_user": "taher@burhani.com",
+			"due_date": "2026-10-13",
+			"status": "Not Started",
+			"priority": "Medium"
+		}
+	]
+
+	for td in todos:
+		doc_name = frappe.db.get_value("To Do", {"todo_name": td["todo_name"]}, "name")
+		if not doc_name:
+			try:
+				doc = frappe.get_doc({
+					"doctype": "To Do",
+					"todo_name": td["todo_name"],
+					"team": td["team"],
+					"owner_user": td["owner_user"],
+					"due_date": td["due_date"],
+					"status": td["status"],
+					"priority": td["priority"],
+					"archived": 0
+				})
+				doc.insert(ignore_permissions=True)
+			except Exception as e:
+				print("Error creating To-Do:", td["todo_name"], e)
+		else:
+			frappe.db.set_value("To Do", doc_name, {
+				"team": td["team"],
+				"owner_user": td["owner_user"],
+				"due_date": td["due_date"],
+				"priority": td["priority"],
+				"archived": 0
+			})
+

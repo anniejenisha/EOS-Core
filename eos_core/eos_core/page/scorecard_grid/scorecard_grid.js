@@ -43,6 +43,9 @@
 		"close": '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
 		"info": '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>',
 		"arrow-up-right": '<path d="M7 17 17 7"/><path d="M7 7h10v10"/>',
+		"arrow-down": '<line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>',
+		"clock": '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+		"check": '<polyline points="20 6 9 17 4 12"/>',
 		"refresh": '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
 		"box": '<path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>',
 		"book": '<path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M6 6h10"/><path d="M6 10h10"/>',
@@ -75,10 +78,19 @@
 				banner_off: false,
 				sc_collapsed: false,
 				view_mode: "chart",
-				expanded_rocks: { "EDMS implementation and go live": true }
+				expanded_rocks: { "EDMS implementation and go live": true },
+
+				// To-Dos State
+				todo_team: "Leadership Team",
+				todo_owner: "Taher Jivanji",
+				todo_tab: "Team",
+				todo_archive: false,
+				todo_search: "",
+				todo_sort_dir: "asc"
 			};
 			this.data = { periods: [], metrics: [] };
 			this.rocks = [];
+			this.todos = [];
 			this.users = [];
 			this.players = [];
 			this.all_teams = ["All Teams", "Leadership Team", "BEL BPO", "BPO and IT", "Test"];
@@ -183,15 +195,22 @@
 			return u;
 		}
 
-		get_available_owners() {
+		get_available_owners(team = null) {
 			const list = new Set();
 			list.add("Taher Jivanji");
-			if (this.s.rock_team && this.s.rock_team !== "All Teams") {
+			const active_team = team || (this.s.view === "todos" ? this.s.todo_team : this.s.rock_team);
+			if (active_team && active_team !== "All Teams") {
 				(this.players || []).forEach(p => {
-					if (p.team === this.s.rock_team && p.player_name) list.add(p.player_name);
+					if (p.team === active_team && p.player_name) list.add(p.player_name);
+				});
+				(this.todos || []).forEach(td => {
+					if (td.team === active_team) {
+						const name = this.get_user_display_name(td.owner_user);
+						if (name) list.add(name);
+					}
 				});
 				(this.rocks || []).forEach(r => {
-					if (r.team === this.s.rock_team) {
+					if (r.team === active_team) {
 						const name = this.get_user_display_name(r.owner_user);
 						if (name) list.add(name);
 					}
@@ -199,6 +218,10 @@
 			} else {
 				(this.players || []).forEach(p => {
 					if (p.player_name) list.add(p.player_name);
+				});
+				(this.todos || []).forEach(td => {
+					const name = this.get_user_display_name(td.owner_user);
+					if (name) list.add(name);
 				});
 				(this.rocks || []).forEach(r => {
 					const name = this.get_user_display_name(r.owner_user);
@@ -210,6 +233,59 @@
 				});
 			}
 			return Array.from(list);
+		}
+
+		get_initials(name) {
+			if (!name) return "TJ";
+			const clean = String(name).trim();
+			if (clean.includes("@")) {
+				return clean.substring(0, 2).toUpperCase();
+			}
+			const parts = clean.split(/\s+/);
+			if (parts.length >= 2) {
+				return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+			}
+			return clean.substring(0, 2).toUpperCase();
+		}
+
+		diff_days(d1_str, d2_str) {
+			const d1 = new Date(d1_str);
+			const d2 = new Date(d2_str);
+			return Math.round((d1 - d2) / (1000 * 60 * 60 * 24));
+		}
+
+		format_todo_due(due_str) {
+			if (!due_str) return { html: `<span style="color:#9ca3af">—</span>` };
+			const parts = due_str.split("-");
+			if (parts.length < 3) return { html: this.esc(due_str) };
+			const yr = parseInt(parts[0], 10);
+			const mo = parseInt(parts[1], 10) - 1;
+			const da = parseInt(parts[2], 10);
+			const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+			const date_label = `${da} ${months[mo] || ""}`;
+
+			// Baseline date: 2026-10-10 or today
+			const now = new Date();
+			const now_str = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+			const ref_date = now_str > "2026-10-10" ? now_str : "2026-10-10";
+
+			// Match screenshot:
+			// 6 Oct (or <= 2026-10-06): Red alert "!" badge
+			// 8 Oct (or <= 2026-10-08): Dark clock badge
+			// 9 Oct, 12 Oct, 13 Oct: normal text
+			if (due_str <= "2026-10-06" || (due_str < ref_date && this.diff_days(due_str, ref_date) <= -3)) {
+				return {
+					html: `<span class="nn-due-badge"><span class="nn-due-icon red">!</span><span class="nn-due-text red">${date_label}</span></span>`
+				};
+			} else if (due_str === "2026-10-08" || due_str === "2026-10-07" || (due_str <= ref_date && this.diff_days(due_str, ref_date) >= -2)) {
+				return {
+					html: `<span class="nn-due-badge"><span class="nn-due-icon clock">${ic("clock", 11)}</span><span class="nn-due-text dark">${date_label}</span></span>`
+				};
+			} else {
+				return {
+					html: `<span class="nn-due-badge"><span class="nn-due-text gray">${date_label}</span></span>`
+				};
+			}
 		}
 
 		check_goal_pass(val, goal, op, min_val, max_val) {
@@ -407,6 +483,58 @@
 			.nn-btn-save { height: 36px; padding: 0 20px; border-radius: 6px; background: #064e3b; color: #ffffff; font-size: 13px; font-weight: 600; border: none; cursor: pointer; }
 			.nn-btn-save:hover { background: #04392b; }
 			.nn-btn-cancel { height: 36px; padding: 0 16px; border-radius: 6px; background: #fff; border: 1px solid #d1d5db; color: #374151; font-size: 13px; font-weight: 500; cursor: pointer; }
+
+			/* To-Dos Styles (Ninety.io) */
+			.nn-todos-body { padding: 24px 32px 48px; display: flex; justify-content: center; width: 100%; background: #ffffff; }
+			.nn-todo-card { width: 100%; max-width: 960px; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.03); overflow: hidden; }
+			.nn-todo-card-header { padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #f1f3f5; }
+			.nn-todo-card-title { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 700; color: #111827; }
+			.nn-todo-count { font-size: 13px; font-weight: 600; color: #6b7280; }
+			.nn-todo-expand-btn { width: 28px; height: 28px; border: none; background: transparent; color: #6b7280; cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 4px; transition: background 0.1s; }
+			.nn-todo-expand-btn:hover { background: #f3f4f6; color: #111827; }
+
+			.nn-todo-table-head { display: flex; align-items: center; padding: 10px 18px; font-size: 11.5px; font-weight: 600; color: #6b7280; border-bottom: 1px solid #f1f3f5; background: #ffffff; user-select: none; }
+			.nn-todo-col-check { width: 36px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+			.nn-todo-col-title { flex: 1 1 0%; min-width: 0; padding-right: 16px; font-size: 12px; font-weight: 600; color: #6b7280; }
+			.nn-todo-col-due { width: 120px; flex-shrink: 0; display: flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; color: #6b7280; }
+			.nn-todo-col-owner { width: 70px; flex-shrink: 0; display: flex; align-items: center; font-size: 12px; font-weight: 600; color: #6b7280; }
+			.nn-todo-col-actions { width: 36px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+
+			.nn-todo-row { display: flex; align-items: center; padding: 11px 18px; border-bottom: 1px solid #f3f4f6; transition: background 0.12s; background: #ffffff; }
+			.nn-todo-row:hover { background: #f9fafb; }
+			.nn-todo-row:last-child { border-bottom: none; }
+
+			.nn-todo-circle-check { width: 17px; height: 17px; border-radius: 50%; border: 1.5px solid #d1d5db; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.15s ease; background: #ffffff; flex-shrink: 0; }
+			.nn-todo-circle-check:hover { border-color: #059669; }
+			.nn-todo-circle-check.checked { background: #059669; border-color: #059669; color: #ffffff; }
+
+			.nn-todo-row .nn-todo-col-title { font-size: 13px; font-weight: 500; color: #111827; cursor: pointer; }
+			.nn-todo-row .nn-todo-col-title:hover { color: #064e3b; }
+			.nn-todo-row .nn-todo-col-title.done { text-decoration: line-through; color: #9ca3af; }
+
+			.nn-due-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; }
+			.nn-due-icon.red { width: 16px; height: 16px; border-radius: 50%; background: #ef4444; color: #ffffff; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; line-height: 1; flex-shrink: 0; }
+			.nn-due-text.red { color: #dc2626; font-weight: 600; }
+			.nn-due-icon.clock { width: 16px; height: 16px; border-radius: 50%; background: #111827; color: #ffffff; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+			.nn-due-icon.clock .nn-svg { color: #ffffff; }
+			.nn-due-text.dark { color: #111827; font-weight: 600; }
+			.nn-due-text.gray { color: #6b7280; font-weight: 400; }
+
+			.nn-owner-circle { width: 24px; height: 24px; border-radius: 50%; background: #71717a; color: #ffffff; font-size: 10px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; text-transform: uppercase; flex-shrink: 0; }
+			.nn-todo-row-menu-btn { width: 24px; height: 24px; border: none; background: transparent; color: #9ca3af; cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 4px; }
+			.nn-todo-row-menu-btn:hover { background: #f3f4f6; color: #111827; }
+
+			.nn-todo-card-footer { padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid #f1f3f5; font-size: 12px; color: #6b7280; background: #ffffff; }
+			.nn-todo-add-trigger { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 600; color: #374151; cursor: pointer; user-select: none; }
+			.nn-todo-add-trigger:hover { color: #064e3b; }
+			.nn-todo-pagination { display: flex; align-items: center; gap: 18px; }
+			.nn-todo-page-size { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; color: #6b7280; }
+			.nn-todo-page-size b { color: #111827; font-weight: 600; }
+			.nn-todo-page-info { color: #6b7280; font-weight: 500; }
+			.nn-todo-page-nav { display: flex; align-items: center; gap: 4px; }
+			.nn-p-btn { width: 22px; height: 22px; border: 1px solid #e5e7eb; background: #ffffff; color: #6b7280; border-radius: 4px; font-size: 11px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; }
+			.nn-p-btn:hover { background: #f3f4f6; color: #111827; border-color: #cbd5e1; }
+			.nn-todo-empty { padding: 36px 20px; text-align: center; color: #9ca3af; font-size: 13px; }
 			</style>`);
 		}
 
@@ -454,10 +582,6 @@
 			const self = this;
 			this.$root.find(".nn-nav-item").on("click", function () {
 				const view = $(this).attr("data-view");
-				if (view === "todos") {
-					frappe.set_route("List", "ToDo");
-					return;
-				}
 				self.go(view);
 			});
 
@@ -477,6 +601,7 @@
 			this.s.view = view;
 			this.$root.find(".nn-nav-item").removeClass("on").filter(`[data-view="${view}"]`).addClass("on");
 			if (view === "rocks") this.load_rocks();
+			else if (view === "todos") this.load_todos();
 			else this.load_scorecard();
 		}
 
@@ -1128,6 +1253,499 @@
 			this.$root.find("#nn-drawer-backdrop").addClass("show");
 			$drawer.addClass("show");
 			$drawer.find("#nn-r-title").focus();
+		}
+
+		/* =========================================================================
+		   TO-DOS VIEW IMPLEMENTATION (Ninety To-Dos)
+		   ========================================================================= */
+		async load_todos() {
+			this.$main.html(`<div style="padding:48px;text-align:center;color:#6b7280;font-size:14px">${__("Loading To-Dos…")}</div>`);
+			try {
+				await this.fetch_all_teams();
+				await this.fetch_players();
+				await this.fetch_todos_data();
+			} catch (e) {
+				console.error("To-Dos load error:", e);
+			}
+			this.render_todos();
+		}
+
+		async fetch_todos_data() {
+			const filters = {};
+			if (this.s.todo_archive) {
+				filters.archived = 1;
+			} else {
+				filters.archived = 0;
+			}
+			const res = await this.list("To Do", [
+				"name", "todo_name", "status", "owner_user", "team", "due_date", "priority", "notes", "archived"
+			], filters, "due_date asc, creation asc", 200);
+
+			this.todos = res.ok ? (res.data || []) : [];
+
+			if (!this.users || !this.users.length) {
+				const u_res = await this.list("User", ["name", "full_name", "first_name", "last_name", "email"], { enabled: 1 }, "full_name asc", 200);
+				this.users = u_res.ok ? u_res.data : [];
+			}
+		}
+
+		render_todos() {
+			const s = this.s;
+
+			this.$main.html(`
+				<div class="nn-top-header">
+					<div>
+						<div class="nn-title">${__("To-Dos")}</div>
+						<div class="nn-sub">${__("Create, assign, and track deadlines for critical tasks.")}</div>
+					</div>
+					<div class="nn-top-right">
+						<a class="nn-badge-maz" href="javascript:void(0)"><span>+ Maz</span><span class="nn-badge-new">NEW</span></a>
+						<div class="nn-top-search">${ic("search", 13)}<input type="text" placeholder="${__("Search…")}"></div>
+						<button class="nn-btn-icon">${ic("bell", 15)}<span class="nn-dot-red"></span></button>
+						<button class="nn-btn-create" id="nn-create-todo-top">${ic("plus", 13)} ${__("Create")}</button>
+					</div>
+				</div>
+
+				<div class="nn-tabs">
+					<div class="nn-tab ${s.todo_tab === "Team" ? "on" : ""}" data-ttab="Team">${__("Team")}</div>
+					<div class="nn-tab ${s.todo_tab === "Private" ? "on" : ""}" data-ttab="Private">${__("Private")}</div>
+				</div>
+
+				<div class="nn-filter-bar">
+					<div class="nn-filter-left">
+						<button class="nn-pill-select" id="nn-t-team" data-menu>
+							<span class="k">${__("Team")}:</span> <b>${this.esc(s.todo_team)}</b> ${ic("chevron-down", 12)}
+						</button>
+						<button class="nn-pill-select" id="nn-t-owner" data-menu>
+							<span class="k">${__("Owner")}:</span> <b>${this.esc(s.todo_owner)}</b> ${ic("chevron-down", 12)}
+						</button>
+						<div style="display:inline-flex;align-items:center;gap:8px;margin-left:6px;font-size:12.5px;color:#374151">
+							<span class="nn-switch ${s.todo_archive ? "on" : ""}" id="nn-sw-t-archive"></span>
+							<span>${__("Archive")}</span>
+						</div>
+					</div>
+					<div class="nn-filter-right">
+						<button class="nn-ibtn-bar" id="nn-t-refresh" title="${__("Refresh To-Dos")}">${ic("refresh", 14)}</button>
+						<button class="nn-ibtn-bar" title="${__("More Options")}">${ic("dots", 14)}</button>
+						<div class="nn-search-input-wrap">${ic("search", 13)}<input id="nn-todo-search" placeholder="${__("Search To-Dos…")}" value="${this.esc(s.todo_search)}"></div>
+					</div>
+				</div>
+
+				<div class="nn-todos-body" id="nn-todos-body-wrap"></div>
+			`);
+
+			this.render_todos_table();
+			this.bind_todos_events();
+		}
+
+		render_todos_table() {
+			const s = this.s;
+			const all_todos = this.todos || [];
+			const q = (s.todo_search || "").toLowerCase().trim();
+
+			let filtered = all_todos.filter(td => {
+				if (q && !(td.todo_name || "").toLowerCase().includes(q) && !(td.notes || "").toLowerCase().includes(q)) return false;
+
+				// Team filter
+				if (s.todo_tab === "Team") {
+					if (s.todo_team && s.todo_team !== "All Teams") {
+						if (td.team && td.team !== s.todo_team) return false;
+					}
+				}
+
+				// Owner filter
+				if (s.todo_owner && s.todo_owner !== "All") {
+					const owner_name = this.get_user_display_name(td.owner_user);
+					if (owner_name !== s.todo_owner && td.owner_user !== s.todo_owner) return false;
+				}
+
+				// Private tab filter
+				if (s.todo_tab === "Private") {
+					const cur = (frappe.session && frappe.session.user) ? frappe.session.user : "taher@burhani.com";
+					if (td.owner_user !== cur && td.owner_user !== "taher@burhani.com") return false;
+				}
+
+				return true;
+			});
+
+			// Sort by due date
+			filtered.sort((a, b) => {
+				const da = a.due_date || "9999-99-99";
+				const db = b.due_date || "9999-99-99";
+				return s.todo_sort_dir === "desc" ? db.localeCompare(da) : da.localeCompare(db);
+			});
+
+			const table_html = `
+				<div class="nn-todo-card">
+					<div class="nn-todo-card-header">
+						<div class="nn-todo-card-title">
+							<span>${s.todo_tab === "Private" ? __("Private To-Dos") : __("Team To-Dos")}</span>
+							<span class="nn-todo-count">${filtered.length}</span>
+						</div>
+						<button class="nn-todo-expand-btn" title="${__("Open in full view")}">${ic("arrow-up-right", 15)}</button>
+					</div>
+
+					<div class="nn-todo-table-head">
+						<div class="nn-todo-col-check"></div>
+						<div class="nn-todo-col-title">${__("Title")}</div>
+						<div class="nn-todo-col-due" id="nn-todo-sort-due" style="cursor:pointer;" title="${__("Sort by Due Date")}">
+							<span>${__("Due By")}</span> ${ic(s.todo_sort_dir === "desc" ? "chevron-up" : "arrow-down", 11)}
+						</div>
+						<div class="nn-todo-col-owner">${__("Owner")}</div>
+						<div class="nn-todo-col-actions"></div>
+					</div>
+
+					<div class="nn-todo-table-body">
+						${filtered.length === 0 ? `
+							<div class="nn-todo-empty">${__("No To-Dos match the selected filters.")}</div>
+						` : filtered.map(td => {
+							const is_complete = td.status === "Complete";
+							const due_info = this.format_todo_due(td.due_date);
+							const owner_name = this.get_user_display_name(td.owner_user);
+							const initials = this.get_initials(owner_name || td.owner_user || "TJ");
+
+							return `
+								<div class="nn-todo-row" data-id="${this.esc(td.name)}">
+									<div class="nn-todo-col-check">
+										<div class="nn-todo-circle-check ${is_complete ? "checked" : ""}" data-id="${this.esc(td.name)}" title="${is_complete ? __("Mark Not Started") : __("Mark Complete")}">
+											${is_complete ? ic("check", 11) : ""}
+										</div>
+									</div>
+									<div class="nn-todo-col-title ${is_complete ? "done" : ""}" data-action="edit" data-id="${this.esc(td.name)}" title="${__("Click to edit")}">
+										${this.esc(td.todo_name)}
+									</div>
+									<div class="nn-todo-col-due">
+										${due_info.html}
+									</div>
+									<div class="nn-todo-col-owner">
+										<span class="nn-owner-circle" title="${this.esc(owner_name)}">${this.esc(initials)}</span>
+									</div>
+									<div class="nn-todo-col-actions">
+										<button class="nn-todo-row-menu-btn" data-id="${this.esc(td.name)}" title="${__("Options")}">
+											${ic("dots", 14)}
+										</button>
+									</div>
+								</div>
+							`;
+						}).join("")}
+					</div>
+
+					<div class="nn-todo-card-footer">
+						<div class="nn-todo-add-trigger" id="nn-todo-add-btn">
+							<span style="font-weight:700;font-size:14px;line-height:1;margin-right:2px;">+</span> ${__("Add To-Do")}
+						</div>
+						<div class="nn-todo-pagination">
+							<div class="nn-todo-page-size">
+								${__("Items per page:")} <b>100</b> ${ic("chevron-down", 11)}
+							</div>
+							<div class="nn-todo-page-info">
+								${filtered.length > 0 ? `1 - ${filtered.length} of ${filtered.length}` : `0 of 0`}
+							</div>
+							<div class="nn-todo-page-nav">
+								<button class="nn-p-btn" title="${__("First page")}">|&lt;</button>
+								<button class="nn-p-btn" title="${__("Previous page")}">&lt;</button>
+								<button class="nn-p-btn" title="${__("Next page")}">&gt;</button>
+								<button class="nn-p-btn" title="${__("Last page")}">&gt;|</button>
+							</div>
+						</div>
+					</div>
+				</div>
+			`;
+
+			this.$root.find("#nn-todos-body-wrap").html(table_html);
+		}
+
+		bind_todos_events() {
+			const self = this;
+
+			// Top Create button & card add button
+			this.$root.off("click.todocreate").on("click.todocreate", "#nn-create-todo-top, #nn-todo-add-btn", () => {
+				self.open_todo_drawer();
+			});
+
+			// Tabs: Team vs Private
+			this.$root.find("[data-ttab]").off("click").on("click", function() {
+				const tab = $(this).attr("data-ttab");
+				self.s.todo_tab = tab;
+				self.$root.find("[data-ttab]").removeClass("on").filter(`[data-ttab="${tab}"]`).addClass("on");
+				self.render_todos_table();
+			});
+
+			// Team Filter Dropdown
+			this.$root.find("#nn-t-team").off("click").on("click", function (e) {
+				e.stopPropagation();
+				self.pick_menu(this, self.all_teams, self.s.todo_team, val => {
+					self.s.todo_team = val;
+					self.$root.find("#nn-t-team b").text(val);
+					self.render_todos_table();
+				});
+			});
+
+			// Owner Filter Dropdown
+			this.$root.find("#nn-t-owner").off("click").on("click", function (e) {
+				e.stopPropagation();
+				const owners = ["All", ...self.get_available_owners(self.s.todo_team)];
+				self.pick_menu(this, owners, self.s.todo_owner, val => {
+					self.s.todo_owner = val;
+					self.$root.find("#nn-t-owner b").text(val);
+					self.render_todos_table();
+				});
+			});
+
+			// Archive Switch
+			this.$root.find("#nn-sw-t-archive").off("click").on("click", async function (e) {
+				e.stopPropagation();
+				self.s.todo_archive = !self.s.todo_archive;
+				$(this).toggleClass("on", self.s.todo_archive);
+				await self.fetch_todos_data();
+				self.render_todos_table();
+			});
+
+			// Refresh Button
+			this.$root.find("#nn-t-refresh").off("click").on("click", async () => {
+				await self.fetch_todos_data();
+				self.render_todos_table();
+				frappe.show_alert({ message: __("To-Dos refreshed"), indicator: "green" });
+			});
+
+			// Search Input
+			this.$root.find("#nn-todo-search").off("input").on("input", function() {
+				self.s.todo_search = $(this).val();
+				self.render_todos_table();
+			});
+
+			// Sort by Due Date
+			this.$root.off("click.todosort").on("click.todosort", "#nn-todo-sort-due", function() {
+				self.s.todo_sort_dir = self.s.todo_sort_dir === "asc" ? "desc" : "asc";
+				self.render_todos_table();
+			});
+
+			// Circle Checkbox Toggle
+			this.$root.off("click.todochk").on("click.todochk", ".nn-todo-circle-check", async function (e) {
+				e.stopPropagation();
+				const $chk = $(this);
+				const id = $chk.attr("data-id");
+				const td = (self.todos || []).find(x => x.name === id);
+				if (!td) return;
+
+				const next_status = td.status === "Complete" ? "Not Started" : "Complete";
+				td.status = next_status;
+				$chk.toggleClass("checked", next_status === "Complete");
+				$chk.html(next_status === "Complete" ? ic("check", 11) : "");
+				$chk.closest(".nn-todo-row").find(".nn-todo-col-title").toggleClass("done", next_status === "Complete");
+
+				try {
+					await self.call("frappe.client.set_value", {
+						doctype: "To Do",
+						name: id,
+						fieldname: "status",
+						value: next_status
+					});
+				} catch (err) {
+					console.error("Error setting status:", err);
+				}
+			});
+
+			// Click Title to Edit
+			this.$root.off("click.todoedit").on("click.todoedit", ".nn-todo-col-title", function (e) {
+				e.stopPropagation();
+				const id = $(this).attr("data-id");
+				self.open_todo_drawer(id);
+			});
+
+			// Row Menu (⋯)
+			this.$root.off("click.todomenu").on("click.todomenu", ".nn-todo-row-menu-btn", function (e) {
+				e.stopPropagation();
+				const id = $(this).attr("data-id");
+				const td = (self.todos || []).find(x => x.name === id);
+				if (!td) return;
+
+				const options = [
+					["edit", __("Edit To-Do")],
+					["toggle", td.status === "Complete" ? __("Mark Incomplete") : __("Mark Complete")],
+					["delete", __("Delete")]
+				];
+
+				self.pick_menu(this, options, "", async action => {
+					if (action === "edit") {
+						self.open_todo_drawer(id);
+					} else if (action === "toggle") {
+						const next_status = td.status === "Complete" ? "Not Started" : "Complete";
+						td.status = next_status;
+						await self.call("frappe.client.set_value", { doctype: "To Do", name: id, fieldname: "status", value: next_status });
+						self.render_todos_table();
+					} else if (action === "delete") {
+						frappe.confirm(__("Are you sure you want to delete this To-Do?"), async () => {
+							await self.call("frappe.client.delete", { doctype: "To Do", name: id });
+							await self.fetch_todos_data();
+							self.render_todos_table();
+							frappe.show_alert({ message: __("To-Do deleted"), indicator: "green" });
+						});
+					}
+				});
+			});
+		}
+
+		open_todo_drawer(todo_id = null) {
+			const is_edit = !!todo_id;
+			const td = is_edit ? (this.todos || []).find(x => x.name === todo_id) : null;
+
+			const current_title = td ? td.todo_name : "";
+			const current_owner = td ? td.owner_user : "taher@burhani.com";
+			const current_team = td ? (td.team || "Leadership Team") : (this.s.todo_team !== "All Teams" ? this.s.todo_team : "Leadership Team");
+			const current_status = td ? td.status : "Not Started";
+			const current_priority = td ? (td.priority || "Medium") : "Medium";
+			const current_due = td && td.due_date ? td.due_date : "2026-10-15";
+			const current_notes = td && td.notes ? td.notes : "";
+
+			let owner_options = "";
+			const users_list = this.users.length ? this.users : [
+				{ name: "taher@burhani.com", full_name: "Taher Jivanji" },
+				{ name: "Administrator", full_name: "Administrator" }
+			];
+			users_list.forEach(u => {
+				const val = u.name;
+				const label = u.full_name ? `${u.full_name} (${u.name})` : u.name;
+				const sel = val === current_owner ? "selected" : "";
+				owner_options += `<option value="${this.esc(val)}" ${sel}>${this.esc(label)}</option>`;
+			});
+
+			let team_options = "";
+			this.all_teams.filter(t => t !== "All Teams").forEach(t => {
+				const sel = t === current_team ? "selected" : "";
+				team_options += `<option value="${this.esc(t)}" ${sel}>${this.esc(t)}</option>`;
+			});
+
+			const drawer_html = `
+				<div class="nn-drawer-header">
+					<div class="nn-drawer-title">${is_edit ? __("Edit To-Do") : __("Create To-Do")}</div>
+					<div class="nn-drawer-header-actions">
+						<button class="nn-drawer-btn-icon" id="nn-drawer-close">${ic("close", 16)}</button>
+					</div>
+				</div>
+
+				<div class="nn-drawer-body">
+					<div class="nn-field-group">
+						<div class="nn-field-label"><span>${__("To-Do Title")}</span> <span style="color:#ef4444">*</span></div>
+						<input type="text" class="nn-input-text" id="nn-td-title" value="${this.esc(current_title)}" placeholder="${__("e.g. Complete customer review meeting")}">
+					</div>
+
+					<div class="nn-field-group">
+						<div class="nn-field-label"><span>${__("Team")}</span></div>
+						<select class="nn-select" id="nn-td-team">${team_options}</select>
+					</div>
+
+					<div class="nn-field-group">
+						<div class="nn-field-label"><span>${__("Owner")}</span></div>
+						<select class="nn-select" id="nn-td-owner">${owner_options}</select>
+					</div>
+
+					<div class="nn-field-group">
+						<div class="nn-field-label"><span>${__("Due Date")}</span></div>
+						<input type="date" class="nn-input-text" id="nn-td-due" value="${this.esc(current_due)}">
+					</div>
+
+					<div class="nn-field-group">
+						<div class="nn-field-label"><span>${__("Status")}</span></div>
+						<select class="nn-select" id="nn-td-status">
+							<option value="Not Started" ${current_status === "Not Started" ? "selected" : ""}>Not Started</option>
+							<option value="In Progress" ${current_status === "In Progress" ? "selected" : ""}>In Progress</option>
+							<option value="Complete" ${current_status === "Complete" ? "selected" : ""}>Complete</option>
+							<option value="Dropped" ${current_status === "Dropped" ? "selected" : ""}>Dropped</option>
+						</select>
+					</div>
+
+					<div class="nn-field-group">
+						<div class="nn-field-label"><span>${__("Priority")}</span></div>
+						<select class="nn-select" id="nn-td-priority">
+							<option value="Low" ${current_priority === "Low" ? "selected" : ""}>Low</option>
+							<option value="Medium" ${current_priority === "Medium" ? "selected" : ""}>Medium</option>
+							<option value="High" ${current_priority === "High" ? "selected" : ""}>High</option>
+						</select>
+					</div>
+
+					<div class="nn-field-group">
+						<div class="nn-field-label"><span>${__("Notes")}</span></div>
+						<textarea class="nn-input-text" id="nn-td-notes" style="height:80px;padding:8px 10px;resize:vertical;" placeholder="${__("Add details or notes…")}">${this.esc(current_notes)}</textarea>
+					</div>
+				</div>
+
+				<div class="nn-drawer-footer">
+					<button class="nn-btn-save" id="nn-drawer-todo-save">${is_edit ? __("Save changes") : __("Save To-Do")}</button>
+					${is_edit ? `<button class="nn-btn-cancel" style="color:#dc2626;border-color:#fca5a5" id="nn-drawer-todo-delete">${__("Delete")}</button>` : ""}
+					<button class="nn-btn-cancel" id="nn-drawer-todo-cancel">${__("Cancel")}</button>
+				</div>
+			`;
+
+			const $drawer = this.$root.find("#nn-drawer");
+			$drawer.html(drawer_html);
+
+			const self = this;
+			$drawer.find("#nn-drawer-close, #nn-drawer-todo-cancel").on("click", () => self.close_drawer());
+
+			if (is_edit) {
+				$drawer.find("#nn-drawer-todo-delete").on("click", async function() {
+					frappe.confirm(__("Are you sure you want to delete this To-Do?"), async () => {
+						await self.call("frappe.client.delete", { doctype: "To Do", name: todo_id });
+						self.close_drawer();
+						await self.fetch_todos_data();
+						self.render_todos_table();
+						frappe.show_alert({ message: __("To-Do deleted"), indicator: "green" });
+					});
+				});
+			}
+
+			$drawer.find("#nn-drawer-todo-save").on("click", async function () {
+				const title = $drawer.find("#nn-td-title").val().trim();
+				if (!title) {
+					frappe.msgprint(__("Please enter a To-Do title."));
+					return;
+				}
+				const owner = $drawer.find("#nn-td-owner").val();
+				const team = $drawer.find("#nn-td-team").val();
+				const status = $drawer.find("#nn-td-status").val();
+				const due = $drawer.find("#nn-td-due").val();
+				const priority = $drawer.find("#nn-td-priority").val();
+				const notes = $drawer.find("#nn-td-notes").val().trim();
+
+				if (is_edit && td) {
+					await self.call("frappe.client.set_value", {
+						doctype: "To Do", name: td.name,
+						fieldname: {
+							todo_name: title,
+							owner_user: owner,
+							team: team,
+							status: status,
+							due_date: due,
+							priority: priority,
+							notes: notes
+						}
+					});
+				} else {
+					await self.call("frappe.client.insert", {
+						doc: {
+							doctype: "To Do",
+							todo_name: title,
+							owner_user: owner,
+							team: team,
+							status: status,
+							due_date: due,
+							priority: priority,
+							notes: notes,
+							archived: 0
+						}
+					});
+				}
+
+				self.close_drawer();
+				await self.fetch_todos_data();
+				self.render_todos_table();
+				frappe.show_alert({ message: __("To-Do saved successfully!"), indicator: "green" });
+			});
+
+			this.$root.find("#nn-drawer-backdrop").addClass("show");
+			$drawer.addClass("show");
+			$drawer.find("#nn-td-title").focus();
 		}
 
 		/* =========================================================================
