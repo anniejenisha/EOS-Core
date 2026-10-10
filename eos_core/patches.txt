@@ -6,3 +6,4 @@
 # Patches added in this section will be executed after doctypes are migrated
 eos_core.patches.backfill_measurable_owner
 eos_core.patches.seed_sample_documents
+eos_core.patches.seed_production_sample_data

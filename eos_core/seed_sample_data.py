@@ -5,24 +5,29 @@ from frappe.utils import add_days, getdate, nowdate
 def seed_all():
 	"""
 	Idempotent seeder that ensures all sample documents for EOS Core
-	(Teams, Players, Scorecards, Measurables, Entries, and Rocks)
+	(Users, Teams, Players, Scorecards, Measurables, Entries, Rocks, and To-Dos)
 	are created/updated in both local and production environments.
-	Executed automatically via after_migrate hook and patch.
 	"""
-	try:
-		fix_scorecard_entry_parents()
-		ensure_users()
-		ensure_teams()
-		ensure_players()
-		ensure_scorecards()
-		ensure_metrics_and_entries()
-		ensure_rocks()
-		ensure_todos()
-		frappe.db.commit()
-		print("EOS Core sample documents successfully ensured.")
-	except Exception as e:
-		frappe.log_error(title="EOS Core Seed Sample Data Error", message=str(e))
-		print("EOS Core seed warning:", e)
+	print("--- Starting EOS Core Sample Data Seeding ---")
+	steps = [
+		("Fix Scorecard Entry Parents", fix_scorecard_entry_parents),
+		("Ensure Users", ensure_users),
+		("Ensure Teams", ensure_teams),
+		("Ensure Players", ensure_players),
+		("Ensure Scorecards", ensure_scorecards),
+		("Ensure Metrics & Entries", ensure_metrics_and_entries),
+		("Ensure Rocks", ensure_rocks),
+		("Ensure To-Dos", ensure_todos),
+	]
+	for step_name, fn in steps:
+		try:
+			fn()
+			frappe.db.commit()
+			print(f"✓ {step_name} succeeded.")
+		except Exception as e:
+			frappe.log_error(title=f"EOS Core Seed Error ({step_name})", message=str(e))
+			print(f"✗ Warning in {step_name}: {e}")
+	print("--- EOS Core Sample Data Seeding Completed ---")
 
 
 def fix_scorecard_entry_parents():
@@ -41,21 +46,33 @@ def fix_scorecard_entry_parents():
 
 def ensure_users():
 	"""Ensure standard users exist with names and roles"""
-	if not frappe.db.exists("User", "taher@burhani.com"):
-		u = frappe.get_doc({
-			"doctype": "User",
-			"email": "taher@burhani.com",
-			"first_name": "Taher",
-			"last_name": "Jivanji",
-			"send_welcome_email": 0,
-			"roles": [{"role": "System Manager"}]
-		})
-		u.insert(ignore_permissions=True)
-	else:
-		frappe.db.set_value("User", "taher@burhani.com", {
-			"first_name": "Taher",
-			"last_name": "Jivanji"
-		})
+	users = [
+		{"email": "taher@burhani.com", "first_name": "Taher", "last_name": "Jivanji"},
+		{"email": "jd@example.com", "first_name": "John", "last_name": "Doe"},
+		{"email": "anniejenisha.p@gmail.com", "first_name": "Jenisha", "last_name": ""},
+	]
+	for u_data in users:
+		if not frappe.db.exists("User", u_data["email"]):
+			try:
+				u = frappe.get_doc({
+					"doctype": "User",
+					"email": u_data["email"],
+					"first_name": u_data["first_name"],
+					"last_name": u_data["last_name"],
+					"send_welcome_email": 0,
+					"roles": [{"role": "System Manager"}]
+				})
+				u.insert(ignore_permissions=True)
+			except Exception as e:
+				print("User create note:", u_data["email"], e)
+		else:
+			try:
+				frappe.db.set_value("User", u_data["email"], {
+					"first_name": u_data["first_name"],
+					"last_name": u_data["last_name"]
+				})
+			except Exception:
+				pass
 
 
 def ensure_teams():

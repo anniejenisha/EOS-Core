@@ -765,7 +765,7 @@
 			// Group non-company rocks by owner
 			const user_groups = {};
 			non_company_rocks.forEach(r => {
-				const owner_name = this.get_user_display_name(r.owner_user) || "Taher Jivanji";
+				const owner_name = this.get_user_display_name(r.owner_user) || r.owner_user || "Unknown";
 				if (!user_groups[owner_name]) user_groups[owner_name] = [];
 				user_groups[owner_name].push(r);
 			});
@@ -775,9 +775,6 @@
 				owners_to_show = [s.rock_owner];
 			} else {
 				owners_to_show = Object.keys(user_groups);
-				if (!owners_to_show.length) {
-					owners_to_show = ["Taher Jivanji"];
-				}
 			}
 
 			// If "Show people without Rocks" is enabled, include team members who have 0 rocks
@@ -797,7 +794,7 @@
 			let user_cards_html = "";
 			owners_to_show.forEach(owner_name => {
 				const rocks_for_owner = user_groups[owner_name] || [];
-				const initials = (owner_name || "TJ").split(/\s+/).slice(0, 2).map(w => w[0] || "").join("").toUpperCase();
+				const initials = this.get_initials(owner_name);
 
 				user_cards_html += `
 					<div class="nn-rock-card">
@@ -887,6 +884,17 @@
 			this.bind_table_actions();
 		}
 
+		format_rock_due(due_str) {
+			if (!due_str) return "—";
+			const parts = String(due_str).split("-");
+			if (parts.length < 3) return this.esc(due_str);
+			const yr = parseInt(parts[0], 10);
+			const mo = parseInt(parts[1], 10) - 1;
+			const da = parseInt(parts[2], 10);
+			const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+			return `${da} ${months[mo] || ""}`;
+		}
+
 		get_rock_status_badge(st, rname = null) {
 			st = (st || "").trim();
 			const is_off = st === "Not Started" || st === "Off-track";
@@ -921,13 +929,11 @@
 				const is_expanded = !!self.s.expanded_rocks[r.title];
 				const ms = r.milestones || [];
 				const done = ms.filter(m => m.completed).length;
-				let total = ms.length;
-				if (!total) {
-					if (r.title.includes("EDMS") || r.title === "Test") total = 2;
-					else if (r.title.includes("portal")) total = 8;
-					else total = 2;
-				}
+				const total = ms.length;
 				const pct = total ? Math.round((done / total) * 100) : 0;
+				const owner_name = self.get_user_display_name(r.owner_user);
+				const initials = self.get_initials(owner_name || r.owner_user || "—");
+				const due_label = self.format_rock_due(r.due);
 
 				let child_html = "";
 				if (is_expanded && ms.length) {
@@ -940,8 +946,8 @@
 								<span>${self.esc(m.milestone_name)}</span>
 							</td>
 							<td></td>
-							<td style="text-align:center"><span class="nn-av-circle" style="width:22px;height:22px;font-size:9px">TJ</span></td>
-							<td style="text-align:center;color:#6b7280;font-size:11.5px">${self.esc(m.notes ? m.notes.replace("Due:", "").trim() : "15 Oct")}</td>
+							<td style="text-align:center"><span class="nn-av-circle" style="width:22px;height:22px;font-size:9px">${initials}</span></td>
+							<td style="text-align:center;color:#6b7280;font-size:11.5px">${self.esc(m.notes ? m.notes.replace("Due:", "").trim() : "—")}</td>
 							<td style="color:#9ca3af;cursor:pointer">⋯</td>
 						</tr>
 					`).join("");
@@ -962,8 +968,8 @@
 								<span class="nn-prog-txt">${done}/${total}</span>
 							</div>
 						</td>
-						<td style="text-align:center"><span class="nn-av-circle">TJ</span></td>
-						<td style="text-align:center;color:#374151">31 Dec</td>
+						<td style="text-align:center"><span class="nn-av-circle" title="${self.esc(owner_name)}">${initials}</span></td>
+						<td style="text-align:center;color:#374151">${due_label}</td>
 						<td style="color:#9ca3af;cursor:pointer">⋯</td>
 					</tr>
 					${child_html}
@@ -978,17 +984,12 @@
 			}
 
 			return rocks.map(r => {
-				const is_comp = r.is_company_rock || r.scope === "Company" || r.title.includes("EDMS") || r.title.includes("portal") || r.title === "Test";
+				const is_comp = !!(r.is_company_rock || r.scope === "Company");
 				const ms = r.milestones || [];
 				const done = ms.filter(m => m.completed).length;
-				let total = ms.length;
-				if (!total) {
-					if (r.title.includes("EDMS") || r.title === "Test") total = 2;
-					else if (r.title.includes("portal")) total = 4;
-					else if (r.title.includes("incentive")) total = 9;
-					else total = 5;
-				}
+				const total = ms.length;
 				const pct = total ? Math.round((done / total) * 100) : 0;
+				const due_label = self.format_rock_due(r.due);
 
 				return `
 					<tr class="nn-rock-row">
@@ -1004,7 +1005,7 @@
 								<span class="nn-prog-txt">${done}/${total}</span>
 							</div>
 						</td>
-						<td style="text-align:center;color:#374151">31 Dec</td>
+						<td style="text-align:center;color:#374151">${due_label}</td>
 						<td style="color:#9ca3af;cursor:pointer">⋯</td>
 					</tr>
 				`;
