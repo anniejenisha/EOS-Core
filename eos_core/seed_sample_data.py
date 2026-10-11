@@ -18,6 +18,7 @@ def seed_all():
 		("Ensure Metrics & Entries", ensure_metrics_and_entries),
 		("Ensure Rocks", ensure_rocks),
 		("Ensure To-Dos", ensure_todos),
+		("Ensure Issues", ensure_issues),
 	]
 	for step_name, fn in steps:
 		try:
@@ -101,9 +102,11 @@ def ensure_players():
 	players = [
 		{"player_name": "Taher Jivanji", "user": "taher@burhani.com", "team": "Leadership Team"},
 		{"player_name": "Administrator", "user": "Administrator", "team": "BEL BPO"},
-		{"player_name": "Administrator", "user": "Administrator", "team": "BPO and IT"},
+		{"player_name": "Administrator (BPO and IT)", "user": "Administrator", "team": "BPO and IT"},
 		{"player_name": "John Doe", "user": "jd@example.com", "team": "BEL BPO"},
+		{"player_name": "John Doe (BPO and IT)", "user": "jd@example.com", "team": "BPO and IT"},
 		{"player_name": "Jenisha", "user": "anniejenisha.p@gmail.com", "team": "Test"},
+		{"player_name": "Jenisha (Leadership Team)", "user": "anniejenisha.p@gmail.com", "team": "Leadership Team"},
 	]
 	for p in players:
 		if not frappe.db.exists("Player", {"user": p["user"], "team": p["team"]}):
@@ -124,9 +127,13 @@ def ensure_scorecards():
 	"""Ensure Scorecards exist for each team"""
 	cards = [
 		{"name": "Leadership Team-Weekly", "team": "Leadership Team", "timeframe": "Weekly"},
+		{"name": "Leadership Team-Monthly", "team": "Leadership Team", "timeframe": "Monthly"},
 		{"name": "BEL BPO-Weekly", "team": "BEL BPO", "timeframe": "Weekly"},
+		{"name": "BEL BPO-Monthly", "team": "BEL BPO", "timeframe": "Monthly"},
 		{"name": "BPO and IT-Weekly", "team": "BPO and IT", "timeframe": "Weekly"},
+		{"name": "BPO and IT-Monthly", "team": "BPO and IT", "timeframe": "Monthly"},
 		{"name": "Test-Weekly", "team": "Test", "timeframe": "Weekly"},
+		{"name": "Test-Monthly", "team": "Test", "timeframe": "Monthly"},
 	]
 	for sc in cards:
 		if not frappe.db.exists("Scorecard", sc["name"]):
@@ -199,6 +206,61 @@ def ensure_metrics_and_entries():
 			"unit": "%",
 			"frequency": "Weekly",
 			"entries": [96, 92, 98, 95, 94, 97, 96, 91, 99, 95, 93, 96, 95]
+		},
+		{
+			"metric_name": "Qualified Leads",
+			"team": "BEL BPO",
+			"owner_user": "jd@example.com",
+			"scorecard": "BEL BPO-Weekly",
+			"target_value": 15,
+			"operator": ">=",
+			"unit": "",
+			"frequency": "Weekly",
+			"entries": [18, 14, 16, 15, 12, 19, 17, 13, 20, 15, 14, 16, 17]
+		},
+		{
+			"metric_name": "Success Stories",
+			"team": "BEL BPO",
+			"owner_user": "jd@example.com",
+			"scorecard": "BEL BPO-Weekly",
+			"target_value": 2,
+			"operator": ">=",
+			"unit": "",
+			"frequency": "Weekly",
+			"entries": [3, 2, 4, 2, 1, 3, 2, 2, 4, 3, 1, 2, 3]
+		},
+		{
+			"metric_name": "Deviation from the cumulative weekly baseline target",
+			"team": "BEL BPO",
+			"owner_user": "Administrator",
+			"scorecard": "BEL BPO-Weekly",
+			"target_value": 0,
+			"operator": "<=",
+			"unit": "",
+			"frequency": "Weekly",
+			"entries": [0, -1, 0, 1, 0, -2, 0, 0, -1, 0, 1, 0, 0]
+		},
+		{
+			"metric_name": "System Uptime",
+			"team": "BPO and IT",
+			"owner_user": "Administrator",
+			"scorecard": "BPO and IT-Weekly",
+			"target_value": 99.5,
+			"operator": ">=",
+			"unit": "%",
+			"frequency": "Weekly",
+			"entries": [99.9, 99.8, 99.7, 99.9, 99.6, 99.9, 99.8, 99.5, 99.9, 99.7, 99.8, 99.9, 99.9]
+		},
+		{
+			"metric_name": "Sprint Velocity",
+			"team": "Test",
+			"owner_user": "anniejenisha.p@gmail.com",
+			"scorecard": "Test-Weekly",
+			"target_value": 40,
+			"operator": ">=",
+			"unit": "pts",
+			"frequency": "Weekly",
+			"entries": [42, 38, 45, 40, 39, 44, 41, 37, 43, 40, 39, 42, 41]
 		}
 	]
 
@@ -227,6 +289,14 @@ def ensure_metrics_and_entries():
 				continue
 		else:
 			doc = frappe.get_doc("EOS Metric", name)
+			doc.team = m["team"]
+			doc.owner_user = m["owner_user"]
+			doc.scorecard = m["scorecard"]
+			doc.target_value = m["target_value"]
+			doc.operator = m["operator"]
+			doc.unit = m.get("unit", "")
+			doc.frequency = m["frequency"]
+			doc.archived = 0
 
 		# Add weekly entries
 		for idx, val in enumerate(m["entries"]):
@@ -259,7 +329,6 @@ def ensure_metrics_and_entries():
 
 
 def ensure_rocks():
-	"""Ensure standard Company Rocks and Individual Rocks with Milestones"""
 	rocks = [
 		{
 			"name": "R-EOS company portal go live",
@@ -269,6 +338,7 @@ def ensure_rocks():
 			"is_company": 1,
 			"scope": "Company",
 			"status": "In Progress",
+			"start": "2026-10-01",
 			"due": "2026-12-31",
 			"milestones": [
 				{"name": "Requirements gathering and blueprinting", "done": 1, "notes": "Due: 30 Sep"},
@@ -289,6 +359,7 @@ def ensure_rocks():
 			"is_company": 1,
 			"scope": "Company",
 			"status": "In Progress",
+			"start": "2026-10-01",
 			"due": "2026-12-31",
 			"milestones": [
 				{"name": "Identification of the right tool with open integration protocols", "done": 0, "notes": "Due: 10 Oct"},
@@ -299,10 +370,11 @@ def ensure_rocks():
 			"name": "R-Test",
 			"title": "Test",
 			"team": "Leadership Team",
-			"owner": "taher@burhani.com",
+			"owner": "anniejenisha.p@gmail.com",
 			"is_company": 1,
 			"scope": "Company",
 			"status": "Not Started",
+			"start": "2026-10-01",
 			"due": "2026-12-31",
 			"milestones": [
 				{"name": "Initial assessment", "done": 0, "notes": "Due: 15 Oct"},
@@ -313,23 +385,31 @@ def ensure_rocks():
 			"name": "R-EOS Company Map",
 			"title": "EOS Company Map",
 			"team": "BEL BPO",
-			"owner": "Administrator",
+			"owner": "anniejenisha.p@gmail.com",
 			"is_company": 1,
 			"scope": "Company",
 			"status": "In Progress",
+			"start": "2026-10-01",
 			"due": "2026-12-31",
-			"milestones": []
+			"milestones": [
+				{"name": "Process mapping sessions", "done": 1, "notes": "Due: 15 Oct"},
+				{"name": "Role accountability chart finalized", "done": 0, "notes": "Due: 31 Oct"}
+			]
 		},
 		{
 			"name": "R-EOS Company",
 			"title": "EOS Company",
 			"team": "BEL BPO",
-			"owner": "Administrator",
+			"owner": "anniejenisha.p@gmail.com",
 			"is_company": 1,
 			"scope": "Company",
 			"status": "In Progress",
+			"start": "2026-10-01",
 			"due": "2026-12-31",
-			"milestones": []
+			"milestones": [
+				{"name": "Team alignment review", "done": 1, "notes": "Due: 10 Oct"},
+				{"name": "Execution roadmap sign-off", "done": 0, "notes": "Due: 25 Oct"}
+			]
 		},
 		{
 			"name": "R-To systemise incentive plans",
@@ -339,6 +419,7 @@ def ensure_rocks():
 			"is_company": 0,
 			"scope": "Individual",
 			"status": "In Progress",
+			"start": "2026-10-01",
 			"due": "2026-12-31",
 			"milestones": [
 				{"name": "Review historic payout metrics", "done": 0, "notes": "Due: 15 Oct"},
@@ -353,16 +434,49 @@ def ensure_rocks():
 			"is_company": 0,
 			"scope": "Individual",
 			"status": "In Progress",
+			"start": "2026-10-01",
 			"due": "2026-12-31",
 			"milestones": [
 				{"name": "Module configuration and testing", "done": 0, "notes": "Due: 15 Oct"},
 				{"name": "Master data migration", "done": 0, "notes": "Due: 30 Oct"}
+			]
+		},
+		{
+			"name": "R-BPO Performance Automation",
+			"title": "BPO Performance Automation",
+			"team": "BPO and IT",
+			"owner": "jd@example.com",
+			"is_company": 1,
+			"scope": "Company",
+			"status": "In Progress",
+			"start": "2026-10-01",
+			"due": "2026-12-31",
+			"milestones": [
+				{"name": "Ticket workflow integration", "done": 1, "notes": "Due: 20 Oct"},
+				{"name": "SLA alerting rules", "done": 0, "notes": "Due: 05 Nov"}
+			]
+		},
+		{
+			"name": "R-Quality Assurance Framework",
+			"title": "Quality Assurance Framework",
+			"team": "BEL BPO",
+			"owner": "jd@example.com",
+			"is_company": 0,
+			"scope": "Individual",
+			"status": "In Progress",
+			"start": "2026-10-01",
+			"due": "2026-12-31",
+			"milestones": [
+				{"name": "Draft audit rubric", "done": 1, "notes": "Due: 12 Oct"},
+				{"name": "Agent training sessions", "done": 0, "notes": "Due: 28 Oct"}
 			]
 		}
 	]
 
 	for r in rocks:
 		name = r["name"]
+		start_date = r.get("start", "2026-10-01")
+		due_date = r.get("due", "2026-12-31")
 		if not frappe.db.exists("Rock", name):
 			doc = frappe.get_doc({
 				"doctype": "Rock",
@@ -373,21 +487,23 @@ def ensure_rocks():
 				"is_company_rock": r["is_company"],
 				"scope": r["scope"],
 				"status": r["status"],
-				"duration_end": r["due"],
+				"duration_start": start_date,
+				"duration_end": due_date,
 				"archived": 0
 			})
 			doc.insert(ignore_permissions=True)
 		else:
 			doc = frappe.get_doc("Rock", name)
+			doc.rock_name = r["title"]
 			doc.team = r["team"]
 			doc.owner_user = r["owner"]
 			doc.is_company_rock = r["is_company"]
 			doc.scope = r["scope"]
 			doc.status = r["status"]
-			doc.duration_end = r["due"]
+			doc.duration_start = start_date
+			doc.duration_end = due_date
 			doc.archived = 0
 
-		# Update milestones
 		if r.get("milestones"):
 			doc.set("milestones", [])
 			for m in r["milestones"]:
@@ -460,6 +576,38 @@ def ensure_todos():
 			"due_date": "2026-10-13",
 			"status": "Not Started",
 			"priority": "Medium"
+		},
+		{
+			"todo_name": "Review BPO attendance records and anomalies",
+			"team": "BEL BPO",
+			"owner_user": "Administrator",
+			"due_date": "2026-10-15",
+			"status": "In Progress",
+			"priority": "High"
+		},
+		{
+			"todo_name": "Deploy IT security patches across workstations",
+			"team": "BPO and IT",
+			"owner_user": "Administrator",
+			"due_date": "2026-10-18",
+			"status": "Not Started",
+			"priority": "High"
+		},
+		{
+			"todo_name": "Finalize Q4 KPI targets with team leads",
+			"team": "BEL BPO",
+			"owner_user": "jd@example.com",
+			"due_date": "2026-10-20",
+			"status": "In Progress",
+			"priority": "Medium"
+		},
+		{
+			"todo_name": "Deliver test automation framework demo",
+			"team": "Test",
+			"owner_user": "anniejenisha.p@gmail.com",
+			"due_date": "2026-10-25",
+			"status": "Complete",
+			"priority": "Low"
 		}
 	]
 
@@ -485,7 +633,75 @@ def ensure_todos():
 				"team": td["team"],
 				"owner_user": td["owner_user"],
 				"due_date": td["due_date"],
+				"status": td["status"],
 				"priority": td["priority"],
 				"archived": 0
 			})
+
+
+def ensure_issues():
+	issues = [
+		{
+			"issue_name": "Scorecard sync delay during weekly cutoff",
+			"team": "Leadership Team",
+			"owner_user": "taher@burhani.com",
+			"status": "Identified",
+			"priority": "High"
+		},
+		{
+			"issue_name": "Missing attendance logs for remote contractors",
+			"team": "BEL BPO",
+			"owner_user": "Administrator",
+			"status": "Discussing",
+			"priority": "Medium"
+		},
+		{
+			"issue_name": "API timeout when generating monthly rollups",
+			"team": "BPO and IT",
+			"owner_user": "Administrator",
+			"status": "Identified",
+			"priority": "High"
+		},
+		{
+			"issue_name": "Test site permission caching across sessions",
+			"team": "Test",
+			"owner_user": "anniejenisha.p@gmail.com",
+			"status": "Solved",
+			"priority": "Low",
+			"solution": "Cleared session role cache and validated ACL hooks"
+		}
+	]
+	for iss in issues:
+		name = iss["issue_name"]
+		if not frappe.db.exists("Issue", name):
+			try:
+				doc_data = {
+					"doctype": "Issue",
+					"issue_name": name,
+					"team": iss["team"],
+					"owner_user": iss["owner_user"],
+					"status": iss["status"],
+					"priority": iss["priority"],
+					"archived": 0
+				}
+				if iss.get("solution"):
+					doc_data["solution"] = iss["solution"]
+				doc = frappe.get_doc(doc_data)
+				doc.insert(ignore_permissions=True)
+			except Exception as e:
+				print("Issue insert error:", e)
+		else:
+			try:
+				vals = {
+					"team": iss["team"],
+					"owner_user": iss["owner_user"],
+					"status": iss["status"],
+					"priority": iss["priority"],
+					"archived": 0
+				}
+				if iss.get("solution"):
+					vals["solution"] = iss["solution"]
+				frappe.db.set_value("Issue", name, vals)
+			except Exception:
+				pass
 
