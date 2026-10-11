@@ -2016,8 +2016,8 @@
 						</button>
 					</div>
 					<div class="nn-filter-right">
-						<button class="nn-ibtn-bar">${ic("undo", 14)}</button>
-						<button class="nn-ibtn-bar">${ic("redo", 14)}</button>
+						<button class="nn-ibtn-bar" id="nn-sc-undo" title="${__("Undo")}">${ic("undo", 14)}</button>
+						<button class="nn-ibtn-bar" id="nn-sc-redo" title="${__("Redo")}">${ic("redo", 14)}</button>
 						<button class="nn-btn-bar" id="nn-new-group">+ ${__("New group")}</button>
 						<button class="nn-btn-bar" id="nn-mgr">${__("Go to Measurable Manager")}</button>
 						<button class="nn-btn-bar" id="nn-optimize"><span style="color:#047857">${ic("sparkle", 13)}</span> ${__("Optimize Scorecard")}</button>
@@ -2084,15 +2084,172 @@
 				});
 			});
 
+			// Timeframe tabs: Weekly, Monthly, Quarterly, Annual
+			$m.find(".nn-tab[data-tf]").off("click").on("click", function () {
+				const tf = $(this).attr("data-tf");
+				$m.find(".nn-tab[data-tf]").removeClass("on");
+				$(this).addClass("on");
+				s.timeframe = tf;
+				self.load_scorecard();
+			});
+
+			// Create Measurable button
 			$m.find("#nn-create-top, #nn-new-meas").off("click").on("click", (e) => {
 				e.preventDefault();
 				self.open_measurable_drawer();
 			});
 
+			// New group button
+			$m.find("#nn-new-group").off("click").on("click", function (e) {
+				e.preventDefault();
+				frappe.prompt([
+					{
+						label: __("Group Name"),
+						fieldname: "group_name",
+						fieldtype: "Data",
+						reqd: 1,
+						placeholder: __("e.g. Sales, Operations, Finance")
+					}
+				], async (values) => {
+					try {
+						await self.call("frappe.client.insert", {
+							doc: {
+								doctype: "Measurable Group",
+								group_name: values.group_name,
+								scorecard: self.current_scorecard_id,
+								archived: 0
+							}
+						});
+						frappe.show_alert({ message: __("Measurable Group created"), indicator: "green" });
+						await self.fetch_scorecard_data();
+						self.render_grid();
+					} catch (err) {
+						frappe.msgprint(__("Error creating group: ") + (err.message || err));
+					}
+				}, __("New Measurable Group"), __("Create Group"));
+			});
+
+			// Go to Measurable Manager button
+			$m.find("#nn-mgr").off("click").on("click", function (e) {
+				e.preventDefault();
+				frappe.set_route("List", "EOS Metric");
+			});
+
+			// Optimize Scorecard button
+			$m.find("#nn-optimize").off("click").on("click", function (e) {
+				e.preventDefault();
+				self.show_optimize_modal();
+			});
+
+			// Undo and Redo buttons
+			$m.find("#nn-sc-undo, #nn-sc-redo").off("click").on("click", function (e) {
+				e.preventDefault();
+				frappe.show_alert({ message: __("Scorecard cell edits are automatically synced live"), indicator: "blue" });
+			});
+
+			// Maz AI Coach button
+			$m.find(".nn-badge-maz").off("click").on("click", function (e) {
+				e.preventDefault();
+				frappe.msgprint({
+					title: __("Maz AI Coach"),
+					message: __("Maz monitors team measurables against goals. Review off-track metrics weekly in your Level 10 meeting to stay focused on traction."),
+					indicator: "green"
+				});
+			});
+
+			// Notification bell button
+			$m.find(".nn-top-header .nn-btn-icon").off("click").on("click", function (e) {
+				e.preventDefault();
+				const off_track_count = (self.data.metrics || []).filter(m => {
+					const p0 = self.data.periods && self.data.periods[0];
+					if (!p0) return false;
+					const val = m.values && m.values[p0.key];
+					return val != null && !self.check_goal_pass(val, m.goal, m.goal_op, m.min_value, m.max_value);
+				}).length;
+				frappe.msgprint({
+					title: __("Scorecard Alerts"),
+					message: __(`Current period has <b>${off_track_count}</b> measurable(s) off track.`),
+					indicator: off_track_count ? "orange" : "blue"
+				});
+			});
+
+			// Search inputs (both top header search and filter bar search)
 			$m.find("#nn-search-input").off("input").on("input", function () {
 				self.s.search = $(this).val();
+				$m.find(".nn-top-search input").val(self.s.search);
 				self.render_grid();
 			});
+
+			$m.find(".nn-top-search input").off("input").on("input", function () {
+				self.s.search = $(this).val();
+				$m.find("#nn-search-input").val(self.s.search);
+				self.render_grid();
+			});
+		}
+
+		show_optimize_modal() {
+			const metrics = this.data.metrics || [];
+			const periods = this.data.periods || [];
+			let total_entries = 0, on_track = 0, off_track = 0, missing = 0;
+
+			metrics.forEach(m => {
+				periods.forEach(p => {
+					const val = m.values && m.values[p.key];
+					if (val == null) {
+						missing++;
+					} else {
+						total_entries++;
+						const pass = this.check_goal_pass(val, m.goal, m.goal_op, m.min_value, m.max_value);
+						if (pass) on_track++;
+						else off_track++;
+					}
+				});
+			});
+
+			const pass_rate = total_entries ? Math.round((on_track / total_entries) * 100) : 0;
+
+			const d = new frappe.ui.Dialog({
+				title: __("Scorecard Health & Optimization"),
+				fields: [
+					{
+						fieldtype: "HTML",
+						fieldname: "stats_html",
+						options: `
+							<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;text-align:center">
+								<div style="background:#f8fafc;padding:12px;border-radius:8px;border:1px solid #e2e8f0">
+									<div style="font-size:11px;color:#64748b;font-weight:600">MEASURABLES</div>
+									<div style="font-size:22px;font-weight:700;color:#1e293b">${metrics.length}</div>
+								</div>
+								<div style="background:#dcfce7;padding:12px;border-radius:8px;border:1px solid #86efac">
+									<div style="font-size:11px;color:#15803d;font-weight:600">ON TRACK</div>
+									<div style="font-size:22px;font-weight:700;color:#15803d">${on_track}</div>
+								</div>
+								<div style="background:#fee2e2;padding:12px;border-radius:8px;border:1px solid #fca5a5">
+									<div style="font-size:11px;color:#dc2626;font-weight:600">OFF TRACK</div>
+									<div style="font-size:22px;font-weight:700;color:#dc2626">${off_track}</div>
+								</div>
+								<div style="background:#f1f5f9;padding:12px;border-radius:8px;border:1px solid #cbd5e1">
+									<div style="font-size:11px;color:#475569;font-weight:600">PASS RATE</div>
+									<div style="font-size:22px;font-weight:700;color:#0f172a">${pass_rate}%</div>
+								</div>
+							</div>
+							<div style="font-size:13px;line-height:1.6;color:#334155;background:#ffffff;padding:12px;border:1px solid #e2e8f0;border-radius:6px">
+								<b>${__("Optimization Insights:")}</b>
+								<ul style="margin:8px 0 0 18px;padding:0">
+									${missing > 0 ? `<li>${missing} ${__("period cells have missing entries. Keep entries updated weekly for accurate rollups.")}</li>` : `<li>${__("All historical period cells have recorded values.")}</li>`}
+									${off_track > 0 ? `<li>${off_track} ${__("entries are currently off track. Consider creating an Issue for recurring bottlenecks.")}</li>` : `<li>${__("No off-track metrics found.")}</li>`}
+									<li>${__("Maintain 5-15 measurable KPIs per team scorecard for high-focus EOS traction.")}</li>
+								</ul>
+							</div>
+						`
+					}
+				],
+				primary_action_label: __("Close"),
+				primary_action() {
+					d.hide();
+				}
+			});
+			d.show();
 		}
 
 		render_grid() {
@@ -2262,6 +2419,7 @@
 			const current_desc = m ? (m.description || "") : "";
 			const current_freq = m ? (m.frequency || "Weekly") : "Weekly";
 			const current_owner = m ? m.owner : (frappe.session.user || "Administrator");
+			const current_op = m ? (m.goal_op || ">=") : ">=";
 			const current_val = m && m.goal != null ? m.goal : 0;
 
 			let owner_options = "";
