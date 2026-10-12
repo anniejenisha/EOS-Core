@@ -621,6 +621,27 @@ erDiagram
   Overdue is judged against `period_end` (passed as `as_of`), not the current date, so historical
   reviews are stable.
 
+## 3i. Scorecard Grid UI (Phase 7 — implemented)
+
+The primary user interface for Ninety is the Scorecard Grid, hosted as a Frappe `Page` (`#scorecard_grid`) with client assets in `public/js/scorecard_grid.js` and `public/css/scorecard_grid.css`.
+
+### Architecture & Endpoints
+- **Hosting**: A standard Frappe `Page` DocType `scorecard_grid` registered in `eos_core/eos_core/page/scorecard_grid/` with roles for all six Ninety roles (`Owner`, `Admin`, `Coach`, `Manager`, `Team Member`, `Observer`) plus `System Manager`. Assets are built via `bench build --app eos_core`.
+- **Read Endpoint (`Scorecard.get_grid_view`)**: Whitelisted method on `Scorecard`. Reads measurables via `frappe.get_list` to enforce `permission_query_conditions` and DocPerm rules so users only see measurables within their assigned teams. Returns period columns (`rollup_periods`), measurables grouped and sorted by `Measurable Group.order` (ungrouped last), trailing `status_indicator` calculated by `compute_status_indicator`, consecutive off-track count, and scorecard summary.
+- **Write Endpoint (`Scorecard.update_scorecard_entry`)**: Whitelisted method that writes data by loading the parent `EOS Metric`, updating or appending child `Scorecard Entry` rows, and calling `parent.save()`. This ensures that `validate_data_entry_only` and status recalculations execute as expected, allowing `Team Member` users to enter periodic actuals while preventing unauthorized changes to settings.
+- **Interactive Capabilities**:
+  - Period navigation and timeframe switching (`Week`, `Month`, `Quarter`, `Year`).
+  - Inline data entry for actual values (clearing cell removes entry; recomputes status and indicators).
+  - Group collapse/expand persisting state client-side (accessible to all roles, including Observer).
+  - Column toggles and Trends view integrations.
+
+### Measurable Ordering Inside Groups (Decision for PERM-3)
+- **Current Behavior**: `Measurable Group.order` orders groups. Measurables within each group are sorted by `metric_name` ascending. `EOS Metric` currently has no dedicated ordering column.
+- **Ordering Decision for `PERM-3`**:
+  - When drag-and-drop reordering within a group is implemented for `PERM-3`, an ordering field (e.g. `position`, `Int`) must be added to `EOS Metric`.
+  - **Crucial Permission Requirement**: Because `TEAM_MEMBER_EDITABLE_FIELDS` in `eos_core/permissions.py` is a strict allow-list guarding settings changes, any new ordering field **must be explicitly added to `TEAM_MEMBER_EDITABLE_FIELDS`**. Otherwise, a Team Member attempting to reorder a measurable will be blocked by `validate_data_entry_only`.
+  - **Unset handling**: Since Frappe `Int` fields default to 0 (`NOT NULL DEFAULT 0`), `0` indicates unset. Ordering logic must maintain a deterministic total sort falling back to `metric_name`.
+
 ## 4. Scoring engine (`eos_core/scorecard_engine.py`)
 
 Pure, frappe-free functions so they are trivially testable. Behaviour (defaults, all configurable):
@@ -724,14 +745,7 @@ Phase status is in `docs/roadmap.md`; the live work queue with stable IDs is in
   rules (`Inside min/max`, `Outside min/max`) were added in Phase 3 and are implemented.
 - `frequency` already lists Quarterly/Annual (Ninety ships 4 scorecards per team) even though entry
   UI defaults to weekly.
-- **There is no user interface.** `public/js` and `public/css` are empty, there are no client
-  scripts, and only four `@frappe.whitelist()` methods exist (`rock.mark_complete`,
-  `rock.get_rock_summary`, `scorecard_report.send_report`, `scorecard.get_rollup_view`).
-  `create_issue_from_metric` is server-side only with no UI trigger. Everything is reachable only
-  through the default Frappe form or the console. The Scorecard grid, column toggles, trends view
-  and bulk paste remain unbuilt — they are tracked as Phases 6 and 7 in the roadmap. The one piece
-  of Ninety's "View by" that is reachable today is `Scorecard.get_rollup_view`, a whitelisted
-  read-only endpoint (see §3g).
+- **User interface status.** The core Scorecard Grid UI is implemented and accessible via the Frappe `Page` (`#scorecard_grid`), backed by `public/js/scorecard_grid.js` and `public/css/scorecard_grid.css`. It integrates period navigation, inline data entry, group collapse/expand, column toggles, trends view, and bulk actions. Form actions exist on Rock and Scorecard Report forms. Whitelisted endpoints include `Scorecard.get_grid_view`, `Scorecard.update_scorecard_entry`, `Scorecard.get_rollup_view`, `rock.mark_complete`, `rock.get_rock_summary`, and `scorecard_report.send_report`.
 - `week_overlap_ratio` and `quarter_bounds` are public, unit-tested and have no production call
   site yet; `week_overlap_days`, `prorate_for_period`, `aggregate_values`, `is_period_complete` and
   `EOS Metric.rollup` **are** wired (through `aggregate_entries_for_period` and

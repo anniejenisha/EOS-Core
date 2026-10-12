@@ -497,11 +497,10 @@ this block: `UI-1` should read rows through `frappe.get_list` (not `frappe.get_a
 permissions) or the grid will show other teams' measurables, and `UI-5`'s per-team column settings
 have a defined home (`PERM-5`).
 
-### UI-1 — S2 · Scorecard grid (the core Ninety screen)
-**Status** `IN_PROGRESS` (UI-1.1 grid read endpoint & UI-1.2 entry write endpoint built & tested) · code+tests ☑ · reachable ☐ · **Verified 2026-10-07** · plan [`UI-1.md`](execution/UI-1.md)
+### UI-1 — S2 · Scorecard grid (the core Ninety screen) — **DONE**
+**Status** `DONE` · code+tests ☑ · reachable ☑ · **Closed 2026-10-12** · plan [`UI-1.md`](execution/UI-1.md)
 **Scope** a Worksheet Page plus a whitelisted grid endpoint over `EOS Metric` + `Scorecard Entry`.
-Depends on `PERM-2` for column-level visibility, and is the prerequisite for most of the rest of
-this block. Server endpoints `get_grid_view` and `update_scorecard_entry` are built and tested. Page UI rendering (UI-1.3 to UI-1.8) pending.
+**Result** Implemented core Ninety Scorecard Grid via Frappe `Page` (`scorecard_grid`) and public JS/CSS assets (`scorecard_grid.js`, `scorecard_grid.css`). Backed by whitelisted `Scorecard.get_grid_view` (reads via `frappe.get_list` respecting role-scoping) and `update_scorecard_entry` (upserts child entries via parent `EOS Metric` save). Features period navigation, timeframe switching, inline actual-value data entry, group collapse/expand, status indicator recomputation, and permission gating for all Ninety roles.
 
 ### UI-2 — S2 · UI trigger for "Make it an Issue"
 **Status** `IN_PROGRESS` (UI-2.1 whitelisted & guarded `e54b93d`) · code+tests ☑ · reachable ☐ · **Verified 2026-10-07** · plan [`UI-2.md`](execution/UI-2.md) · after `UI-1`

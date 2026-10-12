@@ -285,11 +285,7 @@ it is the thing to remember before touching any grant: adding a flat role to a D
 scoping layer in `hooks.py` makes every team's data company-wide to that role — the opposite of
 Ninety's assigned-teams model. Both halves are in place, so edit them together.
 
-**There is no UI.** `public/js` and `public/css` are empty, there are no client scripts, and only
-four `@frappe.whitelist()` methods (`rock.mark_complete`, `rock.get_rock_summary`,
-`scorecard_report.send_report`, `scorecard.get_rollup_view`). Everything is reachable only via the
-default Frappe form or the console. Treat "DONE" in the table above as "the code exists and is unit-tested", not "the
-feature is reachable by a user".
+**UI is implemented for the Scorecard Grid.** The core Ninety screen is hosted as a standard Frappe `Page` (`#scorecard_grid`), backed by `public/js/scorecard_grid.js`, `public/css/scorecard_grid.css`, and whitelisted endpoints `Scorecard.get_grid_view` (read via `frappe.get_list` respecting role-scoping) and `update_scorecard_entry` (writes through parent `EOS Metric` to enforce validation and permissions). It supports period navigation, inline data entry, group collapse/expand, status indicators, and role-based permissions. Form action buttons exist for `rock.mark_complete`, `rock.get_rock_summary`, and `scorecard_report.send_report`.
 
 **Read `docs/roadmap.md` § "Known gaps in Phases 1–5" before starting any phase.** It separates
 bugs that are *fixed* from those *still open* (none), lists code that exists but has no call
