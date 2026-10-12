@@ -52,7 +52,8 @@
 		"rock-icon": '<path d="m8 3 4 8 5-5 5 15H2L8 3z"/>',
 		"scorecard-icon": '<path d="M3 3v18a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/>',
 		"todo-icon": '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 12 2 2 4-4"/>',
-		"target": '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>'
+		"target": '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
+		"alert-circle": '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>'
 	};
 
 	const ic = (n, s) => `<svg class="nn-svg" width="${s || 14}" height="${s || 14}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${IC[n] || ""}</svg>`;
@@ -80,17 +81,24 @@
 				view_mode: "chart",
 				expanded_rocks: {},
 
-				// To-Dos State
 				todo_team: "All Teams",
 				todo_owner: "All",
 				todo_tab: "Team",
 				todo_archive: false,
 				todo_search: "",
-				todo_sort_dir: "asc"
+				todo_sort_dir: "asc",
+
+				issue_team: "All Teams",
+				issue_owner: "All",
+				issue_tab: "Short-Term",
+				issue_archive: false,
+				issue_search: "",
+				issue_priority: "All"
 			};
 			this.data = { periods: [], metrics: [] };
 			this.rocks = [];
 			this.todos = [];
+			this.issues = [];
 			this.users = [];
 			this.players = [];
 			this.all_teams = ["All Teams"];
@@ -104,13 +112,9 @@
 		}
 
 		async preload_doctypes() {
-			const dtypes = ["Rock", "To Do", "EOS Metric", "Team", "Player"];
-			for (const dt of dtypes) {
-				if (frappe.model && frappe.model.with_doctype) {
-					try {
-						await frappe.model.with_doctype(dt);
-					} catch (_) {}
-				}
+			const dtypes = ["Rock", "To Do", "EOS Metric", "Team", "Player", "Issue"];
+			if (frappe.model && frappe.model.with_doctype) {
+				await Promise.all(dtypes.map(dt => frappe.model.with_doctype(dt).catch(() => {})));
 			}
 		}
 
@@ -190,7 +194,8 @@
 			});
 		}
 
-		async fetch_all_teams() {
+		async fetch_all_teams(force = false) {
+			if (!force && this.all_teams && this.all_teams.length > 1) return;
 			try {
 				let team_names = [];
 				if (frappe.db && frappe.db.get_list) {
@@ -222,7 +227,8 @@
 			}
 		}
 
-		async fetch_players() {
+		async fetch_players(force = false) {
+			if (!force && this.players && this.players.length > 0) return;
 			try {
 				let p_list = [];
 				if (frappe.db && frappe.db.get_list) {
@@ -512,6 +518,12 @@
 			.nn-cell-badge.fail { background: #fee2e2 !important; color: #dc2626 !important; border: 1px solid #fca5a5 !important; }
 			.nn-sc-cell-input { width: 68px; height: 28px; border: 2px solid #064e3b; border-radius: 6px; text-align: center; font-size: 12.5px; font-weight: 700; color: #111827; background: #ffffff; outline: none; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
 
+			.nn-cell-wrap { display: inline-flex; align-items: center; justify-content: center; gap: 4px; position: relative; }
+			.nn-btn-make-issue { display: inline-flex; align-items: center; gap: 3px; padding: 2px 5px; font-size: 10px; font-weight: 600; color: #b91c1c; background: #ffffff; border: 1px solid #fca5a5; border-radius: 4px; cursor: pointer; line-height: 1.2; transition: all 0.15s ease; white-space: nowrap; }
+			.nn-btn-make-issue:hover { background: #fee2e2; border-color: #ef4444; color: #991b1b; }
+			.nn-cell-issue-link { display: inline-flex; align-items: center; gap: 2px; font-size: 10px; font-weight: 600; color: #4338ca; background: #e0e7ff; border: 1px solid #c7d2fe; border-radius: 4px; padding: 2px 5px; text-decoration: none; line-height: 1.2; white-space: nowrap; transition: all 0.15s ease; max-width: 90px; overflow: hidden; text-overflow: ellipsis; }
+			.nn-cell-issue-link:hover { text-decoration: underline; background: #c7d2fe; }
+
 			/* Menu Dropdown */
 			.nn-menu { position: fixed; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.14); z-index: 99999 !important; padding: 6px; min-width: 190px; max-height: 340px; overflow-y: auto; }
 			.nn-mi { padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 12.5px; color: #374151; display: flex; align-items: center; justify-content: space-between; transition: background 0.1s; }
@@ -587,6 +599,17 @@
 			.nn-p-btn { width: 22px; height: 22px; border: 1px solid #e5e7eb; background: #ffffff; color: #6b7280; border-radius: 4px; font-size: 11px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; }
 			.nn-p-btn:hover { background: #f3f4f6; color: #111827; border-color: #cbd5e1; }
 			.nn-todo-empty { padding: 36px 20px; text-align: center; color: #9ca3af; font-size: 13px; }
+
+			.nn-btn-green { height: 36px; padding: 0 16px; border-radius: 6px; background: #064e3b; color: #ffffff; font-size: 13px; font-weight: 600; border: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: background 0.15s; }
+			.nn-btn-green:hover { background: #04392b; }
+			.nn-issues-body { padding: 24px 32px 48px; display: flex; justify-content: center; width: 100%; background: #ffffff; }
+			.nn-issues-empty-wrap { width: 100%; max-width: 640px; margin: 40px auto; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+			.nn-issues-empty-icon { width: 48px; height: 48px; border-radius: 50%; background: #f3f4f6; color: #9ca3af; display: flex; align-items: center; justify-content: center; margin-bottom: 4px; }
+			.nn-issues-empty-title { font-size: 16px; font-weight: 700; color: #111827; margin: 0; }
+			.nn-issues-empty-desc { font-size: 13px; color: #6b7280; margin: 0; max-width: 440px; line-height: 1.5; }
+			.nn-issues-learn-link { font-size: 12px; color: #064e3b; text-decoration: underline; cursor: pointer; font-weight: 500; }
+			.nn-issue-priority-select { border: 1px solid #e5e7eb; border-radius: 4px; padding: 2px 6px; font-size: 11.5px; color: #374151; background: #fff; cursor: pointer; outline: none; }
+			.nn-issue-priority-select:focus { border-color: #064e3b; }
 			</style>`);
 		}
 
@@ -612,6 +635,9 @@
 						</div>
 						<div class="nn-nav-item" data-view="todos">
 							${ic("todo-icon", 16)} <span>${__("To-Dos")}</span>
+						</div>
+						<div class="nn-nav-item" data-view="issues">
+							${ic("alert-circle", 16)} <span>${__("Issues")}</span>
 						</div>
 
 						<div class="nn-side-footer">
@@ -657,6 +683,7 @@
 			this.$root.find(".nn-nav-item").removeClass("on").filter(`[data-view="${view}"]`).addClass("on");
 			if (view === "rocks") this.load_rocks();
 			else if (view === "todos") this.load_todos();
+			else if (view === "issues") this.load_issues();
 			else this.load_scorecard();
 		}
 
@@ -1875,9 +1902,593 @@
 			$drawer.find("#nn-td-title").focus();
 		}
 
-		/* =========================================================================
-		   SCORECARD VIEW IMPLEMENTATION
-		   ========================================================================= */
+		async load_issues() {
+			this.$main.html(`<div style="padding:48px;text-align:center;color:#6b7280;font-size:14px">${__("Loading Issues…")}</div>`);
+			try {
+				if (!this.all_teams || this.all_teams.length <= 1) await this.fetch_all_teams();
+				if (!this.players || !this.players.length) await this.fetch_players();
+				await this.fetch_issues_data();
+			} catch (e) {
+				console.error("Issues load error:", e);
+			}
+			this.render_issues();
+		}
+
+		async fetch_issues_data() {
+			const filters = {};
+			if (this.s.issue_archive) {
+				filters.archived = 1;
+			} else {
+				filters.archived = 0;
+			}
+			const res = await this.list("Issue", [
+				"name", "issue_name", "status", "priority", "owner_user", "team", "due_date", "description", "solution", "source", "originating_metric", "archived", "creation"
+			], filters, "creation desc", 200);
+
+			this.issues = res.ok ? (res.data || []) : [];
+
+			if (!this.users || !this.users.length) {
+				const u_res = await this.list("User", ["name", "full_name", "first_name", "last_name", "email"], { enabled: 1 }, "full_name asc", 200);
+				this.users = u_res.ok ? u_res.data : [];
+			}
+		}
+
+		render_issues() {
+			const s = this.s;
+
+			this.$main.html(`
+				<div class="nn-top-header">
+					<div>
+						<div class="nn-title">${__("Issues")}</div>
+						<div class="nn-sub">${__("Identify and organize your team's most pressing Issues to resolve them with ease.")}</div>
+					</div>
+					<div class="nn-top-right">
+						<a class="nn-badge-maz" href="javascript:void(0)"><span>+ Maz</span><span class="nn-badge-new">NEW</span></a>
+						<div class="nn-top-search">${ic("search", 13)}<input type="text" placeholder="${__("Search…")}"></div>
+						<button class="nn-btn-icon">${ic("bell", 15)}<span class="nn-dot-red"></span></button>
+						<button class="nn-btn-green" id="nn-create-issue-top">${ic("plus", 13)} ${__("Create")}</button>
+					</div>
+				</div>
+
+				<div class="nn-tabs">
+					<div class="nn-tab ${s.issue_tab === "Short-Term" ? "on" : ""}" data-itab="Short-Term">${__("Short-Term")}</div>
+					<div class="nn-tab ${s.issue_tab === "Long-Term" ? "on" : ""}" data-itab="Long-Term">${__("Long-Term")}</div>
+				</div>
+
+				<div class="nn-filter-bar">
+					<div class="nn-filter-left">
+						<button class="nn-pill-select" id="nn-i-team" data-menu>
+							<span class="k">${__("Team")}:</span> <b>${this.esc(s.issue_team)}</b> ${ic("chevron-down", 12)}
+						</button>
+						<button class="nn-pill-select" id="nn-i-owner" data-menu>
+							<span class="k">${__("Owner")}:</span> <b>${this.esc(s.issue_owner)}</b> ${ic("chevron-down", 12)}
+						</button>
+						<div style="display:inline-flex;align-items:center;gap:8px;margin-left:6px;font-size:12.5px;color:#374151">
+							<span class="nn-switch ${s.issue_archive ? "on" : ""}" id="nn-sw-i-archive"></span>
+							<span>${__("Archive")}</span>
+						</div>
+					</div>
+					<div class="nn-filter-right">
+						<button class="nn-ibtn-bar" id="nn-i-refresh" title="${__("Refresh Issues")}">${ic("refresh", 14)}</button>
+						<button class="nn-ibtn-bar" title="${__("More Options")}">${ic("dots", 14)}</button>
+						<div class="nn-search-input-wrap">${ic("search", 13)}<input id="nn-issue-search" placeholder="${__("Search Issues…")}" value="${this.esc(s.issue_search)}"></div>
+					</div>
+				</div>
+
+				<div class="nn-todos-body" id="nn-issues-body-wrap"></div>
+			`);
+
+			this.render_issues_table();
+			this.bind_issues_events();
+		}
+
+		render_issues_table() {
+			const s = this.s;
+			const all_issues = this.issues || [];
+			const q = (s.issue_search || "").toLowerCase().trim();
+
+			let filtered = all_issues.filter(iss => {
+				if (q && !(iss.issue_name || "").toLowerCase().includes(q) && !(iss.description || "").toLowerCase().includes(q)) return false;
+
+				if (s.issue_team && s.issue_team !== "All Teams") {
+					if (iss.team && iss.team !== s.issue_team) return false;
+				}
+
+				if (s.issue_owner && s.issue_owner !== "All") {
+					const owner_name = this.get_user_display_name(iss.owner_user);
+					if (owner_name !== s.issue_owner && iss.owner_user !== s.issue_owner) return false;
+				}
+
+				return true;
+			});
+
+			if (filtered.length === 0) {
+				const empty_html = `
+					<div class="nn-issues-empty-wrap">
+						<div class="nn-issues-empty-icon">${ic("info", 24)}</div>
+						<div class="nn-issues-empty-title">${__("Your team hasn't added any issues yet.")}</div>
+						<div class="nn-issues-empty-desc">${__("Improve communication and transparency to matters that need attention with Issues.")}</div>
+						<button class="nn-btn-green" id="nn-issue-empty-add" style="margin-top:6px">${__("Add Issue")}</button>
+						<a href="javascript:void(0)" class="nn-issues-learn-link">${__("Learn more about Issues")}</a>
+					</div>
+				`;
+				this.$root.find("#nn-issues-body-wrap").html(empty_html);
+				return;
+			}
+
+			const table_html = `
+				<div class="nn-todo-card">
+					<div class="nn-todo-card-header">
+						<div class="nn-todo-card-title">
+							<span>${this.esc(s.issue_tab)}</span>
+							<span class="nn-todo-count">${filtered.length}</span>
+						</div>
+						<button class="nn-todo-expand-btn" title="${__("Open in full view")}">${ic("arrow-up-right", 15)}</button>
+					</div>
+
+					<div class="nn-todo-table-head">
+						<div class="nn-todo-col-check"></div>
+						<div class="nn-todo-col-title">${__("Title")}</div>
+						<div style="width:95px;flex-shrink:0;font-size:12px;font-weight:600;color:#6b7280">${__("Priority")}</div>
+						<div style="width:85px;flex-shrink:0;font-size:12px;font-weight:600;color:#6b7280">${__("Created")}</div>
+						<div class="nn-todo-col-owner">${__("Owner")}</div>
+						<div class="nn-todo-col-actions"></div>
+					</div>
+
+					<div class="nn-todo-table-body">
+						${filtered.map((iss, idx) => {
+							const is_solved = iss.status === "Solved";
+							const owner_name = this.get_user_display_name(iss.owner_user);
+							const initials = this.get_initials(owner_name || iss.owner_user || "");
+							const created_str = this.format_issue_created(iss.creation);
+							const priority_val = iss.priority || "Medium";
+
+							return `
+								<div class="nn-todo-row" data-id="${this.esc(iss.name)}">
+									<div class="nn-todo-col-check">
+										<div class="nn-todo-circle-check ${is_solved ? "checked" : ""}" data-id="${this.esc(iss.name)}" title="${is_solved ? __("Reopen Issue") : __("Mark Solved")}">
+											${is_solved ? ic("check", 11) : ""}
+										</div>
+									</div>
+									<div class="nn-todo-col-title ${is_solved ? "done" : ""}" data-action="edit" data-id="${this.esc(iss.name)}" title="${__("Click to edit")}">
+										${idx + 1}. ${this.esc(iss.issue_name)}
+									</div>
+									<div style="width:95px;flex-shrink:0;">
+										<select class="nn-issue-priority-select" data-id="${this.esc(iss.name)}">
+											<option value="Low" ${priority_val === "Low" ? "selected" : ""}>Low</option>
+											<option value="Medium" ${priority_val === "Medium" ? "selected" : ""}>Medium</option>
+											<option value="High" ${priority_val === "High" ? "selected" : ""}>High</option>
+											<option value="Critical" ${priority_val === "Critical" ? "selected" : ""}>Critical</option>
+										</select>
+									</div>
+									<div style="width:85px;flex-shrink:0;font-size:12.5px;color:#6b7280;">
+										${created_str}
+									</div>
+									<div class="nn-todo-col-owner">
+										<span class="nn-owner-circle" title="${this.esc(owner_name)}">${this.esc(initials)}</span>
+									</div>
+									<div class="nn-todo-col-actions">
+										<button class="nn-todo-row-menu-btn" data-id="${this.esc(iss.name)}" title="${__("Options")}">
+											${ic("dots", 14)}
+										</button>
+									</div>
+								</div>
+							`;
+						}).join("")}
+					</div>
+
+					<div class="nn-todo-card-footer">
+						<div class="nn-todo-add-trigger" id="nn-issue-add-btn">
+							<span style="font-weight:700;font-size:14px;line-height:1;margin-right:2px;">+</span> ${__("Add Issue")}
+						</div>
+						<div class="nn-todo-pagination">
+							<div class="nn-todo-page-size">${__("Items per page:")} <b>200</b></div>
+							<div class="nn-todo-page-info">1 - ${filtered.length} of ${filtered.length}</div>
+							<div class="nn-todo-page-nav">
+								<button class="nn-p-btn" title="${__("First page")}">&lt;|</button>
+								<button class="nn-p-btn" title="${__("Previous page")}">&lt;</button>
+								<button class="nn-p-btn" title="${__("Next page")}">&gt;</button>
+								<button class="nn-p-btn" title="${__("Last page")}">&gt;|</button>
+							</div>
+						</div>
+					</div>
+				</div>
+			`;
+
+			this.$root.find("#nn-issues-body-wrap").html(table_html);
+		}
+
+		format_issue_created(date_str) {
+			if (!date_str) return "";
+			try {
+				const d = new Date(date_str);
+				if (isNaN(d.getTime())) return date_str;
+				const day = d.getDate();
+				const m = MONTHS[d.getMonth()];
+				return `${day} ${m}`;
+			} catch (_) {
+				return date_str;
+			}
+		}
+
+		bind_issues_events() {
+			const self = this;
+
+			this.$root.off("click.issuecreate").on("click.issuecreate", "#nn-create-issue-top, #nn-issue-add-btn, #nn-issue-empty-add", () => {
+				self.open_issue_drawer();
+			});
+
+			this.$root.find("[data-itab]").off("click").on("click", function() {
+				const tab = $(this).attr("data-itab");
+				self.s.issue_tab = tab;
+				self.$root.find("[data-itab]").removeClass("on").filter(`[data-itab="${tab}"]`).addClass("on");
+				self.render_issues_table();
+			});
+
+			this.$root.find("#nn-i-team").off("click").on("click", function (e) {
+				e.stopPropagation();
+				self.pick_menu(this, self.all_teams, self.s.issue_team, val => {
+					self.s.issue_team = val;
+					self.$root.find("#nn-i-team b").text(val);
+					self.render_issues_table();
+				});
+			});
+
+			this.$root.find("#nn-i-owner").off("click").on("click", function (e) {
+				e.stopPropagation();
+				const owners = ["All", ...self.get_available_owners(self.s.issue_team)];
+				self.pick_menu(this, owners, self.s.issue_owner, val => {
+					self.s.issue_owner = val;
+					self.$root.find("#nn-i-owner b").text(val);
+					self.render_issues_table();
+				});
+			});
+
+			this.$root.find("#nn-sw-i-archive").off("click").on("click", async function (e) {
+				e.stopPropagation();
+				self.s.issue_archive = !self.s.issue_archive;
+				$(this).toggleClass("on", self.s.issue_archive);
+				await self.fetch_issues_data();
+				self.render_issues_table();
+			});
+
+			this.$root.find("#nn-i-refresh").off("click").on("click", async () => {
+				await self.fetch_issues_data();
+				self.render_issues_table();
+				frappe.show_alert({ message: __("Issues refreshed"), indicator: "green" });
+			});
+
+			this.$root.find("#nn-issue-search").off("input").on("input", function() {
+				self.s.issue_search = $(this).val();
+				self.render_issues_table();
+			});
+
+			this.$root.off("click.issuechk").on("click.issuechk", ".nn-todo-circle-check[data-id]", async function (e) {
+				e.stopPropagation();
+				const $chk = $(this);
+				const id = $chk.attr("data-id");
+				const iss = (self.issues || []).find(x => x.name === id);
+				if (!iss) return;
+
+				const next_status = iss.status === "Solved" ? "Identified" : "Solved";
+				try {
+					try {
+						await self.call("eos_core.eos_core.doctype.issue.issue.update_issue_status", {
+							issue_name: id,
+							status: next_status,
+							solution: next_status === "Solved" ? (iss.solution || "Resolved") : null
+						});
+					} catch (_) {
+						const update_args = { status: next_status };
+						if (next_status === "Solved" && !iss.solution) {
+							update_args.solution = "Resolved";
+						}
+						await self.call("frappe.client.set_value", {
+							doctype: "Issue",
+							name: id,
+							fieldname: update_args
+						});
+					}
+					iss.status = next_status;
+					if (next_status === "Solved" && !iss.solution) iss.solution = "Resolved";
+					self.render_issues_table();
+				} catch (err) {
+					frappe.msgprint(err && err.message ? err.message : String(err));
+				}
+			});
+
+			this.$root.off("change.issuepriority").on("change.issuepriority", ".nn-issue-priority-select", async function (e) {
+				e.stopPropagation();
+				const $sel = $(this);
+				const id = $sel.attr("data-id");
+				const new_p = $sel.val();
+				try {
+					try {
+						await self.call("eos_core.eos_core.doctype.issue.issue.update_issue_priority", {
+							issue_name: id,
+							priority: new_p
+						});
+					} catch (_) {
+						await self.call("frappe.client.set_value", {
+							doctype: "Issue",
+							name: id,
+							fieldname: "priority",
+							value: new_p
+						});
+					}
+					const iss = (self.issues || []).find(x => x.name === id);
+					if (iss) iss.priority = new_p;
+					frappe.show_alert({ message: __("Priority updated"), indicator: "green" });
+				} catch (err) {
+					frappe.msgprint(err && err.message ? err.message : String(err));
+				}
+			});
+
+			this.$root.off("click.issueedit").on("click.issueedit", ".nn-todo-col-title[data-action='edit']", function (e) {
+				e.stopPropagation();
+				const id = $(this).attr("data-id");
+				self.open_issue_drawer(id);
+			});
+
+			this.$root.off("click.issuemenu").on("click.issuemenu", ".nn-todo-row-menu-btn", function (e) {
+				e.stopPropagation();
+				const id = $(this).attr("data-id");
+				const iss = (self.issues || []).find(x => x.name === id);
+				if (!iss) return;
+
+				const opts = [
+					__("Edit Issue"),
+					iss.status === "Solved" ? __("Reopen Issue") : __("Mark as Solved"),
+					iss.archived ? __("Restore Issue") : __("Archive Issue"),
+					__("Delete Issue")
+				];
+				self.pick_menu(this, opts, null, async val => {
+					if (val === __("Edit Issue")) {
+						self.open_issue_drawer(id);
+					} else if (val === __("Mark as Solved") || val === __("Reopen Issue")) {
+						const next_status = iss.status === "Solved" ? "Identified" : "Solved";
+						try {
+							await self.call("eos_core.eos_core.doctype.issue.issue.update_issue_status", {
+								issue_name: id,
+								status: next_status,
+								solution: next_status === "Solved" ? (iss.solution || "Resolved") : null
+							});
+						} catch (_) {
+							const update_args = { status: next_status };
+							if (next_status === "Solved" && !iss.solution) update_args.solution = "Resolved";
+							await self.call("frappe.client.set_value", {
+								doctype: "Issue",
+								name: id,
+								fieldname: update_args
+							});
+						}
+						await self.fetch_issues_data();
+						self.render_issues_table();
+					} else if (val === __("Archive Issue") || val === __("Restore Issue")) {
+						await self.call("frappe.client.set_value", {
+							doctype: "Issue",
+							name: id,
+							fieldname: "archived",
+							value: iss.archived ? 0 : 1
+						});
+						await self.fetch_issues_data();
+						self.render_issues_table();
+					} else if (val === __("Delete Issue")) {
+						frappe.confirm(__("Are you sure you want to delete this Issue?"), async () => {
+							await self.call("frappe.client.delete", { doctype: "Issue", name: id });
+							await self.fetch_issues_data();
+							self.render_issues_table();
+							frappe.show_alert({ message: __("Issue deleted"), indicator: "green" });
+						});
+					}
+				});
+			});
+		}
+
+		open_issue_drawer(issue_id = null, initial_data = null) {
+			const is_edit = !!issue_id;
+			const iss = is_edit ? (this.issues || []).find(x => x.name === issue_id) : null;
+
+			const current_title = iss ? iss.issue_name : (initial_data && initial_data.title ? initial_data.title : "");
+			const current_owner = iss ? iss.owner_user : (initial_data && initial_data.owner ? initial_data.owner : ((frappe.session && frappe.session.user) || ""));
+			const current_team = iss ? (iss.team || "") : (initial_data && initial_data.team ? initial_data.team : (this.s.issue_team !== "All Teams" ? this.s.issue_team : (this.all_teams.find(t => t !== "All Teams") || "")));
+			const current_priority = iss ? (iss.priority || "Medium") : "Medium";
+			const current_status = iss ? (iss.status || "Identified") : "Identified";
+			const current_desc = iss ? (iss.description || "") : (initial_data && initial_data.description ? initial_data.description : "");
+			const current_solution = iss ? (iss.solution || "") : "";
+
+			let owner_options = "";
+			const users_list = this.users.length ? this.users : (frappe.session && frappe.session.user ? [{ name: frappe.session.user, full_name: frappe.session.user_fullname || frappe.session.user }] : []);
+			users_list.forEach(u => {
+				const val = u.name;
+				const label = u.full_name ? `${u.full_name} (${u.name})` : u.name;
+				const sel = val === current_owner ? "selected" : "";
+				owner_options += `<option value="${this.esc(val)}" ${sel}>${this.esc(label)}</option>`;
+			});
+
+			let team_options = "";
+			this.all_teams.filter(t => t !== "All Teams").forEach(t => {
+				const sel = t === current_team ? "selected" : "";
+				team_options += `<option value="${this.esc(t)}" ${sel}>${this.esc(t)}</option>`;
+			});
+
+			const drawer_html = `
+				<div class="nn-drawer-header">
+					<div class="nn-drawer-title">${is_edit ? __("Edit Issue") : __("Create Issue")}</div>
+					<div class="nn-drawer-header-actions">
+						<button class="nn-drawer-btn-icon" id="nn-drawer-close">${ic("close", 16)}</button>
+					</div>
+				</div>
+
+				<div class="nn-drawer-body">
+					<div class="nn-field-group">
+						<div class="nn-field-label">${__("Title")} <span style="color:#ef4444">*</span></div>
+						<input type="text" class="nn-input-text" id="nn-iss-title" value="${this.esc(current_title)}" placeholder="${__("This is a test issue")}">
+					</div>
+
+					<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+						<div class="nn-field-group">
+							<div class="nn-field-label">${__("Team")}</div>
+							<select class="nn-select" id="nn-iss-team">${team_options}</select>
+						</div>
+						<div class="nn-field-group">
+							<div class="nn-field-label">${__("Owner")} <span style="color:#ef4444">*</span></div>
+							<select class="nn-select" id="nn-iss-owner">${owner_options}</select>
+						</div>
+					</div>
+					<div style="font-size:11px;color:#9ca3af;margin-top:-6px;">
+						${__("Changing the team will affect which users the Issue can be assigned to.")}
+					</div>
+
+					<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+						<div class="nn-field-group">
+							<div class="nn-field-label">${__("Interval")}</div>
+							<select class="nn-select" id="nn-iss-interval">
+								<option value="Short-Term" selected>${__("Short-Term")}</option>
+								<option value="Long-Term">${__("Long-Term")}</option>
+							</select>
+						</div>
+						<div class="nn-field-group">
+							<div class="nn-field-label">${__("Priority")}</div>
+							<select class="nn-select" id="nn-iss-priority">
+								<option value="Low" ${current_priority === "Low" ? "selected" : ""}>Low</option>
+								<option value="Medium" ${current_priority === "Medium" ? "selected" : ""}>Medium</option>
+								<option value="High" ${current_priority === "High" ? "selected" : ""}>High</option>
+								<option value="Critical" ${current_priority === "Critical" ? "selected" : ""}>Critical</option>
+							</select>
+						</div>
+					</div>
+
+					${is_edit ? `
+						<div class="nn-field-group">
+							<div class="nn-field-label">${__("Status")}</div>
+							<select class="nn-select" id="nn-iss-status">
+								<option value="Identified" ${current_status === "Identified" ? "selected" : ""}>Identified</option>
+								<option value="Discussing" ${current_status === "Discussing" ? "selected" : ""}>Discussing</option>
+								<option value="Solved" ${current_status === "Solved" ? "selected" : ""}>Solved</option>
+								<option value="Dropped" ${current_status === "Dropped" ? "selected" : ""}>Dropped</option>
+							</select>
+						</div>
+						<div class="nn-field-group" id="nn-iss-sol-wrap" style="${current_status === "Solved" ? "" : "display:none;"}">
+							<div class="nn-field-label">${__("Solution")}</div>
+							<textarea class="nn-input-text" id="nn-iss-solution" style="height:60px;padding:8px 10px;resize:vertical;" placeholder="${__("Describe how the issue was solved…")}">${this.esc(current_solution)}</textarea>
+						</div>
+					` : ""}
+
+					<div class="nn-field-group">
+						<div class="nn-field-label">${__("Description (optional)")}</div>
+						<textarea class="nn-input-text" id="nn-iss-desc" style="height:100px;padding:8px 10px;resize:vertical;" placeholder="${__("Add a description (optional)…")}">${this.esc(current_desc)}</textarea>
+					</div>
+				</div>
+
+				<div class="nn-drawer-footer">
+					<button class="nn-btn-green" id="nn-drawer-issue-save">${is_edit ? __("Save changes") : __("Create Issue")}</button>
+					${is_edit ? `<button class="nn-btn-cancel" style="color:#dc2626;border-color:#fca5a5" id="nn-drawer-issue-delete">${__("Delete")}</button>` : ""}
+					<button class="nn-btn-cancel" id="nn-drawer-issue-cancel">${__("Cancel")}</button>
+				</div>
+			`;
+
+			const $drawer = this.$root.find("#nn-drawer");
+			$drawer.html(drawer_html);
+
+			const self = this;
+			$drawer.find("#nn-drawer-close, #nn-drawer-issue-cancel").on("click", () => self.close_drawer());
+
+			$drawer.find("#nn-iss-status").on("change", function () {
+				const is_s = $(this).val() === "Solved";
+				$drawer.find("#nn-iss-sol-wrap").toggle(is_s);
+			});
+
+			if (is_edit) {
+				$drawer.find("#nn-drawer-issue-delete").on("click", async function() {
+					frappe.confirm(__("Are you sure you want to delete this Issue?"), async () => {
+						await self.call("frappe.client.delete", { doctype: "Issue", name: issue_id });
+						self.close_drawer();
+						await self.fetch_issues_data();
+						self.render_issues_table();
+						frappe.show_alert({ message: __("Issue deleted"), indicator: "green" });
+					});
+				});
+			}
+
+			$drawer.find("#nn-drawer-issue-save").on("click", async function () {
+				const title = $drawer.find("#nn-iss-title").val().trim();
+				if (!title) {
+					frappe.msgprint(__("Issue Title is mandatory."));
+					return;
+				}
+				const owner = $drawer.find("#nn-iss-owner").val();
+				if (!owner) {
+					frappe.msgprint(__("Owner is mandatory."));
+					return;
+				}
+				const team = $drawer.find("#nn-iss-team").val();
+				const priority = $drawer.find("#nn-iss-priority").val();
+				const desc = $drawer.find("#nn-iss-desc").val().trim();
+
+				try {
+					if (is_edit && iss) {
+						const status = $drawer.find("#nn-iss-status").val() || iss.status;
+						const solution = $drawer.find("#nn-iss-solution").val().trim();
+						const fieldname_obj = {
+							issue_name: title,
+							owner_user: owner,
+							team: team,
+							priority: priority,
+							description: desc,
+							status: status
+						};
+						if (status === "Solved") {
+							fieldname_obj.solution = solution || "Resolved";
+						}
+						await self.call("frappe.client.set_value", {
+							doctype: "Issue",
+							name: iss.name,
+							fieldname: fieldname_obj
+						});
+					} else {
+						const insert_doc = {
+							doctype: "Issue",
+							issue_name: title,
+							owner_user: owner,
+							team: team,
+							priority: priority,
+							description: desc,
+							status: "Identified",
+							source: initial_data && initial_data.metric_id ? "Scorecard" : "Manual",
+							originating_metric: initial_data && initial_data.metric_id ? initial_data.metric_id : null,
+							archived: 0
+						};
+						const res = await self.call("frappe.client.insert", { doc: insert_doc });
+						const created_doc = res && res.message;
+						if (created_doc && initial_data && initial_data.metric_id && initial_data.period_key) {
+							const issue_name = created_doc.name || created_doc.issue_name;
+							self.created_issues = self.created_issues || {};
+							self.created_issues[`${initial_data.metric_id}_${initial_data.period_key}`] = issue_name;
+							const $btn = self.$root.find(`.nn-btn-make-issue[data-metric="${initial_data.metric_id}"][data-date="${initial_data.period_key}"]`);
+							if ($btn.length) {
+								const $link = $(`<a href="/app/issue/${encodeURIComponent(issue_name)}" class="nn-cell-issue-link" target="_blank" title="${__("View Issue: ")}${self.esc(issue_name)}">${ic("arrow-up-right", 9)} ${__("Issue")}</a>`);
+								$btn.replaceWith($link);
+							}
+						}
+					}
+
+					self.close_drawer();
+					if (self.s.view === "issues") {
+						await self.fetch_issues_data();
+						self.render_issues_table();
+					}
+					frappe.show_alert({ message: __("Issue saved successfully!"), indicator: "green" });
+				} catch (err) {
+					frappe.msgprint(err && err.message ? err.message : String(err));
+				}
+			});
+
+			this.$root.find("#nn-drawer-backdrop").addClass("show");
+			$drawer.addClass("show");
+			$drawer.find("#nn-iss-title").focus();
+		}
+
 		make_periods(tf, n) {
 			const out = [];
 			const now = new Date();
@@ -1908,7 +2519,7 @@
 			this.$main.html(`<div style="padding:48px;text-align:center;color:#6b7280;font-size:14px">${__("Loading Scorecard…")}</div>`);
 			this.data = { periods: this.make_periods("Week", 13), metrics: [] };
 			try {
-				await this.fetch_all_teams();
+				if (!this.all_teams || this.all_teams.length <= 1) await this.fetch_all_teams();
 				await this.fetch_scorecard_data();
 			} catch (e) {
 				console.error("Scorecard error:", e);
@@ -1919,24 +2530,31 @@
 		async fetch_scorecard_data() {
 			const s = this.s, C = CFG, P = this.data.periods;
 
-			const sc_res = await this.list(C.scorecard.doctype, ["name", "team", "timeframe"], { archived: 0 });
+			const [sc_res, u_res] = await Promise.all([
+				this.list(C.scorecard.doctype, ["name", "team", "timeframe"], { archived: 0 }),
+				(this.users && this.users.length) ? Promise.resolve({ ok: true, data: this.users }) : this.list("User", ["name", "full_name", "first_name", "last_name", "email"], { enabled: 1 }, "full_name asc", 200)
+			]);
+
 			const scs = sc_res.ok ? sc_res.data : [];
 			const sc_match = scs.find(x => x.team === s.team && (x.timeframe === "Weekly" || x.timeframe === "Week")) || scs[0];
 			this.current_scorecard_id = sc_match ? sc_match.name : `${s.team}-Weekly`;
-
-			const grp_res = await this.list(C.group.doctype, ["name", "group_name"], { scorecard: this.current_scorecard_id, archived: 0 });
-			if (grp_res.ok && grp_res.data.length) this.current_group_id = grp_res.data[0].name;
-
-			const u_res = await this.list("User", ["name", "full_name", "first_name", "last_name", "email"], { enabled: 1 }, "full_name asc", 200);
-			this.users = u_res.ok ? u_res.data : [];
+			if (u_res.ok && u_res.data) this.users = u_res.data;
 
 			const m_fields = ["name", "metric_name as title", "description", "target_value as goal", "operator as goal_op", "unit", "unit_type", "rollup", "frequency", "owner_user", "team", "scorecard", "group as grp", "min_value", "max_value"];
-			let m_res = await this.list(C.measurable.doctype, m_fields, { team: s.team, archived: 0 }, "creation asc", 100);
-			if (!m_res.ok || !m_res.data.length) {
-				m_res = await this.list(C.measurable.doctype, m_fields, { scorecard: this.current_scorecard_id, archived: 0 }, "creation asc", 100);
+
+			const [grp_res, m_res] = await Promise.all([
+				this.list(C.group.doctype, ["name", "group_name"], { scorecard: this.current_scorecard_id, archived: 0 }),
+				this.list(C.measurable.doctype, m_fields, { team: s.team, archived: 0 }, "creation asc", 100)
+			]);
+
+			if (grp_res.ok && grp_res.data && grp_res.data.length) this.current_group_id = grp_res.data[0].name;
+
+			let raw_metrics = (m_res.ok && m_res.data && m_res.data.length) ? m_res.data : [];
+			if (!raw_metrics.length) {
+				const fallback_m = await this.list(C.measurable.doctype, m_fields, { scorecard: this.current_scorecard_id, archived: 0 }, "creation asc", 100);
+				if (fallback_m.ok && fallback_m.data) raw_metrics = fallback_m.data;
 			}
 
-			const raw_metrics = (m_res.ok ? m_res.data : []);
 			const metrics = raw_metrics.map(m => ({
 				id: m.name,
 				title: m.title || m.name,
@@ -1956,11 +2574,17 @@
 			if (metrics.length && P.length) {
 				const start_d = P[P.length - 1].key;
 				const end_d = P[0].end;
-				const e_res = await this.list(C.entry.doctype, [
-					"name", "metric", "parent", "week_start_date as d", "actual_value as v"
-				], {
-					week_start_date: ["between", [start_d, end_d]]
-				}, "week_start_date asc", 2000);
+				const metric_ids = metrics.map(m => m.id);
+
+				const [e_res, iss_res] = await Promise.all([
+					this.list(C.entry.doctype, ["name", "metric", "parent", "week_start_date as d", "actual_value as v"], {
+						week_start_date: ["between", [start_d, end_d]]
+					}, "week_start_date asc", 2000),
+					this.list("Issue", ["name", "issue_name", "originating_metric"], {
+						originating_metric: ["in", metric_ids],
+						archived: 0
+					}, "creation desc", 200)
+				]);
 
 				if (e_res.ok && e_res.data) {
 					e_res.data.forEach(e => {
@@ -1968,6 +2592,16 @@
 						if (met) {
 							const val = Number(e.v);
 							met.values[e.d] = isNaN(val) ? 0 : val;
+						}
+					});
+				}
+
+				this.created_issues = this.created_issues || {};
+				if (iss_res.ok && iss_res.data) {
+					iss_res.data.forEach(iss => {
+						const match = (iss.issue_name || "").match(/—\s*(\d{4}-\d{2}-\d{2})/);
+						if (match && iss.originating_metric) {
+							this.created_issues[`${iss.originating_metric}_${match[1]}`] = iss.name;
 						}
 					});
 				}
@@ -2279,9 +2913,25 @@
 					} else {
 						const pass = self.check_goal_pass(val, m.goal, m.goal_op, m.min_value, m.max_value);
 						const cls = pass ? "pass" : "fail";
+						const existing_issue = self.created_issues && self.created_issues[`${m.id}_${p.key}`];
+						let issue_action = "";
+						if (!pass) {
+							if (existing_issue) {
+								issue_action = `<a href="/app/issue/${encodeURIComponent(existing_issue)}" class="nn-cell-issue-link" target="_blank" title="${__("View Issue: ")}${self.esc(existing_issue)}">${ic("arrow-up-right", 9)} ${__("Issue")}</a>`;
+							} else {
+								issue_action = `
+									<button class="nn-btn-make-issue" title="${__("Make it an Issue")}" data-metric="${self.esc(m.id)}" data-date="${p.key}">
+										${ic("alert-circle", 10)}
+										<span class="nn-make-issue-text">${__("Issue")}</span>
+									</button>`;
+							}
+						}
 						cells += `
-							<td class="nn-sc-cell" data-metric="${self.esc(m.id)}" data-key="${p.key}" data-goal="${m.goal}" data-op="${self.esc(m.goal_op || '>=')}">
-								<span class="nn-cell-badge ${cls}">${val}</span>
+							<td class="nn-sc-cell ${cls}" data-metric="${self.esc(m.id)}" data-key="${p.key}" data-goal="${m.goal}" data-op="${self.esc(m.goal_op || '>=')}">
+								<div class="nn-cell-wrap">
+									<span class="nn-cell-badge ${cls}">${val}</span>
+									${issue_action}
+								</div>
 							</td>`;
 					}
 				});
@@ -2363,7 +3013,26 @@
 					if (metric) metric.values[key] = new_val;
 					const pass = self.check_goal_pass(new_val, goal, op);
 					const cls = pass ? "pass" : "fail";
-					$td.html(`<span class="nn-cell-badge ${cls}">${new_val}</span>`);
+					const existing_issue = self.created_issues && self.created_issues[`${metric_id}_${key}`];
+					let issue_html = "";
+					if (!pass) {
+						if (existing_issue) {
+							issue_html = `<a href="/app/issue/${encodeURIComponent(existing_issue)}" class="nn-cell-issue-link" target="_blank" title="${__("View Issue: ")}${self.esc(existing_issue)}">${ic("arrow-up-right", 9)} ${__("Issue")}</a>`;
+						} else {
+							issue_html = `
+								<button class="nn-btn-make-issue" title="${__("Make it an Issue")}" data-metric="${self.esc(metric_id)}" data-date="${key}">
+									${ic("alert-circle", 10)}
+									<span class="nn-make-issue-text">${__("Issue")}</span>
+								</button>`;
+						}
+					}
+					$td.html(`
+						<div class="nn-cell-wrap">
+							<span class="nn-cell-badge ${cls}">${new_val}</span>
+							${issue_html}
+						</div>
+					`);
+					self.bind_grid_cell_events();
 
 					if (!pass) {
 						frappe.show_alert({
@@ -2390,12 +3059,73 @@
 						finished = true;
 						if (cur_val !== "") {
 							const pass = self.check_goal_pass(cur_val, goal, op);
-							$td.html(`<span class="nn-cell-badge ${pass ? "pass" : "fail"}">${cur_val}</span>`);
+							const existing_issue = self.created_issues && self.created_issues[`${metric_id}_${key}`];
+							let issue_html = "";
+							if (!pass) {
+								if (existing_issue) {
+									issue_html = `<a href="/app/issue/${encodeURIComponent(existing_issue)}" class="nn-cell-issue-link" target="_blank" title="${__("View Issue: ")}${self.esc(existing_issue)}">${ic("arrow-up-right", 9)} ${__("Issue")}</a>`;
+								} else {
+									issue_html = `
+										<button class="nn-btn-make-issue" title="${__("Make it an Issue")}" data-metric="${self.esc(metric_id)}" data-date="${key}">
+											${ic("alert-circle", 10)}
+											<span class="nn-make-issue-text">${__("Issue")}</span>
+										</button>`;
+								}
+							}
+							$td.html(`
+								<div class="nn-cell-wrap">
+									<span class="nn-cell-badge ${pass ? "pass" : "fail"}">${cur_val}</span>
+									${issue_html}
+								</div>
+							`);
+							self.bind_grid_cell_events();
 						} else {
 							$td.html('<span class="nn-cell-val empty">-</span>');
 						}
 					}
 				});
+			});
+
+			// Make it an Issue button click handler
+			$m.find(".nn-btn-make-issue").off("click").on("click", async function (e) {
+				e.stopPropagation();
+				e.preventDefault();
+				const $btn = $(this);
+				const metric_id = $btn.attr("data-metric");
+				const period_key = $btn.attr("data-date");
+
+				$btn.prop("disabled", true).text(__("Creating..."));
+				try {
+					const res = await frappe.call({
+						method: "eos_core.eos_core.doctype.issue.issue.create_issue_from_metric",
+						args: {
+							metric_name: metric_id,
+							week_start_date: period_key
+						}
+					});
+					const issue = res && res.message;
+					if (issue) {
+						const issue_name = issue.name || issue.issue_name;
+						self.created_issues = self.created_issues || {};
+						self.created_issues[`${metric_id}_${period_key}`] = issue_name;
+
+						const $link = $(`<a href="/app/issue/${encodeURIComponent(issue_name)}" class="nn-cell-issue-link" target="_blank" title="${__("View Issue: ")}${self.esc(issue_name)}">${ic("arrow-up-right", 9)} ${__("Issue")}</a>`);
+						$btn.replaceWith($link);
+
+						frappe.show_alert({
+							message: __(`Issue created: <a href="/app/issue/${encodeURIComponent(issue_name)}" style="font-weight:700;text-decoration:underline" target="_blank">${self.esc(issue_name)}</a>`),
+							indicator: "green"
+						}, 7);
+					}
+				} catch (err) {
+					$btn.prop("disabled", false).html(`${ic("alert-circle", 10)} <span class="nn-make-issue-text">${__("Issue")}</span>`);
+					const msg = err && err.message ? err.message : (err && err._server_messages ? JSON.parse(err._server_messages).join("\n") : String(err));
+					frappe.msgprint({
+						title: __("Make it an Issue Error"),
+						message: msg,
+						indicator: "red"
+					});
+				}
 			});
 		}
 

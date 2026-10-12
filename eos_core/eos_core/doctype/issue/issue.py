@@ -10,6 +10,15 @@ VALID_STATUS_TRANSITIONS = {
 
 
 class Issue(Document):
+	def before_validate(self):
+		if self.team and not frappe.db.exists("Team", self.team):
+			frappe.get_doc({
+				"doctype": "Team",
+				"team_name": self.team,
+				"default_timeframe": "Weekly",
+				"archived": 0
+			}).insert(ignore_permissions=True)
+
 	def validate(self):
 		self.validate_status_transition()
 		self.validate_solution_required()
@@ -41,6 +50,40 @@ class Issue(Document):
 		self.check_permission("write")
 		self.archived = 0
 		self.save()
+
+
+@frappe.whitelist()
+def update_issue_priority(issue_name, priority):
+	if not frappe.has_permission("Issue", "write"):
+		frappe.throw("No permission to update Issue.", frappe.PermissionError)
+	if not frappe.db.exists("Issue", issue_name):
+		frappe.throw(f"Issue {frappe.bold(issue_name)} not found.")
+	doc = frappe.get_doc("Issue", issue_name)
+	if doc.team and not frappe.db.exists("Team", doc.team):
+		frappe.get_doc({
+			"doctype": "Team",
+			"team_name": doc.team,
+			"default_timeframe": "Weekly",
+			"archived": 0
+		}).insert(ignore_permissions=True)
+	frappe.db.set_value("Issue", issue_name, "priority", priority)
+	return {"status": "ok", "priority": priority}
+
+
+@frappe.whitelist()
+def update_issue_status(issue_name, status, solution=None):
+	if not frappe.has_permission("Issue", "write"):
+		frappe.throw("No permission to update Issue.", frappe.PermissionError)
+	if not frappe.db.exists("Issue", issue_name):
+		frappe.throw(f"Issue {frappe.bold(issue_name)} not found.")
+	doc = frappe.get_doc("Issue", issue_name)
+	doc.status = status
+	if solution:
+		doc.solution = solution
+	elif status == "Solved" and not doc.solution:
+		doc.solution = "Resolved"
+	doc.save()
+	return {"status": "ok", "status": doc.status}
 
 
 @frappe.whitelist()
