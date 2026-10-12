@@ -515,12 +515,14 @@
 			/* Interactive Editable Cells & Goal Color Badges */
 			.nn-sc-cell { min-width: 72px; text-align: center; cursor: pointer; user-select: none; transition: background 0.12s ease; position: relative; }
 			.nn-sc-cell:hover { background: #f3f4f6; }
+			.nn-sc-cell.pass { background-color: #dcfce7 !important; color: #15803d !important; }
+			.nn-sc-cell.pass:hover { background-color: #bbf7d0 !important; }
+			.nn-sc-cell.fail { background-color: #fee2e2 !important; color: #dc2626 !important; }
+			.nn-sc-cell.fail:hover { background-color: #fecaca !important; }
 			.nn-cell-val.empty { color: #9ca3af; font-size: 13px; font-weight: 500; }
-			.nn-cell-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 34px; padding: 3px 10px; border-radius: 6px; font-size: 12.5px; font-weight: 700; line-height: 1.2; transition: all 0.15s ease; }
-			/* GREEN when >= Goal */
-			.nn-cell-badge.pass { background: #dcfce7 !important; color: #15803d !important; border: 1px solid #86efac !important; }
-			/* RED when < Goal */
-			.nn-cell-badge.fail { background: #fee2e2 !important; color: #dc2626 !important; border: 1px solid #fca5a5 !important; }
+			.nn-cell-badge { display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; line-height: 1.2; color: inherit; }
+			.nn-cell-badge.pass { background: transparent !important; color: #15803d !important; border: none !important; }
+			.nn-cell-badge.fail { background: transparent !important; color: #dc2626 !important; border: none !important; }
 			.nn-sc-cell-input { width: 68px; height: 28px; border: 2px solid #064e3b; border-radius: 6px; text-align: center; font-size: 12.5px; font-weight: 700; color: #111827; background: #ffffff; outline: none; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
 
 			.nn-cell-wrap { display: inline-flex; align-items: center; justify-content: center; gap: 4px; position: relative; }
@@ -2734,6 +2736,7 @@
 						<button class="nn-btn-bar" id="nn-new-group">+ ${__("New group")}</button>
 						<button class="nn-btn-bar" id="nn-mgr">${__("Go to Measurable Manager")}</button>
 						<button class="nn-btn-bar" id="nn-optimize"><span style="color:#047857">${ic("sparkle", 13)}</span> ${__("Optimize Scorecard")}</button>
+						<button class="nn-btn-bar" id="nn-gen-test-data" style="color:#047857" title="${__("Create test data with red and green boxes")}"><span style="color:#10b981">${ic("sparkle", 13)}</span> ${__("Generate Test Data")}</button>
 						<div class="nn-search-input-wrap">${ic("search", 13)}<input id="nn-search-input" placeholder="${__("Search")} ${this.get_doctype_label("EOS Metric", "Measurables")}…" value="${this.esc(s.search)}"></div>
 					</div>
 				</div>
@@ -2874,6 +2877,24 @@
 			$m.find("#nn-optimize").off("click").on("click", function (e) {
 				e.preventDefault();
 				self.show_optimize_modal();
+			});
+
+			$m.find("#nn-gen-test-data").off("click").on("click", async function (e) {
+				e.preventDefault();
+				const metric_ids = (self.data.metrics || []).map(m => m.id);
+				frappe.show_alert({ message: __("Generating test data..."), indicator: "blue" });
+				try {
+					await self.call("eos_core.eos_core.doctype.scorecard.scorecard.generate_test_scorecard_data", {
+						team: self.s.team,
+						metrics: metric_ids,
+						force: 1
+					});
+					await self.load_scorecard();
+					frappe.show_alert({ message: __("Test data created with red and green boxes!"), indicator: "green" });
+				} catch (err) {
+					console.error("Test data generation error:", err);
+					frappe.show_alert({ message: __("Failed to generate test data"), indicator: "red" });
+				}
 			});
 
 			// Undo and Redo buttons
@@ -3107,7 +3128,7 @@
 
 					if (new_val === null) {
 						if (metric) delete metric.values[key];
-						$td.html('<span class="nn-cell-val empty">-</span>');
+						$td.removeClass("pass fail").html('<span class="nn-cell-val empty">-</span>');
 						await self.save_scorecard_entry(metric_id, key, null);
 						return;
 					}
@@ -3134,7 +3155,7 @@
 								</button>`;
 						}
 					}
-					$td.html(`
+					$td.removeClass("pass fail").addClass(cls).html(`
 						<div class="nn-cell-wrap">
 							<span class="nn-cell-badge ${cls}">${new_val}</span>
 							${issue_html}
@@ -3167,6 +3188,7 @@
 						finished = true;
 						if (cur_val !== "") {
 							const pass = self.check_goal_pass(cur_val, goal, op);
+							const cls = pass ? "pass" : "fail";
 							const existing_issue = self.created_issues && self.created_issues[`${metric_id}_${key}`];
 							let issue_html = "";
 							if (!pass) {
@@ -3180,15 +3202,15 @@
 										</button>`;
 								}
 							}
-							$td.html(`
+							$td.removeClass("pass fail").addClass(cls).html(`
 								<div class="nn-cell-wrap">
-									<span class="nn-cell-badge ${pass ? "pass" : "fail"}">${cur_val}</span>
+									<span class="nn-cell-badge ${cls}">${cur_val}</span>
 									${issue_html}
 								</div>
 							`);
 							self.bind_grid_cell_events();
 						} else {
-							$td.html('<span class="nn-cell-val empty">-</span>');
+							$td.removeClass("pass fail").html('<span class="nn-cell-val empty">-</span>');
 						}
 					}
 				});
