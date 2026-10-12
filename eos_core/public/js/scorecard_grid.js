@@ -53,7 +53,8 @@
 		"scorecard-icon": '<path d="M3 3v18a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/>',
 		"todo-icon": '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 12 2 2 4-4"/>',
 		"target": '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
-		"alert-circle": '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>'
+		"alert-circle": '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>',
+		"archive": '<rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/>'
 	};
 
 	const ic = (n, s) => `<svg class="nn-svg" width="${s || 14}" height="${s || 14}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${IC[n] || ""}</svg>`;
@@ -776,7 +777,6 @@
 						<div class="nn-sub">${__("Set and track quarterly goals to help your team consistently hit their targets.")}</div>
 					</div>
 					<div class="nn-top-right">
-						<a class="nn-badge-maz" href="javascript:void(0)"><span>+ Maz</span><span class="nn-badge-new">NEW</span></a>
 						<div class="nn-top-search">${ic("search", 13)}<input type="text" placeholder="${__("Search…")}"></div>
 						<button class="nn-btn-icon">${ic("bell", 15)}<span class="nn-dot-red"></span></button>
 						<button class="nn-btn-create" id="nn-create-rock-top">${ic("plus", 13)} ${__("Create")}</button>
@@ -786,7 +786,7 @@
 				<div class="nn-tabs">
 					<div class="nn-tab ${s.rock_tab === "List" ? "on" : ""}" data-rtab="List"><span style="font-size:14px">≡</span> ${__("List")}</div>
 					<div class="nn-tab ${s.rock_tab === "Planning" ? "on" : ""}" data-rtab="Planning"><span style="font-size:14px">⊞</span> ${__("Planning Board")}</div>
-					<div class="nn-tab ${s.rock_tab === "Archive" ? "on" : ""}" data-rtab="Archive"><span style="font-size:14px">📁</span> ${__("Archive")}</div>
+					<div class="nn-tab ${s.rock_tab === "Archive" ? "on" : ""}" data-rtab="Archive">${ic("archive", 13)} ${__("Archive")}</div>
 				</div>
 
 				<div class="nn-filter-bar">
@@ -991,17 +991,17 @@
 			const is_dropped = st === "Dropped";
 
 			let cls = "on-track";
-			let label = "👍 " + __("On-track");
+			let label = __("On-track");
 
 			if (is_off) {
 				cls = "off-track";
-				label = "⚠️ " + __("Off-track");
+				label = __("Off-track");
 			} else if (is_complete) {
 				cls = "complete";
-				label = "✓ " + __("Complete");
+				label = __("Complete");
 			} else if (is_dropped) {
 				cls = "dropped";
-				label = "✕ " + __("Dropped");
+				label = __("Dropped");
 			}
 
 			const data_attr = rname ? `data-rock="${this.esc(rname)}"` : "";
@@ -1230,9 +1230,9 @@
 				if (!rock) return;
 
 				const options = [
-					["In Progress", "👍 " + __("On-track")],
-					["Not Started", "⚠️ " + __("Off-track")],
-					["Complete", "✓ " + __("Complete")]
+					["In Progress", __("On-track")],
+					["Not Started", __("Off-track")],
+					["Complete", __("Complete")]
 				];
 
 				const current_val = (rock.status === "Not Started" || rock.status === "Off-track") ? "Not Started" : (rock.status === "Complete" ? "Complete" : "In Progress");
@@ -1459,7 +1459,6 @@
 						<div class="nn-sub">${__("Create, assign, and track deadlines for critical tasks.")}</div>
 					</div>
 					<div class="nn-top-right">
-						<a class="nn-badge-maz" href="javascript:void(0)"><span>+ Maz</span><span class="nn-badge-new">NEW</span></a>
 						<div class="nn-top-search">${ic("search", 13)}<input type="text" placeholder="${__("Search…")}"></div>
 						<button class="nn-btn-icon">${ic("bell", 15)}<span class="nn-dot-red"></span></button>
 						<button class="nn-btn-create" id="nn-create-todo-top">${ic("plus", 13)} ${__("Create")}</button>
@@ -1950,7 +1949,6 @@
 						<div class="nn-sub">${__("Identify and organize your team's most pressing Issues to resolve them with ease.")}</div>
 					</div>
 					<div class="nn-top-right">
-						<a class="nn-badge-maz" href="javascript:void(0)"><span>+ Maz</span><span class="nn-badge-new">NEW</span></a>
 						<div class="nn-top-search">${ic("search", 13)}<input type="text" placeholder="${__("Search…")}"></div>
 						<button class="nn-btn-icon">${ic("bell", 15)}<span class="nn-dot-red"></span></button>
 						<button class="nn-btn-green" id="nn-create-issue-top">${ic("plus", 13)} ${__("Create")}</button>
@@ -2710,7 +2708,6 @@
 						<div class="nn-sub">${s.timeframe === "Month" ? __("Track monthly rolled-up measurables against target goals.") : s.timeframe === "Quarter" ? __("Track quarterly rolled-up measurables against target goals.") : s.timeframe === "Annual" ? __("Track annual rolled-up measurables against target goals.") : __("Track weekly and monthly measurables against target goals.")}</div>
 					</div>
 					<div class="nn-top-right">
-						<a class="nn-badge-maz" href="javascript:void(0)"><span>+ Maz</span><span class="nn-badge-new">NEW</span></a>
 						<div class="nn-top-search">${ic("search", 13)}<input type="text" placeholder="${__("Search…")}"></div>
 						<button class="nn-btn-icon">${ic("bell", 15)}<span class="nn-dot-red"></span></button>
 						<button class="nn-btn-create" id="nn-create-top">${ic("plus", 13)} ${__("Create")}</button>
@@ -2906,15 +2903,7 @@
 				frappe.show_alert({ message: __("Scorecard cell edits are automatically synced live"), indicator: "blue" });
 			});
 
-			// Maz AI Coach button
-			$m.find(".nn-badge-maz").off("click").on("click", function (e) {
-				e.preventDefault();
-				frappe.msgprint({
-					title: __("Maz AI Coach"),
-					message: __("Maz monitors team measurables against goals. Review off-track metrics weekly in your Level 10 meeting to stay focused on traction."),
-					indicator: "green"
-				});
-			});
+
 
 			// Notification bell button
 			$m.find(".nn-top-header .nn-btn-icon").off("click").on("click", function (e) {
