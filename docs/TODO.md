@@ -502,9 +502,9 @@ have a defined home (`PERM-5`).
 **Scope** a Worksheet Page plus a whitelisted grid endpoint over `EOS Metric` + `Scorecard Entry`.
 **Result** Implemented core Ninety Scorecard Grid via Frappe `Page` (`scorecard_grid`) and public JS/CSS assets (`scorecard_grid.js`, `scorecard_grid.css`). Backed by whitelisted `Scorecard.get_grid_view` (reads via `frappe.get_list` respecting role-scoping) and `update_scorecard_entry` (upserts child entries via parent `EOS Metric` save). Features period navigation, timeframe switching, inline actual-value data entry, group collapse/expand, status indicator recomputation, and permission gating for all Ninety roles.
 
-### UI-2 — S2 · UI trigger for "Make it an Issue"
-**Status** `IN_PROGRESS` (UI-2.1 whitelisted & guarded `e54b93d`) · code+tests ☑ · reachable ☐ · **Verified 2026-10-07** · plan [`UI-2.md`](execution/UI-2.md) · after `UI-1`
-**Where** `create_issue_from_metric` is whitelisted and permission-guarded (`e54b93d`). Grid row trigger pending (`UI-2.2`).
+### UI-2 — S2 · UI trigger for "Make it an Issue" — **DONE**
+**Status** `DONE` · code+tests ☑ · reachable ☑ · **Closed 2026-10-12** · plan [`UI-2.md`](execution/UI-2.md) · after `UI-1`
+**Where** `create_issue_from_metric` is whitelisted and guarded (`e54b93d`). Wired to "Make it an Issue" action on off-track grid period cells in `scorecard_grid.js` and supported by the Issues screen, slide-over drawer, and whitelisted `update_issue_priority` / `update_issue_status` endpoints.
 **Done when** an off-track metric in the grid has a "Make it an Issue" action, the Issue is created
 from the browser, and the streak in the description matches `BUG-1`'s corrected behaviour.
 

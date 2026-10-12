@@ -416,7 +416,10 @@ erDiagram
   off-track streak in the description. The streak is **bounded at the entry's own week**:
   `count_consecutive_from_db(metric_name, as_of=None)` caps its query with `week_start_date <= as_of`,
   so an Issue raised about an older week reports the run ending at that week rather than one running
-  through the most recent week. With no `as_of` it is the current streak.
+  through the most recent week. With no `as_of` it is the current streak. The function is
+  `@frappe.whitelist()` with permission checks (`UI-2`), wired to the Scorecard Grid row on off-track
+  period cells, and supplemented by an Issues screen, drawer, and `update_issue_priority` /
+  `update_issue_status` endpoints.
 - **Level 10 Meeting**: one per team × date. Format autoname `{team}-{meeting_date}`; `status`
   transitions `Planned → In Progress → Complete` are enforced. The standard 6 agenda sections are
   auto-added on insert (`default_agenda_sections`).
@@ -745,7 +748,7 @@ Phase status is in `docs/roadmap.md`; the live work queue with stable IDs is in
   rules (`Inside min/max`, `Outside min/max`) were added in Phase 3 and are implemented.
 - `frequency` already lists Quarterly/Annual (Ninety ships 4 scorecards per team) even though entry
   UI defaults to weekly.
-- **User interface status.** The core Scorecard Grid UI is implemented and accessible via the Frappe `Page` (`#scorecard_grid`), backed by `public/js/scorecard_grid.js` and `public/css/scorecard_grid.css`. It integrates period navigation, inline data entry, group collapse/expand, column toggles, trends view, and bulk actions. Form actions exist on Rock and Scorecard Report forms. Whitelisted endpoints include `Scorecard.get_grid_view`, `Scorecard.update_scorecard_entry`, `Scorecard.get_rollup_view`, `rock.mark_complete`, `rock.get_rock_summary`, and `scorecard_report.send_report`.
+- **User interface status.** The core Scorecard Grid UI is implemented and accessible via the Frappe `Page` (`#scorecard_grid`), backed by `public/js/scorecard_grid.js` and `public/css/scorecard_grid.css`. It integrates period navigation, inline data entry, group collapse/expand, column toggles, trends view, and bulk actions. Off-track metric cells feature a "Make it an Issue" action (`UI-2`), and an Issues screen/drawer provides IDS management. Form actions exist on Rock and Scorecard Report forms. Whitelisted endpoints include `Scorecard.get_grid_view`, `Scorecard.update_scorecard_entry`, `Scorecard.get_rollup_view`, `create_issue_from_metric`, `update_issue_priority`, `update_issue_status`, `rock.mark_complete`, `rock.get_rock_summary`, and `scorecard_report.send_report`.
 - `week_overlap_ratio` and `quarter_bounds` are public, unit-tested and have no production call
   site yet; `week_overlap_days`, `prorate_for_period`, `aggregate_values`, `is_period_complete` and
   `EOS Metric.rollup` **are** wired (through `aggregate_entries_for_period` and

@@ -498,12 +498,17 @@
 			/* Scorecard Grid Table */
 			.nn-card-wrap { border: 1px solid #e5e7eb; border-radius: 8px; background: #ffffff; overflow: hidden; }
 			.nn-card-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid #f1f3f5; }
-			.nn-table-scroll { overflow-x: auto; max-width: 100%; }
-			.nn-sc-tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; white-space: nowrap; }
+			.nn-table-scroll { overflow-x: auto; max-width: 100%; position: relative; }
+			.nn-sc-tbl { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12.5px; white-space: nowrap; }
 			.nn-sc-tbl th { padding: 8px 12px; background: #fafafa; border-bottom: 1px solid #e5e7eb; border-right: 1px solid #f1f3f5; font-size: 11px; font-weight: 600; color: #6b7280; text-align: right; }
 			.nn-sc-tbl th.left { text-align: left; }
-			.nn-sc-tbl td { padding: 10px 12px; border-bottom: 1px solid #f1f3f5; border-right: 1px solid #f8fafc; text-align: right; vertical-align: middle; }
+			.nn-sc-tbl td { padding: 10px 12px; border-bottom: 1px solid #f1f3f5; border-right: 1px solid #f8fafc; text-align: right; vertical-align: middle; background: #fff; }
 			.nn-sc-tbl td.left { text-align: left; }
+			.nn-col-metric { position: sticky; left: 0; z-index: 4; min-width: 240px; max-width: 240px; background: #fff; }
+			.nn-col-owner { position: sticky; left: 240px; z-index: 4; width: 64px; min-width: 64px; max-width: 64px; text-align: center; background: #fff; }
+			.nn-col-goal { position: sticky; left: 304px; z-index: 4; width: 90px; min-width: 90px; max-width: 90px; text-align: center; background: #fff; border-right: 2px solid #e2e8f0 !important; box-shadow: 3px 0 6px -2px rgba(0,0,0,0.08); }
+			.nn-sc-tbl thead th.nn-col-metric, .nn-sc-tbl thead th.nn-col-owner, .nn-sc-tbl thead th.nn-col-goal { background: #fafafa !important; z-index: 6; }
+			.nn-sc-tbl tbody tr:hover td.nn-col-metric, .nn-sc-tbl tbody tr:hover td.nn-col-owner, .nn-sc-tbl tbody tr:hover td.nn-col-goal { background: #f9fafb !important; }
 			.nn-btn-bar { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 6px; border: 1px solid #e5e7eb; background: #fff; font-size: 12px; font-weight: 500; color: #374151; cursor: pointer; }
 			.nn-btn-bar:hover { background: #f9fafb; border-color: #cbd5e1; }
 
@@ -2492,13 +2497,62 @@
 		/* =========================================================================
 		   SCORECARD VIEW IMPLEMENTATION
 		   ========================================================================= */
+		get_range_label() {
+			const s = this.s;
+			const tf = s.timeframe || "Week";
+			if (tf === "Month") {
+				const r = s.range || 6;
+				return __(`Last ${r} Months`);
+			}
+			if (tf === "Quarter") {
+				const r = s.range || 4;
+				return __(`Last ${r} Quarters`);
+			}
+			if (tf === "Annual") {
+				const r = s.range || 3;
+				return __(`Last ${r} Years`);
+			}
+			const r = s.range || 13;
+			return __(`Last ${r} Weeks`);
+		}
+
 		make_periods(tf, n) {
 			const out = [];
 			const now = new Date();
 			const base = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0);
 
 			for (let i = 0; i < n; i++) {
-				if (tf === "Week") {
+				if (tf === "Month") {
+					const cur_y = base.getFullYear();
+					const cur_m = base.getMonth();
+					const a = new Date(cur_y, cur_m - i, 1, 12, 0, 0);
+					const b = new Date(a.getFullYear(), a.getMonth() + 1, 0, 12, 0, 0);
+					const pad = num => String(num).padStart(2, "0");
+					const key = `${a.getFullYear()}-${pad(a.getMonth() + 1)}-01`;
+					const end = `${b.getFullYear()}-${pad(b.getMonth() + 1)}-${pad(b.getDate())}`;
+					const label = `${MONTHS[a.getMonth()]} ${a.getFullYear()}`;
+					out.push({ key, end, label, current: i === 0, year: a.getFullYear() });
+				} else if (tf === "Quarter") {
+					const cur_y = base.getFullYear();
+					const cur_q = Math.floor(base.getMonth() / 3);
+					const target_total_q = cur_q - i;
+					const target_y = cur_y + Math.floor(target_total_q / 4);
+					const target_q_idx = ((target_total_q % 4) + 4) % 4;
+					const start_m = target_q_idx * 3;
+					const a = new Date(target_y, start_m, 1, 12, 0, 0);
+					const b = new Date(target_y, start_m + 3, 0, 12, 0, 0);
+					const pad = num => String(num).padStart(2, "0");
+					const key = `${a.getFullYear()}-${pad(a.getMonth() + 1)}-01`;
+					const end = `${b.getFullYear()}-${pad(b.getMonth() + 1)}-${pad(b.getDate())}`;
+					const label = `Q${target_q_idx + 1} ${target_y}`;
+					out.push({ key, end, label, current: i === 0, year: target_y });
+				} else if (tf === "Annual") {
+					const target_y = base.getFullYear() - i;
+					const key = `${target_y}-01-01`;
+					const end = `${target_y}-12-31`;
+					const label = `${target_y}`;
+					out.push({ key, end, label, current: i === 0, year: target_y });
+				} else {
 					const d = new Date(base);
 					const day = (d.getDay() + 6) % 7;
 					d.setDate(d.getDate() - day - 7 * i);
@@ -2520,7 +2574,10 @@
 
 		async load_scorecard() {
 			this.$main.html(`<div style="padding:48px;text-align:center;color:#6b7280;font-size:14px">${__("Loading Scorecard…")}</div>`);
-			this.data = { periods: this.make_periods("Week", 13), metrics: [] };
+			const tf = this.s.timeframe || "Week";
+			const default_n = tf === "Month" ? 6 : tf === "Quarter" ? 4 : tf === "Annual" ? 3 : 13;
+			const period_count = Number(this.s.range) || default_n;
+			this.data = { periods: this.make_periods(tf, period_count), metrics: [] };
 			try {
 				if (!this.all_teams || this.all_teams.length <= 1) {
 					await Promise.all([this.fetch_all_teams(), this.fetch_players()]);
@@ -2579,27 +2636,45 @@
 			}));
 
 			if (metrics.length && P.length) {
-				const start_d = P[P.length - 1].key;
-				const end_d = P[0].end;
 				const metric_ids = metrics.map(m => m.id);
 
 				const [e_res, iss_res] = await Promise.all([
-					this.list(C.entry.doctype, ["name", "metric", "parent", "week_start_date as d", "actual_value as v"], {
-						week_start_date: ["between", [start_d, end_d]]
-					}, "week_start_date asc", 2000),
+					this.call("eos_core.eos_core.doctype.scorecard.scorecard.get_scorecard_entries", {
+						metrics: metric_ids,
+						team: s.team
+					}),
 					this.list("Issue", ["name", "issue_name", "originating_metric"], {
 						originating_metric: ["in", metric_ids],
 						archived: 0
 					}, "creation desc", 200)
 				]);
 
-				if (e_res.ok && e_res.data) {
-					e_res.data.forEach(e => {
-						const met = metrics.find(x => x.id === e.metric || x.id === e.parent);
+				const raw_entries = (e_res.ok && e_res.data) ? e_res.data : [];
+
+				if (s.timeframe === "Week" || !s.timeframe) {
+					raw_entries.forEach(e => {
+						const met = metrics.find(x => x.id === e.metric || x.id === e.parent || x.title === e.metric);
 						if (met) {
 							const val = Number(e.v);
-							met.values[e.d] = isNaN(val) ? 0 : val;
+							met.values[String(e.d)] = isNaN(val) ? 0 : val;
 						}
+					});
+				} else {
+					metrics.forEach(met => {
+						const m_entries = raw_entries.filter(x => x.metric === met.id || x.parent === met.id || x.metric === met.title);
+						P.forEach(p => {
+							const in_period = m_entries.filter(e => e.d >= p.key && e.d <= p.end);
+							if (in_period.length) {
+								let agg = 0;
+								if (met.rollup === "Average") {
+									const sum = in_period.reduce((acc, curr) => acc + (Number(curr.v) || 0), 0);
+									agg = sum / in_period.length;
+								} else {
+									agg = in_period.reduce((acc, curr) => acc + (Number(curr.v) || 0), 0);
+								}
+								met.values[p.key] = Math.round(agg * 100) / 100;
+							}
+						});
 					});
 				}
 
@@ -2630,7 +2705,7 @@
 				<div class="nn-top-header">
 					<div>
 						<div class="nn-title">${this.get_doctype_label("Scorecard", "Scorecard")}</div>
-						<div class="nn-sub">${__("Track weekly and monthly measurables against target goals.")}</div>
+						<div class="nn-sub">${s.timeframe === "Month" ? __("Track monthly rolled-up measurables against target goals.") : s.timeframe === "Quarter" ? __("Track quarterly rolled-up measurables against target goals.") : s.timeframe === "Annual" ? __("Track annual rolled-up measurables against target goals.") : __("Track weekly and monthly measurables against target goals.")}</div>
 					</div>
 					<div class="nn-top-right">
 						<a class="nn-badge-maz" href="javascript:void(0)"><span>+ Maz</span><span class="nn-badge-new">NEW</span></a>
@@ -2653,7 +2728,7 @@
 							<span class="k">${this.get_field_label("Scorecard", "timeframe", "View by")}:</span> <b>${s.timeframe}</b> ${ic("chevron-down", 12)}
 						</button>
 						<button class="nn-pill-select" id="nn-range" data-menu>
-							<span class="k">${__("Date Range")}:</span> <b>${__("Last 13 Weeks")}</b> ${ic("chevron-down", 12)}
+							<span class="k">${__("Date Range")}:</span> <b>${this.get_range_label()}</b> ${ic("chevron-down", 12)}
 						</button>
 					</div>
 					<div class="nn-filter-right">
@@ -2669,7 +2744,7 @@
 				<div class="nn-card-wrap" style="margin:16px 28px 40px">
 					<div class="nn-card-header">
 						<div style="display:flex;align-items:center;gap:8px">
-							<span style="font-size:16px;font-weight:700">${__("Weekly KPIs")}</span>
+							<span style="font-size:16px;font-weight:700">${s.timeframe === "Month" ? __("Monthly KPIs") : s.timeframe === "Quarter" ? __("Quarterly KPIs") : s.timeframe === "Annual" ? __("Annual KPIs") : __("Weekly KPIs")}</span>
 							<span class="nn-badge-cnt">${this.data.metrics.length}</span>
 						</div>
 						<div>
@@ -2705,8 +2780,9 @@
 			// View by dropdown
 			$m.find("#nn-view").off("click").on("click", function (e) {
 				e.stopPropagation();
-				self.pick_menu(this, ["Week", "Month", "Quarter"], s.timeframe, v => {
+				self.pick_menu(this, ["Week", "Month", "Quarter", "Annual"], s.timeframe, v => {
 					s.timeframe = v;
+					s.range = null;
 					self.load_scorecard();
 				});
 			});
@@ -2714,13 +2790,33 @@
 			// Date range dropdown
 			$m.find("#nn-range").off("click").on("click", function (e) {
 				e.stopPropagation();
-				const ranges = [
-					[13, "Last 13 Weeks"],
-					[26, "Last 26 Weeks"],
-					[52, "Last 52 Weeks"]
-				];
-				self.pick_menu(this, ranges, s.range, v => {
-					s.range = v;
+				let ranges;
+				if (s.timeframe === "Month") {
+					ranges = [
+						[3, "Last 3 Months"],
+						[6, "Last 6 Months"],
+						[12, "Last 12 Months"]
+					];
+				} else if (s.timeframe === "Quarter") {
+					ranges = [
+						[4, "Last 4 Quarters"],
+						[8, "Last 8 Quarters"]
+					];
+				} else if (s.timeframe === "Annual") {
+					ranges = [
+						[3, "Last 3 Years"],
+						[5, "Last 5 Years"]
+					];
+				} else {
+					ranges = [
+						[13, "Last 13 Weeks"],
+						[26, "Last 26 Weeks"],
+						[52, "Last 52 Weeks"]
+					];
+				}
+				const cur_val = s.range || (ranges[0] && ranges[0][0]);
+				self.pick_menu(this, ranges, cur_val, v => {
+					s.range = Number(v);
 					self.load_scorecard();
 				});
 			});
@@ -2731,6 +2827,7 @@
 				$m.find(".nn-tab[data-tf]").removeClass("on");
 				$(this).addClass("on");
 				s.timeframe = tf;
+				s.range = null;
 				self.load_scorecard();
 			});
 
@@ -2945,13 +3042,13 @@
 
 				return `
 					<tr>
-						<td class="left" style="font-weight:600;color:#111827">
+						<td class="left nn-col-metric" style="font-weight:600;color:#111827">
 							<span class="nn-metric-title" data-id="${m.id}" style="cursor:pointer">${this.esc(m.title)}</span>
 						</td>
-						<td style="text-align:center">
+						<td class="nn-col-owner" style="text-align:center">
 							<span class="nn-av-circle" style="width:22px;height:22px;font-size:9.5px">${initials}</span>
 						</td>
-						<td style="font-weight:600;color:#374151;text-align:center">${m.goal_op || ">="} ${m.goal}</td>
+						<td class="nn-col-goal" style="font-weight:600;color:#374151;text-align:center">${m.goal_op || ">="} ${m.goal}</td>
 						${cells}
 					</tr>
 				`;
@@ -2961,9 +3058,9 @@
 				<table class="nn-sc-tbl">
 					<thead>
 						<tr>
-							<th class="left" style="min-width:240px">${this.get_field_label("EOS Metric", "metric_name", "Measurable")}</th>
-							<th style="width:60px;text-align:center">${this.get_field_label("EOS Metric", "owner_user", "Owner")}</th>
-							<th style="width:90px;text-align:center">${this.get_field_label("EOS Metric", "target_value", "Goal")}</th>
+							<th class="left nn-col-metric" style="min-width:240px">${this.get_field_label("EOS Metric", "metric_name", "Measurable")}</th>
+							<th class="nn-col-owner" style="width:64px;min-width:64px;text-align:center">${this.get_field_label("EOS Metric", "owner_user", "Owner")}</th>
+							<th class="nn-col-goal" style="width:90px;min-width:90px;text-align:center">${this.get_field_label("EOS Metric", "target_value", "Goal")}</th>
 							${ths}
 						</tr>
 					</thead>
@@ -2983,6 +3080,13 @@
 			});
 
 			$m.find(".nn-sc-cell").off("click").on("click", function (e) {
+				if (self.s.timeframe && self.s.timeframe !== "Week") {
+					frappe.show_alert({
+						message: __("Rolled-up view is read-only. Switch to Weekly KPIs to enter data."),
+						indicator: "blue"
+					});
+					return;
+				}
 				if ($(this).find(".nn-sc-cell-input").length) return;
 
 				const $td = $(this);

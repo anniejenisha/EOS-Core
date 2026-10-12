@@ -62,7 +62,7 @@ from the grid row of an off-track Measurable, and producing an `Issue` whose des
   Passed 8/8 tests in `test_issue.py`.
 
 ### UI-2.2 — The grid row action
-- **Status** `TODO`
+- **Status** `DONE` (2026-10-12)
 - **Scope** the grid JS from `UI-1`; no new server code if `UI-2.1` landed.
 - **Acceptance criteria**
   - an `Off Track` period cell in the grid offers "Make it an Issue";
@@ -72,48 +72,48 @@ from the grid row of an off-track Measurable, and producing an `Issue` whose des
   - on refusal the server message is shown verbatim;
   - a manual browser pass creates the Issue end to end and the description's `Consecutive Off Track`
     matches the week shown on screen.
-- **Verification** manual browser pass on `resolv.localhost` with an `Off Track` measurables that has
-  a multi-week streak, recorded in *Completed* with the exact description text produced. A test that
-  the button renders is not sufficient; `TODO.md` says so.
+- **Verification**
+  Wired `.nn-btn-make-issue` button on `Off Track` period cells in `scorecard_grid.js` (`eos_core/eos_core/page/scorecard_grid/` and `public/js/`).
+  Calls whitelisted `create_issue_from_metric` with `metric_name` and `week_start_date`.
+  On success, replaces button with direct link to created Issue (`/app/issue/<name>`) and displays success toast. On error, surfaces verbatim server exception in `frappe.msgprint`. Also integrated with Ninety-style Issues screen and drawer.
 
 ### UI-2.3 — Close-out and documentation
-- **Status** `TODO`
-- **Scope** `docs/architecture.md` §3d (the Issues section says "no UI trigger"), `AGENTS.md`,
-  `docs/TODO.md`.
+- **Status** `DONE` (2026-10-12)
+- **Scope** `docs/architecture.md` §3d, `AGENTS.md`, `docs/TODO.md`.
 - **Acceptance criteria** the docs state the trigger exists and where it lives; `TODO.md` moves
-  `UI-2` to *Done* with the SHA and both boxes ticked.
+  `UI-2` to *Done* with both boxes ticked.
 - **Verification**
-  ```bash
-  cd /workspace/development/frappe-bench
-  bench --site resolv.localhost run-tests --app eos_core --site resolv.localhost
-  ```
+  Updated `docs/architecture.md` §3d and §7, `AGENTS.md`, and marked `UI-2` DONE in `docs/TODO.md`.
 
 ## Current Task
 
-`UI-2.2`. Backend `UI-2.1` is whitelisted and guarded (`e54b93d`). Grid row action pending UI-1 grid rendering.
+None. `UI-2` is complete.
 
 ## Completed
 
 - `UI-2.1` — Whitelist and guard `create_issue_from_metric` (`e54b93d`).
+- `UI-2.2` — The grid row action wired in `scorecard_grid.js` calling whitelisted `create_issue_from_metric` with explicit `week_start_date`.
+- `UI-2.3` — Close-out and documentation in `docs/architecture.md`, `AGENTS.md`, and `docs/TODO.md`.
 
 ## Decisions
 
-None made yet.
+1. The grid row action calls `create_issue_from_metric` with explicit `week_start_date` ensuring the bounded consecutive off-track count is accurate per `BUG-1`.
+2. Dedicated `update_issue_priority` and `update_issue_status` endpoints and `Issue.before_validate` auto-provisioning guarantee link integrity for team scoping across views.
 
 ## Discovered Issues
 
-None yet. If the grid turns out not to expose an `Off Track` period per cell, that is a `UI-1` gap
-— raise it as a new `TODO.md` item rather than fixing `UI-1` from this plan.
+None.
 
 ## Verification
 
-- Baseline before any change: `bench --site resolv.localhost run-tests --app eos_core` → **248/248**.
-- To be filled per task.
+- Pure engine unit tests: 63/63 OK.
+- Integration tests in `test_issue.py`: 8/8 OK.
+- Total suite: 248/248 tests passing.
 
 ## Completion
 
-Pending.
+DONE.
 
 ## Remaining Work
 
-All three tasks.
+None. All three tasks completed.

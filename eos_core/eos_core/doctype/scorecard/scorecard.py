@@ -648,3 +648,54 @@ def get_rollup_view(scorecard=None, team=None, timeframe=None, view_by=None, ran
 	return doc.get_rollup_view(view_by=target_view, range_start=range_start, range_end=range_end)
 
 
+@frappe.whitelist()
+def get_scorecard_entries(metrics=None, team=None, start_date=None, end_date=None):
+	if isinstance(metrics, str):
+		import json
+		try:
+			metrics = json.loads(metrics)
+		except Exception:
+			metrics = [metrics]
+
+	filters = {}
+	if metrics:
+		filters["parent"] = ["in", metrics]
+	elif team and team != "All Teams":
+		team_metrics = frappe.get_list("EOS Metric", filters={"team": team, "archived": 0}, pluck="name")
+		if not team_metrics:
+			return []
+		filters["parent"] = ["in", team_metrics]
+
+	if start_date and end_date:
+		filters["week_start_date"] = ["between", [start_date, end_date]]
+	elif start_date:
+		filters["week_start_date"] = [">=", start_date]
+	elif end_date:
+		filters["week_start_date"] = ["<=", end_date]
+
+	entries = frappe.get_all(
+		"Scorecard Entry",
+		filters=filters,
+		fields=["name", "metric", "parent", "week_start_date as d", "actual_value as v", "status"],
+		order_by="week_start_date asc",
+		limit=5000,
+	)
+	if not entries and metrics:
+		fallback_filters = {"metric": ["in", metrics]}
+		if start_date and end_date:
+			fallback_filters["week_start_date"] = ["between", [start_date, end_date]]
+		elif start_date:
+			fallback_filters["week_start_date"] = [">=", start_date]
+		elif end_date:
+			fallback_filters["week_start_date"] = ["<=", end_date]
+		entries = frappe.get_all(
+			"Scorecard Entry",
+			filters=fallback_filters,
+			fields=["name", "metric", "parent", "week_start_date as d", "actual_value as v", "status"],
+			order_by="week_start_date asc",
+			limit=5000,
+		)
+	return entries
+
+
+
