@@ -54,7 +54,15 @@
 		"todo-icon": '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 12 2 2 4-4"/>',
 		"target": '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
 		"alert-circle": '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>',
-		"archive": '<rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/>'
+		"archive": '<rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/>',
+		"calendar": '<rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+		"play": '<polygon points="6 3 20 12 6 21 6 3"/>',
+		"printer": '<polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/>',
+		"tool": '<path d="m14.7 6.3-2.1-2.1a1 1 0 0 0-1.4 0L2 13.4a1 1 0 0 0 0 1.4l2.1 2.1a1 1 0 0 0 1.4 0l9.2-9.2a1 1 0 0 0 0-1.4Z"/><path d="M16.5 4.5 19.5 7.5"/>',
+		"message-square": '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+		"star": '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+		"check-circle": '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
+		"file-text": '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>'
 	};
 
 	const ic = (n, s) => `<svg class="nn-svg" width="${s || 14}" height="${s || 14}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${IC[n] || ""}</svg>`;
@@ -94,12 +102,26 @@
 				issue_tab: "Short-Term",
 				issue_archive: false,
 				issue_search: "",
-				issue_priority: "All"
+				issue_priority: "All",
+
+				meeting_tab: "Upcoming",
+				meeting_team: "All Teams",
+				meeting_in_progress: false,
+				meeting_agenda_type: "l10",
+				meeting_step: 0,
+				meeting_seconds: 0,
+				meeting_step_seconds: 0,
+				meeting_sharing_idx: 0,
+				meeting_notes: "",
+				meeting_ratings: {},
+				meeting_attendance: {},
+				meeting_tools_open: false
 			};
 			this.data = { periods: [], metrics: [] };
 			this.rocks = [];
 			this.todos = [];
 			this.issues = [];
+			this.meetings = [];
 			this.users = [];
 			this.players = [];
 			this.all_teams = ["All Teams"];
@@ -618,6 +640,76 @@
 			.nn-issues-learn-link { font-size: 12px; color: #064e3b; text-decoration: underline; cursor: pointer; font-weight: 500; }
 			.nn-issue-priority-select { border: 1px solid #e5e7eb; border-radius: 4px; padding: 2px 6px; font-size: 11.5px; color: #374151; background: #fff; cursor: pointer; outline: none; }
 			.nn-issue-priority-select:focus { border-color: #064e3b; }
+
+			/* ================= L10 Meetings & Meeting Room CSS ================= */
+			.nn-meeting-hero { background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border: 1px solid #e2e8f0; border-radius: 12px; padding: 44px 24px; text-align: center; margin-bottom: 24px; position: relative; overflow: hidden; }
+			.nn-meeting-hero-tag { display: inline-block; padding: 3px 12px; background: #e2e8f0; border-radius: 12px; font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+			.nn-meeting-hero-title { font-size: 22px; font-weight: 700; color: #111827; margin: 0 0 20px; }
+			.nn-meeting-hero-btns { display: flex; align-items: center; justify-content: center; gap: 12px; }
+			
+			.nn-upcoming-box { border: 1.5px dashed #d1d5db; border-radius: 10px; padding: 48px 24px; text-align: center; background: #fafbfc; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+			.nn-empty-icon-circle { width: 52px; height: 52px; border-radius: 50%; background: #f3f4f6; color: #9ca3af; display: flex; align-items: center; justify-content: center; margin-bottom: 4px; }
+			.nn-empty-box-title { font-size: 15px; font-weight: 700; color: #1f2937; margin: 0; }
+			.nn-empty-box-sub { font-size: 13px; color: #6b7280; margin: 0; max-width: 420px; }
+
+			.nn-modal-backdrop { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45); backdrop-filter: blur(2px); z-index: 99998; }
+			.nn-modal-card { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 100%; max-width: 480px; background: #ffffff; border-radius: 12px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2), 0 10px 10px -5px rgba(0,0,0,0.1); z-index: 99999; overflow: hidden; }
+			.nn-modal-header { display: flex; align-items: flex-start; justify-content: space-between; padding: 20px 24px 14px; border-bottom: 1px solid #f1f3f5; }
+			.nn-modal-title { font-size: 18px; font-weight: 700; color: #111827; margin: 0 0 4px; }
+			.nn-modal-sub { font-size: 13px; color: #6b7280; margin: 0; }
+			.nn-modal-close-btn { background: transparent; border: none; color: #9ca3af; cursor: pointer; padding: 4px; border-radius: 4px; }
+			.nn-modal-close-btn:hover { color: #111827; background: #f3f4f6; }
+			.nn-modal-body { padding: 20px 24px; max-height: 65vh; overflow-y: auto; }
+			.nn-agenda-select-list { display: flex; flex-direction: column; gap: 8px; }
+			.nn-agenda-select-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border: 1px solid #e5e7eb; border-radius: 8px; background: #ffffff; transition: all 0.15s; }
+			.nn-agenda-select-item:hover { border-color: #cbd5e1; background: #f8fafc; }
+			.nn-agenda-select-left { display: flex; align-items: center; gap: 12px; }
+			.nn-agenda-select-icon { width: 32px; height: 32px; border-radius: 6px; background: #ecfdf5; color: #059669; display: flex; align-items: center; justify-content: center; }
+			.nn-agenda-select-title { font-size: 14px; font-weight: 600; color: #1f2937; }
+
+			/* L10 Meeting Workspace */
+			.nn-l10-wrap { display: flex; width: 100%; height: 100%; min-height: calc(100vh - 60px); background: #f8fafc; }
+			.nn-l10-side { width: 280px; flex-shrink: 0; background: #ffffff; border-right: 1px solid #e5e7eb; display: flex; flex-direction: column; justify-content: space-between; box-shadow: 2px 0 6px rgba(0,0,0,0.02); }
+			.nn-l10-side-top { padding: 18px 16px; border-bottom: 1px solid #f1f3f5; }
+			.nn-l10-timer-display { display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 4px; }
+			.nn-l10-timer-bold { font-size: 20px; font-weight: 700; color: #111827; font-variant-numeric: tabular-nums; }
+			.nn-l10-step-timer-badge { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 12px; background: #ecfdf5; color: #064e3b; }
+
+			.nn-l10-agenda-list { display: flex; flex-direction: column; gap: 2px; padding: 12px 10px; flex: 1; overflow-y: auto; }
+			.nn-l10-agenda-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-radius: 6px; cursor: pointer; font-size: 12.5px; font-weight: 600; color: #4b5563; transition: all 0.12s; border-left: 3px solid transparent; }
+			.nn-l10-agenda-item:hover { background: #f3f4f6; color: #111827; }
+			.nn-l10-agenda-item.on { background: #ecfdf5; color: #064e3b; border-left-color: #059669; }
+			.nn-l10-agenda-left { display: flex; align-items: center; gap: 8px; }
+			.nn-l10-agenda-times { font-size: 11px; color: #6b7280; font-variant-numeric: tabular-nums; font-weight: 500; }
+			.nn-l10-agenda-item.on .nn-l10-agenda-times { color: #064e3b; font-weight: 600; }
+
+			.nn-l10-side-foot { padding: 14px 16px; border-top: 1px solid #f1f3f5; display: flex; flex-direction: column; gap: 10px; background: #ffffff; }
+			.nn-l10-foot-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+			.nn-l10-foot-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 6px; border: 1px solid #e5e7eb; background: #fff; font-size: 12px; font-weight: 500; color: #374151; cursor: pointer; flex: 1; justify-content: center; }
+			.nn-l10-foot-btn:hover { background: #f9fafb; border-color: #cbd5e1; }
+
+			.nn-l10-main { flex: 1; overflow-y: auto; padding: 24px 36px 60px; }
+			.nn-l10-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+			.nn-l10-title { font-size: 18px; font-weight: 700; color: #111827; margin: 0; }
+			.nn-l10-sub { font-size: 12.5px; color: #6b7280; margin-top: 2px; }
+
+			.nn-l10-card { background: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.03); }
+			.nn-l10-card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+			.nn-l10-card-title { font-size: 14px; font-weight: 700; color: #111827; margin: 0; }
+
+			.nn-attendee-grid { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+			.nn-attendee-chip { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 20px; border: 1px solid #e5e7eb; background: #ffffff; font-size: 12.5px; font-weight: 600; color: #374151; cursor: pointer; user-select: none; transition: all 0.12s; }
+			.nn-attendee-chip.present { border-color: #059669; background: #ecfdf5; color: #064e3b; }
+			.nn-attendee-chip.absent { opacity: 0.55; }
+
+			.nn-sharing-box { text-align: center; padding: 28px 20px; border: 1px dashed #d1d5db; border-radius: 8px; background: #fafbfc; margin-bottom: 16px; }
+			.nn-sharing-av { width: 56px; height: 56px; border-radius: 50%; background: #064e3b; color: #ffffff; font-size: 18px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 10px; }
+			.nn-sharing-name { font-size: 16px; font-weight: 700; color: #111827; margin-bottom: 4px; }
+			.nn-sharing-badge { display: inline-block; padding: 2px 10px; border-radius: 12px; background: #ecfdf5; color: #064e3b; font-size: 11.5px; font-weight: 600; margin-bottom: 14px; }
+
+			.nn-rating-list { display: flex; flex-direction: column; gap: 10px; }
+			.nn-rating-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border: 1px solid #f1f3f5; border-radius: 6px; background: #ffffff; }
+			.nn-rating-input { width: 60px; height: 32px; border: 1px solid #d1d5db; border-radius: 6px; text-align: center; font-size: 14px; font-weight: 700; color: #111827; }
 			</style>`);
 		}
 
@@ -646,6 +738,9 @@
 						</div>
 						<div class="nn-nav-item" data-view="issues">
 							${ic("alert-circle", 16)} <span>${__("Issues")}</span>
+						</div>
+						<div class="nn-nav-item" data-view="meetings">
+							${ic("calendar", 16)} <span>${__("L10 Meeting")}</span>
 						</div>
 
 						<div class="nn-side-footer">
@@ -692,6 +787,7 @@
 			if (view === "rocks") this.load_rocks();
 			else if (view === "todos") this.load_todos();
 			else if (view === "issues") this.load_issues();
+			else if (view === "meetings") this.load_meetings();
 			else this.load_scorecard();
 		}
 
@@ -1406,7 +1502,11 @@
 
 				self.close_drawer();
 				await self.fetch_rocks_data();
-				self.render_rocks();
+				if (self.s.view === "rocks") {
+					self.render_rocks();
+				} else if (self.s.view === "meetings" && self.s.meeting_in_progress) {
+					self.render_l10_meeting_workspace();
+				}
 				frappe.show_alert({ message: __("Rock saved successfully!"), indicator: "green" });
 			});
 
@@ -1899,7 +1999,11 @@
 
 				self.close_drawer();
 				await self.fetch_todos_data();
-				self.render_todos_table();
+				if (self.s.view === "todos") {
+					self.render_todos_table();
+				} else if (self.s.view === "meetings" && self.s.meeting_in_progress) {
+					self.render_l10_meeting_workspace();
+				}
 				frappe.show_alert({ message: __("To-Do saved successfully!"), indicator: "green" });
 			});
 
@@ -2482,6 +2586,9 @@
 					if (self.s.view === "issues") {
 						await self.fetch_issues_data();
 						self.render_issues_table();
+					} else if (self.s.view === "meetings" && self.s.meeting_in_progress) {
+						await self.fetch_issues_data();
+						self.render_l10_meeting_workspace();
 					}
 					frappe.show_alert({ message: __("Issue saved successfully!"), indicator: "green" });
 				} catch (err) {
@@ -2492,6 +2599,1376 @@
 			this.$root.find("#nn-drawer-backdrop").addClass("show");
 			$drawer.addClass("show");
 			$drawer.find("#nn-iss-title").focus();
+		}
+
+		/* =========================================================================
+		   L10 MEETINGS & LEVEL 10 MEETING ROOM IMPLEMENTATION (MATCHING PDF)
+		   ========================================================================= */
+
+		async load_meetings() {
+			this.$main.html(`<div style="padding:48px;text-align:center;color:#6b7280;font-size:14px">${__("Loading Meetings…")}</div>`);
+			try {
+				await this.fetch_all_teams();
+				await this.fetch_players();
+				await this.fetch_meetings_data();
+			} catch (e) {
+				console.error("Meetings load error:", e);
+			}
+			if (this.s.meeting_in_progress) {
+				this.render_l10_meeting_workspace();
+			} else {
+				this.render_meetings();
+			}
+		}
+
+		async fetch_meetings_data() {
+			const promises = [
+				this.list("Level 10 Meeting", ["name", "team", "meeting_date", "status", "notes", "creation"], {}, "meeting_date desc, creation desc", 50),
+				(!this.todos || !this.todos.length) ? this.fetch_todos_data() : Promise.resolve(),
+				(!this.issues || !this.issues.length) ? this.fetch_issues_data() : Promise.resolve(),
+				(!this.rocks || !this.rocks.length) ? this.fetch_rocks_data() : Promise.resolve(),
+				(!this.data || !this.data.metrics || !this.data.metrics.length) ? this.fetch_scorecard_data() : Promise.resolve()
+			];
+			const [m_res] = await Promise.all(promises);
+			this.meetings = m_res && m_res.ok ? (m_res.data || []) : [];
+
+			if (!this.users || !this.users.length) {
+				const u_res = await this.list("User", ["name", "full_name", "first_name", "last_name", "email"], { enabled: 1 }, "full_name asc", 200);
+				this.users = u_res.ok ? u_res.data : [];
+			}
+		}
+
+		render_meetings() {
+			const s = this.s;
+			const team = s.meeting_team || s.team || (this.all_teams.length > 1 ? this.all_teams[1] : "TG BPO");
+			const tab = s.meeting_tab || "Upcoming";
+
+			this.$main.html(`
+				<div class="nn-top-header">
+					<div>
+						<div class="nn-title">${__("Meetings")}</div>
+						<div class="nn-sub">${__("Improve alignment and transparency across your organization.")}</div>
+					</div>
+					<div class="nn-actions">
+						<button class="nn-btn-bar" id="nn-print-agenda-btn">
+							${ic("printer", 14)} <span>${__("Print Meeting Agenda")}</span>
+						</button>
+						<button class="nn-btn-green" id="nn-btn-create-meeting">
+							${ic("plus", 14)} <span>${__("Create")}</span>
+						</button>
+					</div>
+				</div>
+
+				<div class="nn-toolbar">
+					<div class="nn-tabs">
+						<div class="nn-tab ${tab === "Upcoming" ? "on" : ""}" data-mtab="Upcoming">${__("Upcoming")}</div>
+						<div class="nn-tab ${tab === "Past Meetings" ? "on" : ""}" data-mtab="Past Meetings">${__("Past Meetings")}</div>
+						<div class="nn-tab ${tab === "Agendas" ? "on" : ""}" data-mtab="Agendas">${__("Agendas")}</div>
+					</div>
+					<div class="nn-filters">
+						<div class="nn-pill-select" id="nn-mtg-team-btn" title="${__("Select Team")}">
+							${ic("users", 13)}
+							<span>${this.esc(team)}</span>
+							${ic("chevron-down", 12)}
+						</div>
+					</div>
+				</div>
+
+				<div class="nn-meetings-body" id="nn-meetings-body-wrap">
+					${this.get_meetings_tab_html(tab, team)}
+				</div>
+			`);
+
+			this.bind_meetings_events();
+		}
+
+		get_meetings_tab_html(tab, team) {
+			if (tab === "Past Meetings") {
+				const past = this.meetings || [];
+				if (!past.length) {
+					return `
+						<div class="nn-upcoming-box" style="margin: 0 32px 32px;">
+							<div class="nn-empty-icon-circle">${ic("calendar", 26)}</div>
+							<div class="nn-empty-box-title">${__("No past meetings recorded yet.")}</div>
+							<div class="nn-empty-box-sub">${__("Completed meetings will be archived here for review.")}</div>
+						</div>
+					`;
+				}
+				return `
+					<div class="nn-rock-card" style="margin: 0 32px 32px;">
+						<div class="nn-rock-header">
+							<div class="nn-rock-title-group">
+								<span class="nn-rock-title">${__("Past Meetings")}</span>
+								<span class="nn-badge-cnt">${past.length}</span>
+							</div>
+						</div>
+						<table class="nn-rock-tbl">
+							<thead>
+								<tr>
+									<th>${__("Date")}</th>
+									<th>${__("Team")}</th>
+									<th>${__("Status")}</th>
+									<th>${__("Notes / Summary")}</th>
+									<th style="text-align:right">${__("Action")}</th>
+								</tr>
+							</thead>
+							<tbody>
+								${past.map(m => `
+									<tr class="nn-rock-row">
+										<td><b>${frappe.datetime.str_to_user(m.meeting_date)}</b></td>
+										<td>${this.esc(m.team || team)}</td>
+										<td><span class="nn-status-badge complete">${this.esc(m.status || "Complete")}</span></td>
+										<td style="color:#6b7280">${this.esc(m.notes || __("Level 10 Meeting completed"))}</td>
+										<td style="text-align:right">
+											<a href="/app/level-10-meeting/${encodeURIComponent(m.name)}" target="_blank" class="nn-btn-bar" style="padding:3px 8px;font-size:11px;display:inline-flex">${__("View")}</a>
+										</td>
+									</tr>
+								`).join("")}
+							</tbody>
+						</table>
+					</div>
+				`;
+			}
+
+			if (tab === "Agendas") {
+				const agendas = [
+					{ id: "l10", title: "Level 10 Meeting™", dur: "90 min", desc: "Weekly leadership & team pulse: Segue, Scorecard, Rocks, Headlines, To-Dos, IDS (60m), Conclude." },
+					{ id: "quarterly", title: "Quarterly Session", dur: "Full Day", desc: "Review past quarter results, refresh V/TO®, set 90-day Rocks, tackle major strategic issues." },
+					{ id: "annual", title: "Annual Session", dur: "2 Days", desc: "2-day deep dive into Vision, Core Values, 1-Year Plan, and upcoming quarterly priorities." },
+					{ id: "1on1", title: "Weekly 1-on-1", dur: "30 min", desc: "Manager & employee alignment check-in, reviewing weekly to-dos, measurables, and feedback." }
+				];
+				return `
+					<div style="padding:0 32px 32px;display:grid;grid-template-columns:repeat(auto-fill, minmax(300px, 1fr));gap:18px;">
+						${agendas.map(a => `
+							<div class="nn-l10-card" style="display:flex;flex-direction:column;justify-content:space-between;border:1px solid #e5e7eb;box-shadow:0 1px 3px rgba(0,0,0,0.04);margin-bottom:0">
+								<div>
+									<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+										<h4 style="margin:0;font-size:15px;font-weight:700;color:#111827">${this.esc(a.title)}</h4>
+										<span style="font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:12px;background:#ecfdf5;color:#064e3b">${a.dur}</span>
+									</div>
+									<p style="font-size:13px;color:#4b5563;line-height:1.5;margin-bottom:18px">${this.esc(a.desc)}</p>
+								</div>
+								<div>
+									<button class="nn-btn-green nn-start-agenda-btn" data-agenda="${a.id}" style="width:100%">${__("Start This Meeting")}</button>
+								</div>
+							</div>
+						`).join("")}
+					</div>
+				`;
+			}
+
+			// Default: "Upcoming" Tab (Matching PDF Page 1)
+			return `
+				<div style="padding: 0 32px 32px;">
+					<!-- Hero: No Meetings in progress -->
+					<div class="nn-meeting-hero">
+						<div class="nn-meeting-hero-tag">${this.esc(team)}</div>
+						<h3 class="nn-meeting-hero-title">${__("No Meetings in progress")}</h3>
+						<div class="nn-meeting-hero-btns">
+							<button class="nn-btn-green" id="nn-hero-start-btn">
+								${ic("play", 13)} <span>${__("Start a Meeting")}</span>
+							</button>
+							<button class="nn-btn-bar" id="nn-hero-schedule-btn">
+								${ic("calendar", 13)} <span>${__("Schedule a Meeting")}</span>
+							</button>
+						</div>
+					</div>
+
+					<!-- Upcoming Meetings Section -->
+					<div style="margin-top:28px">
+						<div style="font-size:15px;font-weight:700;color:#111827;margin-bottom:14px;display:flex;align-items:center;gap:6px">
+							<span>${__("Upcoming Meetings")}</span>
+							<span style="font-size:12px;color:#9ca3af;font-weight:400">(0)</span>
+						</div>
+						<div class="nn-upcoming-box">
+							<div class="nn-empty-icon-circle">${ic("message-square", 28)}</div>
+							<div class="nn-empty-box-title">${__("Your team hasn't created any scheduled Meetings yet.")}</div>
+							<div class="nn-empty-box-sub">${__("Scheduled Meetings are a quick way to keep your team aligned.")}</div>
+							<a href="javascript:void(0)" class="nn-issues-learn-link" id="nn-learn-meetings-link">${__("Learn more about Scheduled Meetings")}</a>
+						</div>
+					</div>
+				</div>
+			`;
+		}
+
+		bind_meetings_events() {
+			const self = this;
+			const $wrap = this.$root.find("#nn-main");
+
+			$wrap.find(".nn-tab").on("click", function () {
+				const tab = $(this).attr("data-mtab");
+				self.s.meeting_tab = tab;
+				self.render_meetings();
+			});
+
+			$wrap.find("#nn-mtg-team-btn").on("click", function (e) {
+				e.stopPropagation();
+				const teams = (self.all_teams && self.all_teams.length) ? self.all_teams.filter(t => t !== "All Teams") : ["TG BPO"];
+				self.pick_menu(this, teams, self.s.meeting_team || self.s.team, async val => {
+					self.s.meeting_team = val;
+					self.s.team = val;
+					await self.fetch_meetings_data();
+					self.render_meetings();
+				});
+			});
+
+			$wrap.find("#nn-hero-start-btn, #nn-btn-create-meeting").on("click", () => self.open_start_meeting_modal());
+			$wrap.find(".nn-start-agenda-btn").on("click", function () {
+				const ag = $(this).attr("data-agenda");
+				self.start_l10_meeting(ag);
+			});
+
+			$wrap.find("#nn-hero-schedule-btn, #nn-learn-meetings-link").on("click", () => {
+				frappe.msgprint({
+					title: __("Schedule a Meeting"),
+					message: __("Scheduled recurring meetings allow your team to run weekly Level 10 sessions seamlessly."),
+					indicator: "blue"
+				});
+			});
+
+			$wrap.find("#nn-print-agenda-btn").on("click", () => {
+				window.print();
+			});
+		}
+
+		open_start_meeting_modal() {
+			const self = this;
+			const agendas = [
+				{ id: "l10", title: "Level 10 Meeting™" },
+				{ id: "quarterly", title: "Quarterly Session" },
+				{ id: "annual", title: "Annual Session" },
+				{ id: "1on1", title: "Weekly 1-on-1" }
+			];
+
+			const $backdrop = $(`<div class="nn-modal-backdrop"></div>`);
+			const $modal = $(`
+				<div class="nn-modal-card">
+					<div class="nn-modal-header">
+						<div>
+							<h3 class="nn-modal-title">${__("Start Meeting")}</h3>
+							<p class="nn-modal-sub">${__("Select an agenda for your meeting")}</p>
+						</div>
+						<button class="nn-modal-close-btn" id="nn-modal-close">${ic("close", 16)}</button>
+					</div>
+					<div class="nn-modal-body">
+						<div style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;margin-bottom:12px">${__("All Agendas")}</div>
+						<div class="nn-agenda-select-list">
+							${agendas.map(a => `
+								<div class="nn-agenda-select-item">
+									<div class="nn-agenda-select-left">
+										<div class="nn-agenda-select-icon">${ic("file-text", 16)}</div>
+										<span class="nn-agenda-select-title">${this.esc(a.title)}</span>
+									</div>
+									<button class="nn-btn-green nn-start-agenda-modal-btn" data-agenda="${a.id}" style="height:30px;padding:0 14px;font-size:12px">${__("Start")}</button>
+								</div>
+							`).join("")}
+						</div>
+					</div>
+					<div class="nn-modal-footer" style="padding:14px 24px;border-top:1px solid #f1f3f5;display:flex;justify-content:flex-start">
+						<a href="javascript:void(0)" class="nn-issues-learn-link" id="nn-manage-agendas-link">${__("Manage agendas...")}</a>
+					</div>
+				</div>
+			`);
+
+			$("body").append($backdrop).append($modal);
+
+			const close = () => { $backdrop.remove(); $modal.remove(); };
+			$modal.find("#nn-modal-close").on("click", close);
+			$backdrop.on("click", close);
+
+			$modal.find(".nn-start-agenda-modal-btn").on("click", function () {
+				const ag_id = $(this).attr("data-agenda");
+				close();
+				self.start_l10_meeting(ag_id);
+			});
+
+			$modal.find("#nn-manage-agendas-link").on("click", () => {
+				close();
+				self.s.meeting_tab = "Agendas";
+				self.render_meetings();
+			});
+		}
+
+		start_l10_meeting(agenda_id = "l10") {
+			const team = this.s.meeting_team || this.s.team || (this.all_teams.length > 1 ? this.all_teams[1] : "TG BPO");
+			this.s.meeting_in_progress = true;
+			this.s.meeting_agenda_type = agenda_id;
+			this.s.meeting_step = 0;
+			this.s.meeting_seconds = 0;
+			this.s.meeting_step_seconds = 0;
+			this.s.meeting_sharing_idx = 0;
+			this.s.meeting_good_news = {};
+			this.s.meeting_ratings = {};
+			this.s.meeting_notes = "";
+
+			const team_players = (this.players || []).filter(p => !p.team || p.team === team || team === "All Teams");
+			let attendee_list = team_players.map(p => p.player_name || p.user || p.name);
+			if (!attendee_list.length) {
+				attendee_list = (this.users || []).slice(0, 4).map(u => u.full_name || u.first_name || u.name);
+			}
+			if (!attendee_list.length) {
+				attendee_list = ["Taher Jivanji", "Zafar Fakhri"];
+			}
+
+			this.s.meeting_attendees = attendee_list;
+			this.s.meeting_attendance = {};
+			attendee_list.forEach((att, idx) => {
+				this.s.meeting_attendance[att] = (idx < 2);
+				this.s.meeting_ratings[att] = 8;
+			});
+
+			if (!this.s.headlines || !this.s.headlines.length) {
+				this.s.headlines = [
+					{ id: 1, type: "Customer", title: "Key client onboarding went live seamlessly with 100% SLA met", author: attendee_list[0] || "User", date: "Today" }
+				];
+			}
+			if (!this.s.cascading_messages) {
+				this.s.cascading_messages = [];
+			}
+
+			if (this.meeting_timer_interval) clearInterval(this.meeting_timer_interval);
+			this.meeting_timer_interval = setInterval(() => {
+				this.s.meeting_seconds++;
+				this.s.meeting_step_seconds++;
+				this.update_meeting_timer_display();
+			}, 1000);
+
+			this.render_l10_meeting_workspace();
+		}
+
+		fmt_timer(sec) {
+			const m = Math.floor(sec / 60);
+			const s = sec % 60;
+			return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+		}
+
+		update_meeting_timer_display() {
+			const $tot = this.$root.find("#nn-l10-total-timer");
+			if ($tot.length) $tot.text(this.fmt_timer(this.s.meeting_seconds));
+			const $step = this.$root.find("#nn-l10-step-timer");
+			if ($step.length) $step.text(this.fmt_timer(this.s.meeting_step_seconds));
+			const $curr_row = this.$root.find(`.nn-l10-agenda-item[data-step="${this.s.meeting_step}"] .nn-l10-agenda-elapsed`);
+			if ($curr_row.length) $curr_row.text(this.fmt_timer(this.s.meeting_step_seconds));
+		}
+
+		get_l10_agenda_steps() {
+			return [
+				{ idx: 0, num: "1.", name: "SEGUE", target_sec: 300, target_str: "05:00" },
+				{ idx: 1, num: "2.", name: "SCORECARD", target_sec: 300, target_str: "05:00" },
+				{ idx: 2, num: "3.", name: "ROCK REVIEW", target_sec: 300, target_str: "05:00" },
+				{ idx: 3, num: "4.", name: "CUSTOMER / EMPLOYEE HEADLINES", target_sec: 300, target_str: "05:00" },
+				{ idx: 4, num: "5.", name: "TO-DO LIST", target_sec: 300, target_str: "05:00" },
+				{ idx: 5, num: "6.", name: "IDS™", target_sec: 3600, target_str: "60:00" },
+				{ idx: 6, num: "7.", name: "CONCLUDE", target_sec: 300, target_str: "05:00" }
+			];
+		}
+
+		render_l10_meeting_workspace() {
+			const s = this.s;
+			const team = s.meeting_team || s.team || "TG BPO";
+			const steps = this.get_l10_agenda_steps();
+			const cur_step = steps[s.meeting_step] || steps[0];
+
+			this.$main.html(`
+				<div class="nn-l10-wrap">
+					<!-- Left Agenda Sidebar (Ninety.io meeting runner) -->
+					<div class="nn-l10-side">
+						<div class="nn-l10-side-top">
+							<div class="nn-l10-timer-display">
+								<span>${__("Total:")} <span id="nn-l10-total-timer">${this.fmt_timer(s.meeting_seconds)}</span></span>
+								<span class="nn-l10-step-timer-badge" id="nn-l10-step-timer">${this.fmt_timer(s.meeting_step_seconds)}</span>
+							</div>
+						</div>
+
+						<div class="nn-l10-agenda-list">
+							${steps.map(st => `
+								<div class="nn-l10-agenda-item ${st.idx === s.meeting_step ? "on" : ""}" data-step="${st.idx}">
+									<div class="nn-l10-agenda-left">
+										<span style="font-weight:700">${st.num}</span>
+										<span>${st.name}</span>
+									</div>
+									<div class="nn-l10-agenda-times">
+										<span class="nn-l10-agenda-elapsed">${st.idx === s.meeting_step ? this.fmt_timer(s.meeting_step_seconds) : "00:00"}</span> / ${st.target_str}
+									</div>
+								</div>
+							`).join("")}
+						</div>
+
+						<div class="nn-l10-side-foot">
+							<div class="nn-l10-foot-actions">
+								<button class="nn-l10-foot-btn" id="nn-l10-tools-toggle" title="${__("Open Tools")}">
+									${ic("tool", 14)} <span>${__("Tools")}</span>
+								</button>
+								<button class="nn-l10-foot-btn" id="nn-l10-notes-toggle" title="${__("Toggle Notes")}">
+									${ic("file-text", 14)} <span>${__("Notes")}</span>
+								</button>
+							</div>
+							<div class="nn-l10-foot-actions">
+								<button class="nn-l10-foot-btn" id="nn-l10-prev-step-btn" ${s.meeting_step === 0 ? "disabled style='opacity:0.5'" : ""}>
+									${__("Previous")}
+								</button>
+								<button class="nn-btn-green" id="nn-l10-next-step-btn" style="flex:1;height:32px;font-size:12px">
+									${s.meeting_step === steps.length - 1 ? __("Finish") : __("Next")}
+								</button>
+							</div>
+							<button class="nn-btn-bar" id="nn-l10-quit-btn" style="width:100%;font-size:11.5px;color:#dc2626;border-color:#fecaca">
+								${__("Exit Meeting")}
+							</button>
+						</div>
+					</div>
+
+					<!-- Main Step Content -->
+					<div class="nn-l10-main" id="nn-l10-main-step-container">
+						${this.render_l10_step_content(s.meeting_step, team)}
+					</div>
+				</div>
+			`);
+
+			this.bind_l10_meeting_events();
+		}
+
+		bind_l10_meeting_events() {
+			const self = this;
+			const $wrap = this.$root.find("#nn-main");
+
+			$wrap.find(".nn-l10-agenda-item").on("click", function () {
+				const step = parseInt($(this).attr("data-step"), 10);
+				self.switch_l10_step(step);
+			});
+
+			$wrap.find("#nn-l10-prev-step-btn").on("click", () => {
+				if (self.s.meeting_step > 0) self.switch_l10_step(self.s.meeting_step - 1);
+			});
+
+			$wrap.find("#nn-l10-next-step-btn").on("click", () => {
+				const steps = self.get_l10_agenda_steps();
+				if (self.s.meeting_step < steps.length - 1) {
+					self.switch_l10_step(self.s.meeting_step + 1);
+				} else {
+					self.finish_l10_meeting();
+				}
+			});
+
+			$wrap.find("#nn-l10-tools-toggle").on("click", function (e) {
+				e.stopPropagation();
+				self.open_l10_tools_menu(this);
+			});
+
+			$wrap.find("#nn-l10-notes-toggle").on("click", () => {
+				frappe.prompt([
+					{ fieldname: "notes", fieldtype: "Small Text", label: __("Meeting Notes"), default: self.s.meeting_notes || "" }
+				], values => {
+					self.s.meeting_notes = values.notes;
+					frappe.show_alert({ message: __("Notes saved for this meeting"), indicator: "green" });
+				}, __("Meeting Notes"));
+			});
+
+			$wrap.find("#nn-l10-quit-btn").on("click", () => {
+				frappe.confirm(__("Are you sure you want to exit this meeting session?"), () => {
+					if (self.meeting_timer_interval) clearInterval(self.meeting_timer_interval);
+					self.s.meeting_in_progress = false;
+					self.render_meetings();
+				});
+			});
+
+			this.bind_l10_step_specific_events();
+		}
+
+		switch_l10_step(step_idx) {
+			this.s.meeting_step = step_idx;
+			this.s.meeting_step_seconds = 0;
+			this.render_l10_meeting_workspace();
+		}
+
+		open_l10_tools_menu(anchor) {
+			const existing = $(".nn-l10-tools-menu");
+			if (existing.length) {
+				existing.remove();
+				return;
+			}
+			// CONSTRAINT (from PDF Page 6): "For the tools section only add scorecard, to-dos, issues and rocks (first 4 items)"
+			const tools = [
+				{ id: "scorecard", title: "Scorecard", icon: "scorecard-icon" },
+				{ id: "todos", title: "To-Dos", icon: "todo-icon" },
+				{ id: "issues", title: "Issues", icon: "alert-circle" },
+				{ id: "rocks", title: "Rocks", icon: "rock-icon" }
+			];
+
+			const $m = $(`
+				<div class="nn-menu nn-l10-tools-menu" style="min-width:180px;padding:6px 0;box-shadow:0 10px 25px rgba(0,0,0,0.15);border:1px solid #e5e7eb;border-radius:8px;background:#fff;z-index:999999">
+					<div style="padding:6px 14px 4px;font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase">${__("Meeting Tools")}</div>
+					${tools.map(t => `
+						<div class="nn-menu-item nn-l10-tool-action" data-tool="${t.id}" style="display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;font-size:13px;color:#374151">
+							${ic(t.icon, 16)} <span>${this.esc(t.title)}</span>
+						</div>
+					`).join("")}
+				</div>
+			`);
+
+			const self = this;
+			$m.find(".nn-l10-tool-action").on("click", function () {
+				const tool = $(this).attr("data-tool");
+				$m.remove();
+				self.open_l10_tool_drawer(tool);
+			});
+
+			this.place_menu($m, anchor);
+		}
+
+		open_l10_tool_drawer(tool) {
+			const self = this;
+			const $drawer = this.$root.find("#nn-drawer");
+			let title = "Tool";
+			let body_html = "";
+
+			if (tool === "scorecard") {
+				title = "Scorecard Quick View";
+				const metrics = this.data.metrics || [];
+				body_html = `
+					<div style="padding:16px">
+						<p style="font-size:12.5px;color:#6b7280;margin-bottom:14px">${__("View team metrics and identify off-track items.")}</p>
+						<div style="display:flex;flex-direction:column;gap:8px">
+							${metrics.map(m => `
+								<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid #e5e7eb;border-radius:6px;background:#fff">
+									<div>
+										<div style="font-size:13px;font-weight:600;color:#111827">${this.esc(m.title)}</div>
+										<div style="font-size:11.5px;color:#6b7280">Goal: ${m.goal_op} ${m.goal} ${this.esc(m.unit || "")}</div>
+									</div>
+									<button class="nn-btn-bar nn-drop-to-ids-btn" data-type="Scorecard" data-title="KPI: ${this.esc(m.title)}">${ic("alert-circle", 12)} ${__("Drop to IDS")}</button>
+								</div>
+							`).join("")}
+						</div>
+					</div>
+				`;
+			} else if (tool === "rocks") {
+				title = "Rocks Quick View";
+				const rocks = this.rocks || [];
+				body_html = `
+					<div style="padding:16px">
+						<p style="font-size:12.5px;color:#6b7280;margin-bottom:14px">${__("Quick status check on 90-day priorities.")}</p>
+						<div style="display:flex;flex-direction:column;gap:8px">
+							${rocks.map(r => `
+								<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid #e5e7eb;border-radius:6px;background:#fff">
+									<div>
+										<div style="font-size:13px;font-weight:600;color:#111827">${this.esc(r.title)}</div>
+										<div style="font-size:11.5px;color:#6b7280">${this.esc(r.owner_user || "")} &bull; ${this.esc(r.status || "On Track")}</div>
+									</div>
+									<button class="nn-btn-bar nn-drop-to-ids-btn" data-type="Rock" data-title="Rock: ${this.esc(r.title)}">${ic("alert-circle", 12)} ${__("Drop to IDS")}</button>
+								</div>
+							`).join("")}
+						</div>
+					</div>
+				`;
+			} else if (tool === "todos") {
+				title = "To-Dos Quick View";
+				const todos = this.todos || [];
+				body_html = `
+					<div style="padding:16px">
+						<button class="nn-btn-green" id="nn-drawer-add-todo" style="width:100%;margin-bottom:14px">${__("+ Add To-Do")}</button>
+						<div style="display:flex;flex-direction:column;gap:8px">
+							${todos.map(t => `
+								<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid #e5e7eb;border-radius:6px;background:#fff">
+									<div style="font-size:13px;font-weight:500;color:#111827">${this.esc(t.todo_name)}</div>
+									<span style="font-size:11px;color:#6b7280">${this.esc(t.owner_user || "")}</span>
+								</div>
+							`).join("")}
+						</div>
+					</div>
+				`;
+			} else if (tool === "issues") {
+				title = "Issues Quick View";
+				const issues = this.issues || [];
+				body_html = `
+					<div style="padding:16px">
+						<button class="nn-btn-green" id="nn-drawer-add-issue" style="width:100%;margin-bottom:14px">${__("+ Add Issue")}</button>
+						<div style="display:flex;flex-direction:column;gap:8px">
+							${issues.map(iss => `
+								<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid #e5e7eb;border-radius:6px;background:#fff">
+									<div style="font-size:13px;font-weight:600;color:#111827">${this.esc(iss.issue_name)}</div>
+									<span class="nn-status-badge off-track">${this.esc(iss.priority || "Medium")}</span>
+								</div>
+							`).join("")}
+						</div>
+					</div>
+				`;
+			}
+
+			$drawer.html(`
+				<div class="nn-drawer-header">
+					<span class="nn-drawer-title">${this.esc(title)}</span>
+					<button class="nn-drawer-close-btn" id="nn-l10-drawer-close">${ic("close", 18)}</button>
+				</div>
+				<div class="nn-drawer-body" style="padding:0">
+					${body_html}
+				</div>
+			`);
+
+			$drawer.find("#nn-l10-drawer-close").on("click", () => self.close_drawer());
+			$drawer.find("#nn-drawer-add-todo").on("click", () => {
+				self.close_drawer();
+				self.open_todo_drawer();
+			});
+			$drawer.find("#nn-drawer-add-issue").on("click", () => {
+				self.close_drawer();
+				self.open_issue_drawer();
+			});
+			$drawer.find(".nn-drop-to-ids-btn").on("click", function () {
+				const title = $(this).attr("data-title");
+				const type = $(this).attr("data-type");
+				self.close_drawer();
+				self.drop_to_ids(title, type);
+			});
+
+			this.$root.find("#nn-drawer-backdrop").addClass("show");
+			$drawer.addClass("show");
+		}
+
+		render_l10_step_content(step_idx, team) {
+			if (step_idx === 0) return this.render_l10_segue_step(team);
+			if (step_idx === 1) return this.render_l10_scorecard_step(team);
+			if (step_idx === 2) return this.render_l10_rock_review_step(team);
+			if (step_idx === 3) return this.render_l10_headlines_step(team);
+			if (step_idx === 4) return this.render_l10_todos_step(team);
+			if (step_idx === 5) return this.render_l10_ids_step(team);
+			if (step_idx === 6) return this.render_l10_conclude_step(team);
+			return "";
+		}
+
+		/* Step 0: SEGUE (PDF Page 2 top) */
+		render_l10_segue_step(team) {
+			const s = this.s;
+			const attendees = s.meeting_attendees || [];
+			const present_cnt = attendees.filter(a => s.meeting_attendance[a]).length;
+			const total_cnt = attendees.length;
+			const sharer_idx = s.meeting_sharing_idx || 0;
+			const cur_sharer = attendees[sharer_idx] || attendees[0] || "User";
+			const cur_av = this.get_initials(cur_sharer);
+			const sharer_notes = (s.meeting_good_news && s.meeting_good_news[cur_sharer]) || "";
+
+			return `
+				<div class="nn-l10-header">
+					<div>
+						<h3 class="nn-l10-title">SEGUE | Level 10 Meeting™ - ${this.esc(team)}</h3>
+						<div class="nn-l10-sub">${__("Transition from working IN the business to ON the business.")}</div>
+					</div>
+				</div>
+
+				<!-- Attendance Card -->
+				<div class="nn-l10-card">
+					<div class="nn-l10-card-head">
+						<div style="display:flex;align-items:center;gap:12px">
+							<h4 class="nn-l10-card-title">${__("Attendance")}</h4>
+							<span style="font-size:12px;font-weight:600;color:#6b7280">${present_cnt} ${__("of")} ${total_cnt} ${__("present")}</span>
+						</div>
+						<button class="nn-btn-bar" id="nn-mark-all-present-btn">${__("Mark all present")}</button>
+					</div>
+					<div class="nn-attendee-grid">
+						${attendees.map(att => {
+							const is_pres = !!s.meeting_attendance[att];
+							const av = this.get_initials(att);
+							return `
+								<div class="nn-attendee-chip ${is_pres ? "present" : "absent"}" data-attendee="${this.esc(att)}">
+									<span class="nn-owner-circle" style="background:${is_pres ? "#059669" : "#9ca3af"}">${av}</span>
+									<span>${this.esc(att)}</span>
+									<span style="font-size:11px;font-weight:700">${is_pres ? "✓" : "×"}</span>
+								</div>
+							`;
+						}).join("")}
+					</div>
+				</div>
+
+				<!-- Sharing Card: Good News -->
+				<div class="nn-l10-card">
+					<div class="nn-l10-card-head">
+						<div>
+							<h4 class="nn-l10-card-title">${__("Sharing")}</h4>
+							<div style="font-size:12.5px;color:#6b7280;margin-top:2px">${__("Share your personal and professional best")}</div>
+						</div>
+					</div>
+					<div class="nn-sharing-box">
+						<div class="nn-sharing-av">${cur_av}</div>
+						<div class="nn-sharing-name">${this.esc(cur_sharer)}</div>
+						<div class="nn-sharing-badge">${__("Currently sharing…")}</div>
+						<textarea id="nn-good-news-input" class="form-control" style="max-width:540px;margin:0 auto 16px;border-radius:6px;font-size:13px;resize:vertical" rows="3" placeholder="${__("Record personal and professional best here…")}">${this.esc(sharer_notes)}</textarea>
+						<div style="display:flex;align-items:center;justify-content:center;gap:10px">
+							<button class="nn-btn-bar" id="nn-prev-sharer-btn" ${sharer_idx === 0 ? "disabled style='opacity:0.5'" : ""}>${__("Previous attendee")}</button>
+							<button class="nn-btn-green" id="nn-next-sharer-btn">${sharer_idx === attendees.length - 1 ? __("Done") : __("Next")}</button>
+						</div>
+					</div>
+				</div>
+			`;
+		}
+
+		/* Step 1: SCORECARD (PDF Page 2 bottom) */
+		render_l10_scorecard_step(team) {
+			const metrics = this.data.metrics || [];
+			const periods = (this.data.periods || []).slice(-6); // last 6 periods
+
+			return `
+				<div class="nn-l10-header">
+					<div>
+						<h3 class="nn-l10-title">Scorecard - ${this.esc(team)}</h3>
+						<div class="nn-l10-sub">${__("Review weekly numbers. Drop any off-track measurables directly to IDS.")}</div>
+					</div>
+					<div class="nn-actions">
+						<span class="nn-btn-bar">${__("Weekly KPIs")} <b>${metrics.length}</b></span>
+					</div>
+				</div>
+
+				<div class="nn-card-wrap">
+					<div class="nn-table-scroll">
+						<table class="nn-sc-tbl">
+							<thead>
+								<tr>
+									<th class="left nn-col-metric">${__("Weekly KPIs")}</th>
+									<th class="nn-col-owner">${__("Owner")}</th>
+									<th class="nn-col-goal">${__("Goal")}</th>
+									${periods.map(p => `<th>${this.esc(p.label)}</th>`).join("")}
+									<th style="text-align:center">${__("Action")}</th>
+								</tr>
+							</thead>
+							<tbody>
+								${metrics.length ? metrics.map(m => {
+									const owner_name = this.get_user_display_name(m.owner);
+									const av = this.get_initials(owner_name);
+									const is_off = periods.some(p => {
+										const v = m.values && m.values[p.key];
+										return v != null && v < m.goal;
+									});
+									return `
+										<tr>
+											<td class="left nn-col-metric"><b>${this.esc(m.title)}</b></td>
+											<td class="nn-col-owner"><span class="nn-owner-circle">${av}</span></td>
+											<td class="nn-col-goal">${m.goal_op} ${m.goal} ${this.esc(m.unit || "")}</td>
+											${periods.map(p => {
+												const v = (m.values && m.values[p.key] != null) ? m.values[p.key] : "-";
+												const pass = v !== "-" && v >= m.goal;
+												const cls = v === "-" ? "" : (pass ? "pass" : "fail");
+												return `<td class="nn-sc-cell ${cls}" style="${cls === "fail" ? "background:#fee2e2;color:#dc2626;font-weight:700" : ""}">${v}</td>`;
+											}).join("")}
+											<td style="text-align:center">
+												<button class="nn-btn-bar nn-drop-to-ids-btn" data-type="Scorecard" data-title="KPI off-track: ${this.esc(m.title)}" style="padding:2px 8px;font-size:11px">
+													${ic("alert-circle", 12)} ${__("Drop to IDS")}
+												</button>
+											</td>
+										</tr>
+									`;
+								}).join("") : `<tr><td colspan="8" style="padding:32px;text-align:center;color:#9ca3af">${__("No scorecard measurables found for this team.")}</td></tr>`}
+							</tbody>
+						</table>
+					</div>
+				</div>
+			`;
+		}
+
+		/* Step 2: ROCK REVIEW (PDF Page 3 top) */
+		render_l10_rock_review_step(team) {
+			const rocks = (this.rocks || []).filter(r => team === "All Teams" || !r.team || r.team === team);
+
+			return `
+				<div class="nn-l10-header">
+					<div>
+						<h3 class="nn-l10-title">ROCK REVIEW | Level 10 Meeting™ - ${this.esc(team)}</h3>
+						<div class="nn-l10-sub">${__("Quick status check on 90-day priorities.")}</div>
+					</div>
+				</div>
+
+				<!-- V/TO Card -->
+				<div class="nn-vto-card">
+					<div class="nn-vto-left">
+						<div class="nn-vto-icon">${ic("target", 16)}</div>
+						<span class="nn-vto-title">V/TO® | Revenue, Profit, Measurables</span>
+					</div>
+					${ic("chevron-down", 14)}
+				</div>
+
+				<!-- Rocks Table Card -->
+				<div class="nn-rock-card">
+					<div class="nn-rock-header">
+						<div class="nn-rock-title-group">
+							<span class="nn-rock-title">${__("Team Rocks")}</span>
+							<span class="nn-badge-cnt">${rocks.length}</span>
+						</div>
+						<button class="nn-btn-green" id="nn-l10-add-rock-btn" style="height:30px;padding:0 12px;font-size:12px">${__("+ Add Rock")}</button>
+					</div>
+
+					<table class="nn-rock-tbl">
+						<thead>
+							<tr>
+								<th>${__("Rock Title")}</th>
+								<th>${__("Owner")}</th>
+								<th>${__("Status")}</th>
+								<th style="text-align:right">${__("Progress")}</th>
+								<th style="text-align:center">${__("Action")}</th>
+							</tr>
+						</thead>
+						<tbody>
+							${rocks.length ? rocks.map(r => {
+								const owner_name = this.get_user_display_name(r.owner_user);
+								const av = this.get_initials(owner_name);
+								const st = r.status || "On Track";
+								const is_off = st === "Off-track" || st === "Not Started";
+								return `
+									<tr class="nn-rock-row">
+										<td><b>${this.esc(r.title)}</b></td>
+										<td><span class="nn-owner-circle">${av}</span></td>
+										<td>${this.get_rock_status_badge(st, r.title)}</td>
+										<td style="text-align:right">
+											<div class="nn-progress-wrap">
+												<div class="nn-prog-bar"><div class="nn-prog-fill" style="width:${is_off ? "35%" : "75%"};background:${is_off ? "#ef4444" : "#059669"}"></div></div>
+												<span class="nn-prog-txt">${is_off ? "35%" : "75%"}</span>
+											</div>
+										</td>
+										<td style="text-align:center">
+											<button class="nn-btn-bar nn-drop-to-ids-btn" data-type="Rock" data-title="Rock off-track: ${this.esc(r.title)}" style="padding:2px 8px;font-size:11px">
+												${ic("alert-circle", 12)} ${__("Drop to IDS")}
+											</button>
+										</td>
+									</tr>
+								`;
+							}).join("") : `<tr><td colspan="5" style="padding:32px;text-align:center;color:#9ca3af">${__("No Rocks found.")}</td></tr>`}
+						</tbody>
+					</table>
+				</div>
+			`;
+		}
+
+		/* Step 3: HEADLINES (PDF Page 3 bottom) */
+		render_l10_headlines_step(team) {
+			const headlines = this.s.headlines || [];
+			const cascading = this.s.cascading_messages || [];
+
+			return `
+				<div class="nn-l10-header">
+					<div>
+						<h3 class="nn-l10-title">Headlines - ${this.esc(team)}</h3>
+						<div class="nn-l10-sub">${__("Share client and employee announcements with your team.")}</div>
+					</div>
+				</div>
+
+				<!-- Customer / Employee Headlines Card -->
+				<div class="nn-l10-card">
+					<div class="nn-l10-card-head">
+						<div>
+							<h4 class="nn-l10-card-title">${__("Headlines")} (${headlines.length})</h4>
+							<div style="font-size:12px;color:#6b7280;margin-top:2px">${__("Customer/Employee Headlines")}</div>
+						</div>
+						<button class="nn-btn-green" id="nn-create-headline-btn" style="height:30px;padding:0 12px;font-size:12px">${__("+ Create Headline")}</button>
+					</div>
+
+					${headlines.length ? `
+						<div style="display:flex;flex-direction:column;gap:8px">
+							${headlines.map(h => `
+								<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border:1px solid #e5e7eb;border-radius:6px;background:#fff">
+									<div style="display:flex;align-items:center;gap:10px">
+										<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;background:#f3f4f6;color:#374151">${this.esc(h.type)}</span>
+										<span style="font-size:13.5px;font-weight:600;color:#111827">${this.esc(h.title)}</span>
+									</div>
+									<div style="display:flex;align-items:center;gap:12px">
+										<span style="font-size:12px;color:#6b7280">${this.esc(h.author)}</span>
+										<button class="nn-btn-bar nn-drop-to-ids-btn" data-type="Headline" data-title="Headline Issue: ${this.esc(h.title)}" style="padding:2px 8px;font-size:11px">
+											${ic("alert-circle", 12)} ${__("Drop to IDS")}
+										</button>
+									</div>
+								</div>
+							`).join("")}
+						</div>
+					` : `
+						<div class="nn-upcoming-box" style="padding:28px">
+							<div class="nn-empty-icon-circle">${ic("bell", 24)}</div>
+							<div class="nn-empty-box-title">${__("Your team hasn't added any Headlines yet.")}</div>
+							<div class="nn-empty-box-sub">${__("Headlines are a quick way to share important updates.")}</div>
+						</div>
+					`}
+				</div>
+
+				<!-- Cascading Messages Card -->
+				<div class="nn-l10-card">
+					<div class="nn-l10-card-head">
+						<div>
+							<h4 class="nn-l10-card-title">${__("Cascading Messages")} (${cascading.length})</h4>
+							<div style="font-size:12px;color:#6b7280;margin-top:2px">${__("Information to communicate across departments")}</div>
+						</div>
+						<button class="nn-btn-bar" id="nn-create-cascading-btn" style="height:30px;padding:0 12px;font-size:12px">${__("+ Create Cascading Message")}</button>
+					</div>
+
+					${cascading.length ? `
+						<div style="display:flex;flex-direction:column;gap:8px">
+							${cascading.map(c => `
+								<div style="padding:10px 14px;border:1px solid #e5e7eb;border-radius:6px;background:#fff;font-size:13px;font-weight:500;color:#111827">
+									${this.esc(c.message)}
+								</div>
+							`).join("")}
+						</div>
+					` : `
+						<div class="nn-upcoming-box" style="padding:28px">
+							<div class="nn-empty-icon-circle">${ic("message-square", 24)}</div>
+							<div class="nn-empty-box-title">${__("Your company hasn't added any Cascading Messages yet.")}</div>
+							<div class="nn-empty-box-sub">${__("Cascading messages keep organization units synced.")}</div>
+						</div>
+					`}
+				</div>
+			`;
+		}
+
+		/* Step 4: TO-DOS (PDF Page 4 top) */
+		render_l10_todos_step(team) {
+			const todos = (this.todos || []).filter(t => team === "All Teams" || !t.team || t.team === team);
+
+			return `
+				<div class="nn-l10-header">
+					<div>
+						<h3 class="nn-l10-title">To-Dos - ${this.esc(team)}</h3>
+						<div class="nn-l10-sub">${__("Quickly review, complete, and add 7-day action items.")}</div>
+					</div>
+					<button class="nn-btn-green" id="nn-l10-add-todo-inline-btn" style="height:32px;padding:0 14px;font-size:12px">${__("+ Add To-Do")}</button>
+				</div>
+
+				<div class="nn-todo-card">
+					<div class="nn-todo-card-header">
+						<div class="nn-todo-card-title">
+							<span>${__("Team To-Dos")}</span>
+							<span class="nn-todo-count">${todos.length}</span>
+						</div>
+					</div>
+
+					<div class="nn-todo-table-head">
+						<div class="nn-todo-col-check"></div>
+						<div class="nn-todo-col-title">${__("Title")}</div>
+						<div class="nn-todo-col-due">${__("Due")}</div>
+						<div class="nn-todo-col-owner">${__("Assignee")}</div>
+						<div style="text-align:right">${__("Action")}</div>
+					</div>
+
+					<div class="nn-todo-table-body">
+						${todos.length ? todos.map(t => {
+							const is_done = t.status === "Complete";
+							const owner_name = this.get_user_display_name(t.owner_user);
+							const av = this.get_initials(owner_name);
+							const due_str = t.due_date ? this.format_todo_date(t.due_date) : "7 Days";
+							return `
+								<div class="nn-todo-row ${is_done ? "complete" : ""}">
+									<div class="nn-todo-col-check">
+										<div class="nn-todo-checkbox ${is_done ? "checked" : ""}" data-todo-id="${this.esc(t.name)}">
+											${is_done ? ic("check", 12) : ""}
+										</div>
+									</div>
+									<div class="nn-todo-col-title">
+										<span class="nn-todo-title-text" style="${is_done ? "text-decoration:line-through;color:#9ca3af" : ""}">${this.esc(t.todo_name)}</span>
+									</div>
+									<div class="nn-todo-col-due">
+										<div class="nn-due-badge">
+											<span class="nn-due-icon clock">${ic("clock", 10)}</span>
+											<span class="nn-due-text dark">${this.esc(due_str)}</span>
+										</div>
+									</div>
+									<div class="nn-todo-col-owner">
+										<span class="nn-owner-circle" title="${this.esc(owner_name)}">${av}</span>
+									</div>
+									<div style="text-align:right">
+										<button class="nn-btn-bar nn-drop-to-ids-btn" data-type="To-Do" data-title="Blocked To-Do: ${this.esc(t.todo_name)}" style="padding:2px 8px;font-size:11px">
+											${ic("alert-circle", 12)} ${__("Drop to IDS")}
+										</button>
+									</div>
+								</div>
+							`;
+						}).join("") : `<div class="nn-todo-empty">${__("No To-Dos for this team.")}</div>`}
+					</div>
+				</div>
+			`;
+		}
+
+		/* Step 5: IDS™ (Identify, Discuss, Solve) (PDF Page 4 bottom) */
+		render_l10_ids_step(team) {
+			const issues = (this.issues || []).filter(iss => iss.status !== "Solved" && (team === "All Teams" || !iss.team || iss.team === team));
+
+			return `
+				<div class="nn-l10-header">
+					<div>
+						<h3 class="nn-l10-title">IDS™ | Level 10 Meeting™ - ${this.esc(team)}</h3>
+						<div class="nn-l10-sub">${__("Identify, Discuss, Solve. Dedicate 60 minutes to resolving the most critical obstacles.")}</div>
+					</div>
+					<button class="nn-btn-green" id="nn-l10-add-issue-btn" style="height:32px;padding:0 14px;font-size:12px">${__("+ Add Issue")}</button>
+				</div>
+
+				<div class="nn-todo-card">
+					<div class="nn-todo-card-header">
+						<div class="nn-todo-card-title">
+							<span>${__("Ranked Issues List")}</span>
+							<span class="nn-todo-count">${issues.length}</span>
+						</div>
+					</div>
+
+					<div class="nn-todo-table-head">
+						<div style="width:40px;text-align:center;font-size:12px;font-weight:600;color:#6b7280">${__("#")}</div>
+						<div class="nn-todo-col-title">${__("Issue")}</div>
+						<div style="width:90px;font-size:12px;font-weight:600;color:#6b7280">${__("Priority")}</div>
+						<div class="nn-todo-col-owner">${__("Owner")}</div>
+						<div style="text-align:right">${__("Action")}</div>
+					</div>
+
+					<div class="nn-todo-table-body">
+						${issues.length ? issues.map((iss, idx) => {
+							const owner_name = this.get_user_display_name(iss.owner_user);
+							const av = this.get_initials(owner_name);
+							return `
+								<div class="nn-todo-row">
+									<div style="width:40px;text-align:center;font-size:12px;font-weight:700;color:#064e3b">
+										${idx + 1}
+									</div>
+									<div class="nn-todo-col-title">
+										<span class="nn-todo-title-text" style="font-weight:600;color:#111827">${this.esc(iss.issue_name)}</span>
+										${iss.description ? `<div style="font-size:11.5px;color:#6b7280;margin-top:2px">${this.esc(iss.description)}</div>` : ""}
+									</div>
+									<div style="width:90px">
+										<span class="nn-status-badge off-track">${this.esc(iss.priority || "Medium")}</span>
+									</div>
+									<div class="nn-todo-col-owner">
+										<span class="nn-owner-circle">${av}</span>
+									</div>
+									<div style="text-align:right">
+										<button class="nn-btn-green nn-solve-issue-btn" data-issue="${this.esc(iss.name)}" style="height:28px;padding:0 10px;font-size:11.5px">
+											${ic("check", 12)} ${__("Solve Issue")}
+										</button>
+									</div>
+								</div>
+							`;
+						}).join("") : `
+							<div class="nn-issues-empty-wrap" style="padding:36px">
+								<div class="nn-issues-empty-icon">${ic("info", 24)}</div>
+								<div class="nn-issues-empty-title">${__("Your team hasn't added any issues yet.")}</div>
+								<div class="nn-issues-empty-desc">${__("Identify matters that need resolution before moving forward.")}</div>
+							</div>
+						`}
+					</div>
+				</div>
+			`;
+		}
+
+		/* Step 6: CONCLUDE (PDF Pages 5 & 6) */
+		render_l10_conclude_step(team) {
+			const s = this.s;
+			const attendees = s.meeting_attendees || [];
+			const todos = (this.todos || []).slice(0, 8);
+			const cascading = s.cascading_messages || [];
+
+			let rating_sum = 0;
+			let rating_cnt = 0;
+			attendees.forEach(att => {
+				const r = s.meeting_ratings[att] || 8;
+				rating_sum += Number(r);
+				rating_cnt++;
+			});
+			const avg_rating = rating_cnt ? (rating_sum / rating_cnt).toFixed(1) : "8.5";
+
+			return `
+				<div class="nn-l10-header">
+					<div>
+						<h3 class="nn-l10-title">CONCLUDE | Level 10 Meeting™ - ${this.esc(team)}</h3>
+						<div class="nn-l10-sub">${__("Recap To-Dos, cascading messages, and rate the meeting from 1-10.")}</div>
+					</div>
+				</div>
+
+				<!-- Recap To-Dos -->
+				<div class="nn-l10-card">
+					<div class="nn-l10-card-head">
+						<h4 class="nn-l10-card-title">${__("Recap To-Dos")} (${todos.length})</h4>
+					</div>
+					<div style="display:flex;flex-direction:column;gap:6px">
+						${todos.map(t => `
+							<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid #f1f3f5">
+								<span style="font-size:13px;color:#111827">${this.esc(t.todo_name)}</span>
+								<span style="font-size:11.5px;color:#6b7280">${this.esc(t.owner_user || "")} &bull; ${t.due_date ? this.format_todo_date(t.due_date) : "7 Days"}</span>
+							</div>
+						`).join("")}
+					</div>
+				</div>
+
+				<!-- Cascading Messages -->
+				<div class="nn-l10-card">
+					<div class="nn-l10-card-head">
+						<h4 class="nn-l10-card-title">${__("Cascading Messages")}</h4>
+					</div>
+					${cascading.length ? `
+						<div style="display:flex;flex-direction:column;gap:6px">
+							${cascading.map(c => `<div style="font-size:13px;color:#374151">• ${this.esc(c.message)}</div>`).join("")}
+						</div>
+					` : `<div style="font-size:12.5px;color:#9ca3af">${__("No Cascading Messages were cascaded during this Meeting.")}</div>`}
+				</div>
+
+				<!-- Ratings (1-10) -->
+				<div class="nn-l10-card">
+					<div class="nn-l10-card-head">
+						<h4 class="nn-l10-card-title">${__("Ratings (1–10)")}</h4>
+						<span style="font-size:13px;font-weight:700;color:#064e3b">${__("Average Rating:")} <span id="nn-conclude-avg-rating">${avg_rating}</span> / 10</span>
+					</div>
+					<div class="nn-rating-list">
+						${attendees.map(att => {
+							const cur_r = s.meeting_ratings[att] || 8;
+							return `
+								<div class="nn-rating-item">
+									<span style="font-size:13px;font-weight:600;color:#374151">${this.esc(att)}</span>
+									<input type="number" min="1" max="10" step="1" class="nn-rating-input" data-attendee="${this.esc(att)}" value="${cur_r}">
+								</div>
+							`;
+						}).join("")}
+					</div>
+				</div>
+
+				<!-- Wrap-up Checkboxes & Finish -->
+				<div class="nn-l10-card">
+					<div style="display:flex;flex-direction:column;gap:12px;margin-bottom:20px">
+						<label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#374151;cursor:pointer">
+							<input type="checkbox" id="nn-chk-archive" checked>
+							<span>${__("Archive All Completed Headlines, To-Dos and Issues for the ")}${this.esc(team)}</span>
+						</label>
+						<label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#374151;cursor:pointer">
+							<input type="checkbox" id="nn-chk-email" checked>
+							<span>${__("Send Meeting Recap Email")}</span>
+						</label>
+						<label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#374151;cursor:pointer">
+							<input type="checkbox" id="nn-chk-desc">
+							<span>${__("Show Issue description on recap emails")}</span>
+						</label>
+					</div>
+					<div style="display:flex;justify-content:flex-end">
+						<button class="nn-btn-green" id="nn-finish-meeting-final-btn" style="height:40px;padding:0 24px;font-size:13.5px">
+							${ic("check-circle", 16)} <span>${__("Finish Meeting")}</span>
+						</button>
+					</div>
+				</div>
+			`;
+		}
+
+		bind_l10_step_specific_events() {
+			const self = this;
+			const $main = this.$root.find("#nn-l10-main-step-container");
+
+			// Segue events
+			$main.find(".nn-attendee-chip").on("click", function () {
+				const att = $(this).attr("data-attendee");
+				self.s.meeting_attendance[att] = !self.s.meeting_attendance[att];
+				self.render_l10_meeting_workspace();
+			});
+
+			$main.find("#nn-mark-all-present-btn").on("click", () => {
+				(self.s.meeting_attendees || []).forEach(att => {
+					self.s.meeting_attendance[att] = true;
+				});
+				self.render_l10_meeting_workspace();
+			});
+
+			$main.find("#nn-good-news-input").on("input", function () {
+				const att = (self.s.meeting_attendees || [])[self.s.meeting_sharing_idx || 0];
+				if (att) {
+					self.s.meeting_good_news = self.s.meeting_good_news || {};
+					self.s.meeting_good_news[att] = $(this).val();
+				}
+			});
+
+			$main.find("#nn-prev-sharer-btn").on("click", () => {
+				if (self.s.meeting_sharing_idx > 0) {
+					self.s.meeting_sharing_idx--;
+					self.render_l10_meeting_workspace();
+				}
+			});
+
+			$main.find("#nn-next-sharer-btn").on("click", () => {
+				const atts = self.s.meeting_attendees || [];
+				if (self.s.meeting_sharing_idx < atts.length - 1) {
+					self.s.meeting_sharing_idx++;
+					self.render_l10_meeting_workspace();
+				} else {
+					self.switch_l10_step(1); // Jump to Scorecard
+				}
+			});
+
+			// Drop to IDS buttons across steps
+			$main.find(".nn-drop-to-ids-btn").on("click", function () {
+				const title = $(this).attr("data-title");
+				const type = $(this).attr("data-type");
+				self.drop_to_ids(title, type);
+			});
+
+			// Rock review events
+			$main.find("#nn-l10-add-rock-btn").on("click", () => self.open_rock_drawer());
+
+			// Headlines events
+			$main.find("#nn-create-headline-btn").on("click", () => {
+				frappe.prompt([
+					{ fieldname: "type", fieldtype: "Select", options: "Customer\nEmployee", label: __("Type"), default: "Customer" },
+					{ fieldname: "title", fieldtype: "Data", label: __("Headline"), reqd: 1 }
+				], values => {
+					self.s.headlines = self.s.headlines || [];
+					self.s.headlines.unshift({
+						id: Date.now(),
+						type: values.type,
+						title: values.title,
+						author: frappe.session.user_fullname || "User",
+						date: "Today"
+					});
+					self.render_l10_meeting_workspace();
+					frappe.show_alert({ message: __("Headline added"), indicator: "green" });
+				}, __("Create Headline"));
+			});
+
+			$main.find("#nn-create-cascading-btn").on("click", () => {
+				frappe.prompt([
+					{ fieldname: "message", fieldtype: "Small Text", label: __("Cascading Message"), reqd: 1 }
+				], values => {
+					self.s.cascading_messages = self.s.cascading_messages || [];
+					self.s.cascading_messages.push({ message: values.message });
+					self.render_l10_meeting_workspace();
+					frappe.show_alert({ message: __("Cascading message created"), indicator: "green" });
+				}, __("Create Cascading Message"));
+			});
+
+			// To-Dos events
+			$main.find("#nn-l10-add-todo-inline-btn").on("click", () => self.open_todo_drawer());
+
+			$main.find(".nn-todo-checkbox").on("click", async function (e) {
+				e.stopPropagation();
+				const todo_id = $(this).attr("data-todo-id");
+				const td = (self.todos || []).find(t => t.name === todo_id);
+				if (!td) return;
+				const new_status = td.status === "Complete" ? "Open" : "Complete";
+				td.status = new_status;
+				await self.call("frappe.client.set_value", {
+					doctype: "To Do", name: todo_id, fieldname: "status", value: new_status
+				});
+				self.render_l10_meeting_workspace();
+			});
+
+			// IDS events
+			$main.find("#nn-l10-add-issue-btn").on("click", () => self.open_issue_drawer());
+
+			$main.find(".nn-solve-issue-btn").on("click", function () {
+				const iss_id = $(this).attr("data-issue");
+				frappe.prompt([
+					{ fieldname: "solution", fieldtype: "Small Text", label: __("Resolution / Action To-Do"), reqd: 1 }
+				], async values => {
+					await self.call("frappe.client.set_value", {
+						doctype: "Issue", name: iss_id,
+						fieldname: { status: "Solved", solution: values.solution }
+					});
+					await self.fetch_issues_data();
+					self.render_l10_meeting_workspace();
+					frappe.show_alert({ message: __("Issue solved!"), indicator: "green" });
+				}, __("Solve Issue"));
+			});
+
+			// Ratings events
+			$main.find(".nn-rating-input").on("input change", function () {
+				const att = $(this).attr("data-attendee");
+				const val = parseFloat($(this).val()) || 10;
+				self.s.meeting_ratings[att] = val;
+
+				let sum = 0, cnt = 0;
+				(self.s.meeting_attendees || []).forEach(a => {
+					sum += Number(self.s.meeting_ratings[a] || 8);
+					cnt++;
+				});
+				const avg = cnt ? (sum / cnt).toFixed(1) : "8.5";
+				self.$root.find("#nn-conclude-avg-rating").text(avg);
+			});
+
+			// Rock status change
+			$main.find(".nn-status-badge[data-rock]").on("click", function (e) {
+				e.stopPropagation();
+				const rname = $(this).attr("data-rock");
+				const r = (self.rocks || []).find(x => x.title === rname || x.name === rname);
+				if (!r) return;
+				const statuses = ["On-track", "Off-track", "Complete", "Dropped"];
+				self.pick_menu(this, statuses, r.status || "On-track", async new_st => {
+					r.status = new_st;
+					await self.call("frappe.client.set_value", {
+						doctype: "Rock", name: r.name, fieldname: "status", value: new_st
+					});
+					self.render_l10_meeting_workspace();
+					frappe.show_alert({ message: __(`Rock status updated: ${new_st}`), indicator: "green" });
+				});
+			});
+
+			$main.find("#nn-finish-meeting-final-btn").on("click", async () => {
+				if (self.$root.find("#nn-chk-archive").is(":checked")) {
+					try {
+						const team = self.s.meeting_team || self.s.team || "TG BPO";
+						const completed_tds = (self.todos || []).filter(t => t.status === "Complete" && (team === "All Teams" || !t.team || t.team === team));
+						for (const td of completed_tds) {
+							await self.call("frappe.client.set_value", { doctype: "To Do", name: td.name, fieldname: "archived", value: 1 });
+						}
+						const solved_iss = (self.issues || []).filter(i => i.status === "Solved" && (team === "All Teams" || !i.team || i.team === team));
+						for (const iss of solved_iss) {
+							await self.call("frappe.client.set_value", { doctype: "Issue", name: iss.name, fieldname: "archived", value: 1 });
+						}
+					} catch (ae) {
+						console.warn("Archiving items:", ae);
+					}
+				}
+				self.finish_l10_meeting();
+			});
+		}
+
+		async drop_to_ids(title, type) {
+			const team = this.s.meeting_team || this.s.team || "TG BPO";
+			const doc = {
+				doctype: "Issue",
+				issue_name: title || "New Meeting Issue",
+				team: team !== "All Teams" ? team : "",
+				owner_user: frappe.session.user || "Administrator",
+				status: "Identified",
+				priority: "High",
+				source: type || "Meeting",
+				archived: 0
+			};
+			await this.call("frappe.client.insert", { doc });
+			await this.fetch_issues_data();
+			frappe.show_alert({ message: __(`Dropped to IDS: ${title}`), indicator: "orange" });
+			if (this.s.meeting_step === 5) {
+				this.render_l10_meeting_workspace();
+			}
+		}
+
+		async finish_l10_meeting() {
+			if (this.meeting_timer_interval) clearInterval(this.meeting_timer_interval);
+			const team = this.s.meeting_team || this.s.team || (this.all_teams.length > 1 ? this.all_teams[1] : "TG BPO");
+			const dur_min = Math.max(1, Math.round(this.s.meeting_seconds / 60));
+			const team_name = team !== "All Teams" ? team : (this.all_teams.find(t => t !== "All Teams") || "TG BPO");
+			const today_str = frappe.datetime.nowdate();
+			const doc_name = `${team_name}-${today_str}`;
+			const notes_str = `Duration: ${dur_min} min. Ratings: ${JSON.stringify(this.s.meeting_ratings || {})}. Attendees: ${(this.s.meeting_attendees || []).join(", ")}.`;
+
+			try {
+				const chk = await this.call("frappe.client.get_value", {
+					doctype: "Level 10 Meeting",
+					filters: { name: doc_name },
+					fieldname: "name"
+				});
+				if (chk.ok && chk.data && chk.data.name) {
+					await this.call("frappe.client.set_value", {
+						doctype: "Level 10 Meeting",
+						name: doc_name,
+						fieldname: { status: "Complete", notes: notes_str }
+					});
+				} else {
+					await this.call("frappe.client.insert", {
+						doc: {
+							doctype: "Level 10 Meeting",
+							team: team_name,
+							meeting_date: today_str,
+							status: "Complete",
+							notes: notes_str
+						}
+					});
+				}
+			} catch (e) {
+				console.warn("Saving Level 10 Meeting backend doc:", e);
+			}
+
+			this.s.meeting_in_progress = false;
+			frappe.show_alert({ message: __("Level 10 Meeting completed and archived successfully!"), indicator: "green" });
+			await this.fetch_meetings_data();
+			this.render_meetings();
 		}
 
 		get_range_label() {
