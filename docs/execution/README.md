@@ -123,32 +123,21 @@ When the last task is `DONE`:
 
 ## Index
 
-### Block A — Correctness
+### Block A — Correctness (CLOSED)
+
+All items in Block A are closed. See *Archived plans* below for [`DATA-3.md`](DATA-3.md).
+
+### Block B — Permissions (1 open item)
 
 | Plan | Item | Severity | Blocked by |
 |---|---|---|---|
-| [`DATA-3.md`](DATA-3.md) | `Rock`, `Issue` and `To Do` have no `archived` field | S2 | — |
+| [`PERM-3.md`](PERM-3.md) | Team Members may reorder measurables they do not own | S2 | — |
 
-### Block B — Permissions (all three open items are UI-blocked, not permission-blocked)
+*`PERM-4.md`, `PERM-5.md`, and `PERM-9.md` are closed — see Archived plans below.*
 
-| Plan | Item | Severity | Blocked by |
-|---|---|---|---|
-| [`PERM-3.md`](PERM-3.md) | Team Members may reorder measurables they do not own | S2 | `UI-1` |
-| [`PERM-4.md`](PERM-4.md) | Only Owner / Admin / Coach see the Measurable Manager | S2 | `UI-8` |
-| [`PERM-5.md`](PERM-5.md) | Worksheet column visibility and status-colour toggles | S3 | — |
+### Block C — UI (CLOSED — 8/8 done)
 
-### Block C — UI
-
-| Plan | Item | Severity | Blocked by |
-|---|---|---|---|
-| [`UI-1.md`](UI-1.md) | Scorecard grid (the core Ninety screen) | S2 | — |
-| [`UI-2.md`](UI-2.md) | UI trigger for "Make it an Issue" | S2 | `UI-1` |
-| [`UI-3.md`](UI-3.md) | "View by" dropdown wired to `get_rollup_view` | S2 | `UI-1` |
-| [`UI-4.md`](UI-4.md) | Trends view | S3 | `UI-1` |
-| [`UI-5.md`](UI-5.md) | Scorecard column toggles | S3 | `UI-1`, `PERM-5` |
-| [`UI-6.md`](UI-6.md) | Bulk UX | S3 | `UI-1`, `DATA-3` |
-| [`UI-7.md`](UI-7.md) | Buttons for the three built endpoints nothing can reach | S2 | `DEBT-11` |
-| [`UI-8.md`](UI-8.md) | Measurable Manager — the only Ninety surface with no queue item | S2 | — |
+All items in Block C are closed. See *Archived plans* below for [`UI-1.md`](UI-1.md) through [`UI-8.md`](UI-8.md).
 
 ### Block D — Parity
 
@@ -158,7 +147,7 @@ When the last task is `DONE`:
 | [`PARITY-2.md`](PARITY-2.md) | Auto-seeded default measurables | S3 | — |
 | [`PARITY-3.md`](PARITY-3.md) | Set New Goal + Set Custom Goal | S2 | — |
 | [`PARITY-4.md`](PARITY-4.md) | Backfilling | S3 | — |
-| [`PARITY-5.md`](PARITY-5.md) | Lightning-bolt indicator on formula measurables | S3 | `UI-1` |
+| [`PARITY-5.md`](PARITY-5.md) | Lightning-bolt indicator on formula measurables | S3 | — |
 | [`PARITY-6.md`](PARITY-6.md) | Connectors (Jira, Salesforce, Google Sheets) | S3 | — |
 
 ### Block F — Code debt
@@ -171,14 +160,25 @@ When the last task is `DONE`:
 
 The remaining open items — `DOC-3`, `DEBT-1`, `DEBT-2`, `DEBT-4`, `DEBT-5`, `DEBT-8`, `DEBT-10`,
 `DEBT-11`, `DEBT-12` — have **no** plan on purpose: each is a single-session change with a
-one-line `Done when` in `docs/TODO.md`. `DEBT-12` closes as part of `DEBT-7`, and `DEBT-11` is a
-prerequisite of `UI-7`.
+one-line `Done when` in `docs/TODO.md`. `DEBT-12` closes as part of `DEBT-7`, and `DEBT-11` was closed
+alongside `UI-7`.
 
 ## Archived plans
 
 | Plan | Item | Closed | SHA |
 |---|---|---|---|
 | [`PERM-9.md`](PERM-9.md) | `EOS Metric.owner` is Frappe's creator, so a Measurable's owner is fixed | 2026-09-29 | `e00011d` |
+| [`PERM-4.md`](PERM-4.md) | Only Owner / Admin / Coach see the Measurable Manager | 2026-10-07 | `9124d94` |
+| [`UI-7.md`](UI-7.md) | Buttons for the three built endpoints nothing can reach | 2026-10-07 | `9124d94` |
+| [`UI-8.md`](UI-8.md) | Measurable Manager — the only Ninety surface with no queue item | 2026-10-07 | `9124d94` |
+| [`DATA-3.md`](DATA-3.md) | `Rock`, `Issue` and `To Do` have no `archived` field | 2026-10-08 | `db14f3e` |
+| [`PERM-5.md`](PERM-5.md) | Worksheet column visibility and status-colour toggles | 2026-10-08 | `8c20d09` |
+| [`UI-4.md`](UI-4.md) | Trends view | 2026-10-08 | `99ba35e` |
+| [`UI-5.md`](UI-5.md) | Scorecard column toggles | 2026-10-08 | `8c20d09` |
+| [`UI-6.md`](UI-6.md) | Bulk UX | 2026-10-08 | `1fa1bfa` |
+| [`UI-1.md`](UI-1.md) | Scorecard grid (the core Ninety screen) | 2026-10-12 | `f71dd1b` |
+| [`UI-2.md`](UI-2.md) | UI trigger for "Make it an Issue" | 2026-10-12 | `069fd2b` |
+| [`UI-3.md`](UI-3.md) | "View by" dropdown wired to `get_rollup_view` | 2026-10-12 | `4ea4de8` |
 
 A closed plan stays in this directory. It is the record of how the item was actually built,
 including the bugs found on the way and the traps it walked into.

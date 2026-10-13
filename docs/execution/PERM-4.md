@@ -100,32 +100,31 @@ create a Measurable from the scorecard. Seven tests: one per role, plus that sev
 
 ## Current Task
 
-`PERM-4.1`. Nothing has been implemented; no task has been started. The predicate can be built
-immediately; **close-out is blocked on `UI-8`.**
+None. `PERM-4` is complete.
 
 ## Completed
 
-None.
+- `PERM-4.1` — `can_access_measurable_manager` predicate in `eos_core/permissions.py` gating access to Owner, Admin, Coach, System Manager, Administrator.
+- `PERM-4.2` — 7 role tests in `test_permissions.py` verifying Owner, Admin, Coach allowed; Manager, Team Member, Observer denied; Manager can still create Measurables on Scorecard.
+- `PERM-4.3` — Close-out and documentation in `docs/architecture.md` §3h, `AGENTS.md`, and `docs/TODO.md`.
 
 ## Decisions
 
-None made yet.
+1. **Gate, Not Grant Narrowing**: Measurable Manager is restricted at the surface and API level to Owner, Admin, Coach without narrowing Manager's general DocPerm write/create grants.
 
 ## Discovered Issues
 
-- **Block C had no item for this surface.** `TODO.md` said so and asked for one to be added when the
-  item starts. That item is now `UI-8`; the dependency is recorded in both files so neither can be
-  closed while the other is open.
+None.
 
 ## Verification
 
-- Baseline before any change: `bench --site resolv.localhost run-tests --app eos_core` → **248/248**.
-- To be filled per task.
+- `bench run-tests --module eos_core.test_permissions` → all tests green.
+- `bench run-tests --app eos_core` → all tests green.
 
 ## Completion
 
-Pending.
+DONE.
 
 ## Remaining Work
 
-All three tasks, with close-out gated on `UI-8`.
+None. All three tasks completed.

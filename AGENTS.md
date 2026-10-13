@@ -365,17 +365,11 @@ end-to-end by a user.
 **`docs/TODO.md` is the only live work queue.** Read it before you start and before you finish.
 `docs/execution/<TODO-ID>.md` is the plan for the item you picked, if it has one.
 
-The **code** for Phases 1–5 exists and is tested, but that is not the same as usable — see the
-`code+tests` / `reachable` distinction in `docs/TODO.md` § Rules. As of 2026-09-29: **Block B is
-complete** — `PERM-1`, `PERM-2`, `PERM-6`, `PERM-7`, `PERM-8`, `PERM-9`, `PERM-10`, `PERM-11`,
-`PERM-12` all done. **1 open data gap** (`DATA-3` — `Rock`, `Issue` and `To Do` have no `archived`
-field). `PERM-3` / `PERM-4` / `PERM-5` are open but **UI-blocked**, not permission-blocked. No UI at
-all.
-
-**Block C is the largest gap and `UI-1` is its spine.** `eos_core/public/js` and
-`eos_core/public/css` are empty directories, `hooks.py` sets no `doctype_js` and no `app_include_js`,
-and Frappe v16 has no Worksheet Page — the scaffold's `eos_core/templates/pages/` is empty. Four
-endpoints are whitelisted and nothing in the UI calls them.
+The **code** for Phases 1–5 exists and is tested, and the user-facing UI is live.
+As of October 2026: **Block A and Block C are 100% complete**.
+- **Block A (Correctness)**: All 8 items closed, including `DATA-3` (`archived` flag on `Rock`, `Issue`, `To Do`).
+- **Block B (Permissions)**: 11 of 12 items closed (`PERM-1`, `PERM-2`, `PERM-4`..`PERM-12`). Only `PERM-3` (drag reordering within group) remains open, and it is now unblocked since the Scorecard grid is live.
+- **Block C (UI)**: All 8 items closed (`UI-1` through `UI-8`). The primary surface is the Scorecard Grid (`#scorecard_grid`), backed by `scorecard_grid.js` and `scorecard_grid.css`. It features period navigation, inline data entry, group collapse/expand, Trends view, Settings modal, bulk import/export/archive/share, and Ninety-style slide-over drawers for Measurables, Issues, Rocks, and To-Dos. Form actions are registered via `doctype_js` for `Rock` and `Scorecard Report`.
 
 **`docs/execution/` now holds a plan for every item that is too large for one context window.** Where
 a plan exists, follow it; where one does not, the item is small enough to do straight from its

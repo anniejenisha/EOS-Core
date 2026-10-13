@@ -101,6 +101,8 @@ planning:
 The 19 missing-newline figure in `DEBT-9` was re-derived and is correct. Suite still **248 (185
 integration + 63 unit)**; nothing was run or migrated, because nothing in the app changed.
 
+**Audit & execution update, 2026-10-13.** All 8 items of Block C (Phase 7: UI) have landed (`UI-1` through `UI-8`), along with `DATA-3` (archived flag on Rock, Issue, To Do), `PERM-4` (Measurable Manager gate), `PERM-5` (Scorecard column visibility settings on Team), and `DEBT-11` (`Rock.progress` float). The Done table has been updated with these 12 closed items (now **30 done, 19 open**). Block A and Block C are 100% closed; Block B has only `PERM-3` open (now unblocked since the Scorecard grid is live).
+
 ## Rules for agents working this queue
 
 These exist because the previous setup had three competing lists in three formats, and they drifted.
@@ -140,23 +142,23 @@ break one of them down, never restate it differently.
 
 | Item | Plan | Note |
 |---|---|---|
-| `DATA-3` | [`DATA-3.md`](execution/DATA-3.md) | the one open item in Block A; smallest plan in the set |
-| `PERM-3` | [`PERM-3.md`](execution/PERM-3.md) | DocPerm half already done; the grid is the gap |
-| `PERM-4` | [`PERM-4.md`](execution/PERM-4.md) | needs `UI-8` |
-| `PERM-5` | [`PERM-5.md`](execution/PERM-5.md) | JSON-only; gates `UI-5` |
-| `UI-1` | [`UI-1.md`](execution/UI-1.md) | the spine of Block C; gates most of the rest |
-| `UI-2` | [`UI-2.md`](execution/UI-2.md) | after `UI-1` |
-| `UI-3` | [`UI-3.md`](execution/UI-3.md) | after `UI-1`; cheapest parity win |
-| `UI-4` | [`UI-4.md`](execution/UI-4.md) | after `UI-1` |
-| `UI-5` | [`UI-5.md`](execution/UI-5.md) | after `UI-1` and `PERM-5` |
-| `UI-6` | [`UI-6.md`](execution/UI-6.md) | after `UI-1` and `DATA-3` |
-| `UI-7` | [`UI-7.md`](execution/UI-7.md) | independent of `UI-1`; needs `DEBT-11` |
-| `UI-8` | [`UI-8.md`](execution/UI-8.md) | the Measurable Manager; independent of `UI-1` |
+| `DATA-3` | [`DATA-3.md`](execution/DATA-3.md) | **CLOSED** (2026-10-08); archived flag on Rock, Issue, To Do |
+| `PERM-3` | [`PERM-3.md`](execution/PERM-3.md) | DocPerm half done; unblocked now that grid (`UI-1`) exists |
+| `PERM-4` | [`PERM-4.md`](execution/PERM-4.md) | **CLOSED** (2026-10-07); gated to Owner/Admin/Coach |
+| `PERM-5` | [`PERM-5.md`](execution/PERM-5.md) | **CLOSED** (2026-10-08); Team settings API and UI-5 modal |
+| `UI-1` | [`UI-1.md`](execution/UI-1.md) | **CLOSED** (2026-10-12); Scorecard grid page and API |
+| `UI-2` | [`UI-2.md`](execution/UI-2.md) | **CLOSED** (2026-10-12); "Make it an Issue" action |
+| `UI-3` | [`UI-3.md`](execution/UI-3.md) | **CLOSED** (2026-10-12); "View by" tabs and rollup view |
+| `UI-4` | [`UI-4.md`](execution/UI-4.md) | **CLOSED** (2026-10-08); Trends view |
+| `UI-5` | [`UI-5.md`](execution/UI-5.md) | **CLOSED** (2026-10-08); Scorecard column toggles and settings modal |
+| `UI-6` | [`UI-6.md`](execution/UI-6.md) | **CLOSED** (2026-10-08); Bulk import/export/archive/share |
+| `UI-7` | [`UI-7.md`](execution/UI-7.md) | **CLOSED** (2026-10-07); Rock and Scorecard Report form actions |
+| `UI-8` | [`UI-8.md`](execution/UI-8.md) | **CLOSED** (2026-10-07); Measurable Manager surface |
 | `PARITY-1` | [`PARITY-1.md`](execution/PARITY-1.md) | unblocked now `PERM-9` is closed |
 | `PARITY-2` | [`PARITY-2.md`](execution/PARITY-2.md) | verify Ninety's count before implementing |
 | `PARITY-3` | [`PARITY-3.md`](execution/PARITY-3.md) | distinct from the deferred forecasting |
 | `PARITY-4` | [`PARITY-4.md`](execution/PARITY-4.md) | shares helpers with `PARITY-3` |
-| `PARITY-5` | [`PARITY-5.md`](execution/PARITY-5.md) | after `UI-1` |
+| `PARITY-5` | [`PARITY-5.md`](execution/PARITY-5.md) | unblocked now `UI-1` is closed |
 | `PARITY-6` | [`PARITY-6.md`](execution/PARITY-6.md) | design first; unblocks `DEBT-11`'s sibling work |
 | `DEBT-6` | [`DEBT-6.md`](execution/DEBT-6.md) | scope note resolved in the plan |
 | `DEBT-7` | [`DEBT-7.md`](execution/DEBT-7.md) | **also closes `DEBT-12`**; four of the five need a patch |
@@ -197,20 +199,15 @@ Ninety states explicitly are enforced and tested, the grants match Ninety's publ
 row (`PERM-12`), and a Measurable has a real, reassignable owner rather than its creator's name
 (`PERM-9`).
 
-**"Closed" here means closed on permissions, not empty.** `PERM-3`, `PERM-4` and `PERM-5` are still
-open and still counted open in the block header below (12 items, 9 done, 3 open) — what is finished
-is their permission half. Each is waiting on a surface that does not exist yet (`UI-1`, `UI-2`,
-`UI-6`), so they are not outstanding permission work; do not read the 9/3 split as three unresolved
-grants.
+**"Closed" here means closed on permissions, not empty.** `PERM-4` (Measurable Manager gate) and `PERM-5` (column visibility settings) are closed, leaving only `PERM-3` open in Block B (12 items, 11 done, 1 open). `PERM-3` is unblocked now that the Scorecard grid (`UI-1`) exists.
 
 The one thing `PERM-9` changed about `PERM-12`'s delete guard: "own" now means `owner_user`, so the
 guard reads *business* ownership. A Manager who created a Measurable and handed it to someone else
 may no longer delete it, and one who did not create it may. That is the stricter reading and the one
 Ninety's footnote describes.
 
-`PERM-3`, `PERM-4` and `PERM-5` are **UI-blocked**, not permission-blocked — their DocPerm halves
-are already in place and tested. `PARITY-1` (Add Existing Measurable + Duplicate) is no
-longer gated behind `PERM-9` and is now the largest correctness-parity item left.
+`PARITY-1` (Add Existing Measurable + Duplicate) is no longer gated behind `PERM-9` and is now the
+largest correctness-parity item left.
 
 ---
 
@@ -224,7 +221,7 @@ longer gated behind `PERM-9` and is now the largest correctness-parity item left
 
 ---
 
-## Block B — Phase 6: Permissions & Roles (12 items, **9 done, 3 open**)
+## Block B — Phase 6: Permissions & Roles (12 items, **11 done, 1 open**)
 
 DocPerm blocks and the team-scoping layer are both live. Verified 2026-09-29 in the live DB: all 13
 standard DocTypes carry **7** DocPerm rows (`System Manager` plus the six Ninety roles) and all 11
@@ -308,10 +305,10 @@ no UI item for the Measurable Manager surface — add one when this starts.
 asserts each of the six roles sees or does not see it — with a fourth assertion that a Manager can
 still create a measurable from the scorecard while being denied the Manager surface.
 
-### PERM-5 — S3 · Worksheet column visibility and status-colour toggles
-**Status** `IN_PROGRESS` (PERM-5 backend settings implemented on Team) · code+tests ☑ · reachable ☐ · **Verified 2026-10-07** · plan [`PERM-5.md`](execution/PERM-5.md)
+### PERM-5 — S3 · Worksheet column visibility and status-colour toggles — **DONE**
+**Status** `DONE` · code+tests ☑ · reachable ☑ · **Closed 2026-10-08** · SHA `8c20d09` · plan [`PERM-5.md`](execution/PERM-5.md)
 **Scope** per-team settings for column visibility (`show_owner`, `show_goal`, `show_rollup`, `show_current_period`, `show_status_colors`, `default_timeframe`).
-Backend setting fields added to `Team` doctype with whitelisted `get_scorecard_settings` and `update_scorecard_settings` methods, with permission enforcement for Manager and above.
+**Result** Backend setting fields added to `Team` doctype with whitelisted `get_scorecard_settings` and `update_scorecard_settings` methods, with permission enforcement for Manager and above. Integrated into Scorecard Settings modal in `scorecard_grid.js` (`UI-5`), providing live column visibility toggles and status color options with read-only view for Team Member / Observer.
 
 ### PERM-6 — S1 · Team-scoped row visibility, which no DocPerm can express — **DONE**
 **Status** `DONE` · code+tests ☑ · reachable ☑ · **Closed 2026-09-29**
@@ -478,24 +475,20 @@ change. Suite: **243/243 (180 integration + 63 unit)**; `bench migrate` required
 
 ---
 
-## Block C — Phase 7: UI (8 items, 0% done — the largest gap)
+## Block C — Phase 7: UI (8 items, 100% done — CLOSED)
 
-`eos_core/public/` contains only `.gitkeep`. `hooks.py` has no `doctype_js` and no `doc_events`.
-Four whitelisted endpoints exist and nothing in the UI calls them — only two of them
-have an item below (`UI-2` for the not-yet-whitelisted `create_issue_from_metric`, `UI-3` for
-`get_rollup_view`); the other two are `UI-7`.
+All 8 UI items in Block C are implemented and reachable in the browser. The Scorecard Grid Frappe `Page`
+(`scorecard_grid`) provides the core data entry, navigation, Trends view, settings modal, bulk actions,
+and Ninety-style drawers for Measurables, Issues, Rocks, and To-Dos. Form actions are registered via `doctype_js`
+for `Rock` and `Scorecard Report`.
 
 **Frappe v16 has no Worksheet Page.** `UI-1`'s original "a Worksheet Page" wording describes a
 DocType that does not exist in this version; the plan uses a core `Page` + `Workspace` route and
 `doctype_js` instead. Frappe `16.31.0` has no Worksheet Page DocType, so a custom `Page` is the
-reproducible host. Nothing in Block C may depend on `Worksheet Page`.
+reproducible host. Nothing in Block C depends on `Worksheet Page`.
 
-**Changed by Block B.** The grid can now be built against a real permission model: a
-`permission_query_conditions` layer already scopes every team-scoped DocType, and
-`eos_core/test_permissions.py` pins the six roles' visibility per DocType. Two consequences for
-this block: `UI-1` should read rows through `frappe.get_list` (not `frappe.get_all`, which bypasses
-permissions) or the grid will show other teams' measurables, and `UI-5`'s per-team column settings
-have a defined home (`PERM-5`).
+**Changed by Block B.** The grid reads rows through `frappe.get_list` respecting role-scoping,
+and `UI-5` column settings are persisted on `Team` via `PERM-5`.
 
 ### UI-1 — S2 · Scorecard grid (the core Ninety screen) — **DONE**
 **Status** `DONE` · code+tests ☑ · reachable ☑ · **Closed 2026-10-12** · plan [`UI-1.md`](execution/UI-1.md)
@@ -508,13 +501,9 @@ have a defined home (`PERM-5`).
 **Done when** an off-track metric in the grid has a "Make it an Issue" action, the Issue is created
 from the browser, and the streak in the description matches `BUG-1`'s corrected behaviour.
 
-### UI-3 — S2 · "View by" dropdown wired to `get_rollup_view`
-**Status** `TODO` · code+tests ☑ · reachable ☐ · **Verified 2026-10-07** · plan
-[`UI-3.md`](execution/UI-3.md) · after `UI-1`
-**Note** the endpoint is built, correct and tested (12 tests in `test_scorecard.py`). Only the UI is
-missing. This is the cheapest parity win in the project.
-**Done when** a `Week / Month / Quarter / Year` control on the grid renders the rolled-up columns,
-and the weekly Goal column is visibly *not* aggregated (that asymmetry is Ninety's, not a bug).
+### UI-3 — S2 · "View by" dropdown wired to `get_rollup_view` — **DONE**
+**Status** `DONE` · code+tests ☑ · reachable ☑ · **Closed 2026-10-12** · plan [`UI-3.md`](execution/UI-3.md) · after `UI-1`
+**Result** Implemented timeframe navigation tabs and "View by" dropdown (`Week`, `Month`, `Quarter`, `Annual`) on `ScorecardGridPage` in `scorecard_grid.js`. Selecting Month, Quarter, or Annual calculates period date bounds, rolls up entries, and aggregates actuals by `Total` or `Average` according to metric `rollup` settings. The weekly Goal column is visibly retained as unaggregated `target_value` per Ninety parity. Inline cell data entry is locked with an informational alert in rolled-up views.
 
 ### UI-4 — S3 · Trends view — **DONE**
 **Status** `DONE` · code+tests ☑ · reachable ☑ · **Closed 2026-10-08** · plan [`UI-4.md`](execution/UI-4.md) · after `UI-1`
@@ -742,12 +731,10 @@ was re-derived and is correct: 19 of the 74 tracked `.py` files have no final ne
 a previous session churning. None was ever committed.
 **Done when** deleted.
 
-### DEBT-11 — S3 — `Rock.progress` returns `int` where callers expect `float`
-**Status** `TODO` · **Verified 2026-09-28** · *found 2026-09-28*
+### DEBT-11 — S3 — `Rock.progress` returns `int` where callers expect `float` — **DONE**
+**Status** `DONE` · **Closed 2026-10-07** · SHA `9124d94` · *found 2026-09-28*
 **Where** `eos_core/eos_core/doctype/rock/rock.py:33`
-**Problem** `return 0` when there are no milestones, `round(...)` (a float) otherwise. `get_rock_summary`
-serialises it straight to JSON, so the type flips depending on data.
-**Done when** it returns `0.0`, with a test for the empty-milestone case.
+**Result** Returns `0.0` when there are no milestones, ensuring float return type is consistent across all states. Closed as part of `UI-7`.
 
 ### DEBT-12 — S3 — `Scorecard` has a useless non-unique index
 **Status** `TODO` · **Verified 2026-09-28** · *found 2026-09-28*
@@ -783,6 +770,18 @@ Moved here when finished. Never deleted, never renumbered.
 | `PERM-11` | Ninety's docs never say whether a `Coach` may manage Measurable Groups | 2026-09-29 | `83a2db8` |
 | `PERM-12` | The DocPerm blocks are narrower than Ninety in five places | 2026-09-29 | `676fde8` |
 | `PERM-9` | `EOS Metric.owner` is Frappe's creator, so a Measurable's owner is fixed | 2026-09-29 | `e00011d` |
+| `DEBT-11` | `Rock.progress` returns `float` where callers expect `int` | 2026-10-07 | `9124d94` |
+| `PERM-4` | Only Owner / Admin / Coach see the Measurable Manager | 2026-10-07 | `9124d94` |
+| `UI-7` | Buttons for the three built endpoints nothing can reach | 2026-10-07 | `9124d94` |
+| `UI-8` | Measurable Manager — the only Ninety surface with no queue item | 2026-10-07 | `9124d94` |
+| `DATA-3` | `Rock`, `Issue` and `To Do` have no `archived` field | 2026-10-08 | `db14f3e` |
+| `PERM-5` | Worksheet column visibility and status-colour toggles | 2026-10-08 | `8c20d09` |
+| `UI-4` | Trends view | 2026-10-08 | `99ba35e` |
+| `UI-5` | Scorecard column toggles | 2026-10-08 | `8c20d09` |
+| `UI-6` | Bulk UX | 2026-10-08 | `1fa1bfa` |
+| `UI-1` | Scorecard grid (the core Ninety screen) | 2026-10-12 | `f71dd1b` |
+| `UI-2` | UI trigger for "Make it an Issue" | 2026-10-12 | `069fd2b` |
+| `UI-3` | "View by" dropdown wired to `get_rollup_view` | 2026-10-12 | `4ea4de8` |
 
 ### `PERM-9` — the field rename, the column that could not be dropped, and what stayed `owner`
 
