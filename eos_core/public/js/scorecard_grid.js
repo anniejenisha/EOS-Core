@@ -111,6 +111,7 @@
 				meeting_step: 0,
 				meeting_seconds: 0,
 				meeting_step_seconds: 0,
+				meeting_step_times: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 },
 				meeting_sharing_idx: 0,
 				meeting_notes: "",
 				meeting_ratings: {},
@@ -137,7 +138,7 @@
 		async preload_doctypes() {
 			const dtypes = ["Rock", "To Do", "EOS Metric", "Team", "Player", "Issue"];
 			if (frappe.model && frappe.model.with_doctype) {
-				await Promise.all(dtypes.map(dt => frappe.model.with_doctype(dt).catch(() => {})));
+				await Promise.all(dtypes.map(dt => frappe.model.with_doctype(dt).catch(() => { })));
 			}
 		}
 
@@ -154,7 +155,7 @@
 						if (df && df.label) return __(df.label);
 					}
 				}
-			} catch (_) {}
+			} catch (_) { }
 			return fallback ? __(fallback) : fieldname;
 		}
 
@@ -164,7 +165,7 @@
 					const meta = frappe.get_meta(doctype);
 					if (meta && meta.name) return __(meta.name);
 				}
-			} catch (_) {}
+			} catch (_) { }
 			return fallback ? __(fallback) : doctype;
 		}
 
@@ -181,7 +182,7 @@
 						if (df && df.reqd != null) return Boolean(df.reqd);
 					}
 				}
-			} catch (_) {}
+			} catch (_) { }
 			return fallback;
 		}
 
@@ -239,8 +240,8 @@
 				}
 				const unique_teams = Array.from(new Set(team_names));
 				this.all_teams = ["All Teams", ...unique_teams];
-				if (this.s.team === "All Teams" && unique_teams.length > 0) {
-					this.s.team = unique_teams[0];
+				if (!this.s.team) {
+					this.s.team = "All Teams";
 				}
 			} catch (e) {
 				console.warn("fetch_all_teams failed", e);
@@ -1658,12 +1659,12 @@
 						${filtered.length === 0 ? `
 							<div class="nn-todo-empty">${__("No To-Dos match the selected filters.")}</div>
 						` : filtered.map(td => {
-							const is_complete = td.status === "Complete";
-							const due_info = this.format_todo_due(td.due_date);
-							const owner_name = this.get_user_display_name(td.owner_user);
-							const initials = this.get_initials(owner_name || td.owner_user || "");
+				const is_complete = td.status === "Complete";
+				const due_info = this.format_todo_due(td.due_date);
+				const owner_name = this.get_user_display_name(td.owner_user);
+				const initials = this.get_initials(owner_name || td.owner_user || "");
 
-							return `
+				return `
 								<div class="nn-todo-row" data-id="${this.esc(td.name)}">
 									<div class="nn-todo-col-check">
 										<div class="nn-todo-circle-check ${is_complete ? "checked" : ""}" data-id="${this.esc(td.name)}" title="${is_complete ? __("Mark Not Started") : __("Mark Complete")}">
@@ -1686,7 +1687,7 @@
 									</div>
 								</div>
 							`;
-						}).join("")}
+			}).join("")}
 					</div>
 
 					<div class="nn-todo-card-footer">
@@ -1723,7 +1724,7 @@
 			});
 
 			// Tabs: Team vs Private
-			this.$root.find("[data-ttab]").off("click").on("click", function() {
+			this.$root.find("[data-ttab]").off("click").on("click", function () {
 				const tab = $(this).attr("data-ttab");
 				self.s.todo_tab = tab;
 				self.$root.find("[data-ttab]").removeClass("on").filter(`[data-ttab="${tab}"]`).addClass("on");
@@ -1768,13 +1769,13 @@
 			});
 
 			// Search Input
-			this.$root.find("#nn-todo-search").off("input").on("input", function() {
+			this.$root.find("#nn-todo-search").off("input").on("input", function () {
 				self.s.todo_search = $(this).val();
 				self.render_todos_table();
 			});
 
 			// Sort by Due Date
-			this.$root.off("click.todosort").on("click.todosort", "#nn-todo-sort-due", function() {
+			this.$root.off("click.todosort").on("click.todosort", "#nn-todo-sort-due", function () {
 				self.s.todo_sort_dir = self.s.todo_sort_dir === "asc" ? "desc" : "asc";
 				self.render_todos_table();
 			});
@@ -1940,7 +1941,7 @@
 			$drawer.find("#nn-drawer-close, #nn-drawer-todo-cancel").on("click", () => self.close_drawer());
 
 			if (is_edit) {
-				$drawer.find("#nn-drawer-todo-delete").on("click", async function() {
+				$drawer.find("#nn-drawer-todo-delete").on("click", async function () {
 					frappe.confirm(__("Are you sure you want to delete this To-Do?"), async () => {
 						await self.call("frappe.client.delete", { doctype: "To Do", name: todo_id });
 						self.close_drawer();
@@ -2146,13 +2147,13 @@
 
 					<div class="nn-todo-table-body">
 						${filtered.map((iss, idx) => {
-							const is_solved = iss.status === "Solved";
-							const owner_name = this.get_user_display_name(iss.owner_user);
-							const initials = this.get_initials(owner_name || iss.owner_user || "");
-							const created_str = this.format_issue_created(iss.creation);
-							const priority_val = iss.priority || "Medium";
+				const is_solved = iss.status === "Solved";
+				const owner_name = this.get_user_display_name(iss.owner_user);
+				const initials = this.get_initials(owner_name || iss.owner_user || "");
+				const created_str = this.format_issue_created(iss.creation);
+				const priority_val = iss.priority || "Medium";
 
-							return `
+				return `
 								<div class="nn-todo-row" data-id="${this.esc(iss.name)}">
 									<div class="nn-todo-col-check">
 										<div class="nn-todo-circle-check ${is_solved ? "checked" : ""}" data-id="${this.esc(iss.name)}" title="${is_solved ? __("Reopen Issue") : __("Mark Solved")}">
@@ -2183,7 +2184,7 @@
 									</div>
 								</div>
 							`;
-						}).join("")}
+			}).join("")}
 					</div>
 
 					<div class="nn-todo-card-footer">
@@ -2227,7 +2228,7 @@
 				self.open_issue_drawer();
 			});
 
-			this.$root.find("[data-itab]").off("click").on("click", function() {
+			this.$root.find("[data-itab]").off("click").on("click", function () {
 				const tab = $(this).attr("data-itab");
 				self.s.issue_tab = tab;
 				self.$root.find("[data-itab]").removeClass("on").filter(`[data-itab="${tab}"]`).addClass("on");
@@ -2267,7 +2268,7 @@
 				frappe.show_alert({ message: __("Issues refreshed"), indicator: "green" });
 			});
 
-			this.$root.find("#nn-issue-search").off("input").on("input", function() {
+			this.$root.find("#nn-issue-search").off("input").on("input", function () {
 				self.s.issue_search = $(this).val();
 				self.render_issues_table();
 			});
@@ -2509,7 +2510,7 @@
 			});
 
 			if (is_edit) {
-				$drawer.find("#nn-drawer-issue-delete").on("click", async function() {
+				$drawer.find("#nn-drawer-issue-delete").on("click", async function () {
 					frappe.confirm(__("Are you sure you want to delete this Issue?"), async () => {
 						await self.call("frappe.client.delete", { doctype: "Issue", name: issue_id });
 						self.close_drawer();
@@ -2610,6 +2611,9 @@
 			try {
 				await this.fetch_all_teams();
 				await this.fetch_players();
+				if (!this.data || !this.data.periods || !this.data.periods.length) {
+					this.data = { periods: this.make_periods("Week", 13), metrics: [] };
+				}
 				await this.fetch_meetings_data();
 			} catch (e) {
 				console.error("Meetings load error:", e);
@@ -2627,7 +2631,7 @@
 				(!this.todos || !this.todos.length) ? this.fetch_todos_data() : Promise.resolve(),
 				(!this.issues || !this.issues.length) ? this.fetch_issues_data() : Promise.resolve(),
 				(!this.rocks || !this.rocks.length) ? this.fetch_rocks_data() : Promise.resolve(),
-				(!this.data || !this.data.metrics || !this.data.metrics.length) ? this.fetch_scorecard_data() : Promise.resolve()
+				this.fetch_scorecard_data()
 			];
 			const [m_res] = await Promise.all(promises);
 			this.meetings = m_res && m_res.ok ? (m_res.data || []) : [];
@@ -2654,7 +2658,7 @@
 							${ic("printer", 14)} <span>${__("Print Meeting Agenda")}</span>
 						</button>
 						<button class="nn-btn-green" id="nn-btn-create-meeting">
-							${ic("plus", 14)} <span>${__("Create")}</span>
+							${ic("plus", 14)} <span>${tab === "Agendas" ? __("Create Agenda") : __("Create")}</span>
 						</button>
 					</div>
 				</div>
@@ -2803,10 +2807,11 @@
 
 			$wrap.find("#nn-mtg-team-btn").on("click", function (e) {
 				e.stopPropagation();
-				const teams = (self.all_teams && self.all_teams.length) ? self.all_teams.filter(t => t !== "All Teams") : ["TG BPO"];
+				const teams = (self.all_teams && self.all_teams.length) ? self.all_teams : ["All Teams", "TG BPO"];
 				self.pick_menu(this, teams, self.s.meeting_team || self.s.team, async val => {
 					self.s.meeting_team = val;
 					self.s.team = val;
+					await self.fetch_scorecard_data();
 					await self.fetch_meetings_data();
 					self.render_meetings();
 				});
@@ -2896,6 +2901,7 @@
 			this.s.meeting_step = 0;
 			this.s.meeting_seconds = 0;
 			this.s.meeting_step_seconds = 0;
+			this.s.meeting_step_times = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
 			this.s.meeting_sharing_idx = 0;
 			this.s.meeting_good_news = {};
 			this.s.meeting_ratings = {};
@@ -2929,7 +2935,10 @@
 			if (this.meeting_timer_interval) clearInterval(this.meeting_timer_interval);
 			this.meeting_timer_interval = setInterval(() => {
 				this.s.meeting_seconds++;
-				this.s.meeting_step_seconds++;
+				const step = this.s.meeting_step || 0;
+				this.s.meeting_step_times = this.s.meeting_step_times || {};
+				this.s.meeting_step_times[step] = (this.s.meeting_step_times[step] || 0) + 1;
+				this.s.meeting_step_seconds = this.s.meeting_step_times[step];
 				this.update_meeting_timer_display();
 			}, 1000);
 
@@ -2943,12 +2952,14 @@
 		}
 
 		update_meeting_timer_display() {
+			const cur_step = this.s.meeting_step || 0;
+			const cur_step_sec = (this.s.meeting_step_times && this.s.meeting_step_times[cur_step]) || 0;
 			const $tot = this.$root.find("#nn-l10-total-timer");
 			if ($tot.length) $tot.text(this.fmt_timer(this.s.meeting_seconds));
 			const $step = this.$root.find("#nn-l10-step-timer");
-			if ($step.length) $step.text(this.fmt_timer(this.s.meeting_step_seconds));
-			const $curr_row = this.$root.find(`.nn-l10-agenda-item[data-step="${this.s.meeting_step}"] .nn-l10-agenda-elapsed`);
-			if ($curr_row.length) $curr_row.text(this.fmt_timer(this.s.meeting_step_seconds));
+			if ($step.length) $step.text(this.fmt_timer(cur_step_sec));
+			const $curr_row = this.$root.find(`.nn-l10-agenda-item[data-step="${cur_step}"] .nn-l10-agenda-elapsed`);
+			if ($curr_row.length) $curr_row.text(this.fmt_timer(cur_step_sec));
 		}
 
 		get_l10_agenda_steps() {
@@ -2981,17 +2992,20 @@
 						</div>
 
 						<div class="nn-l10-agenda-list">
-							${steps.map(st => `
+							${steps.map(st => {
+								const elapsed_sec = (s.meeting_step_times && s.meeting_step_times[st.idx]) || 0;
+								return `
 								<div class="nn-l10-agenda-item ${st.idx === s.meeting_step ? "on" : ""}" data-step="${st.idx}">
 									<div class="nn-l10-agenda-left">
 										<span style="font-weight:700">${st.num}</span>
 										<span>${st.name}</span>
 									</div>
 									<div class="nn-l10-agenda-times">
-										<span class="nn-l10-agenda-elapsed">${st.idx === s.meeting_step ? this.fmt_timer(s.meeting_step_seconds) : "00:00"}</span> / ${st.target_str}
+										<span class="nn-l10-agenda-elapsed">${this.fmt_timer(elapsed_sec)}</span> / ${st.target_str}
 									</div>
 								</div>
-							`).join("")}
+								`;
+							}).join("")}
 						</div>
 
 						<div class="nn-l10-side-foot">
@@ -3075,8 +3089,18 @@
 		}
 
 		switch_l10_step(step_idx) {
+			const $gn = this.$root.find("#nn-good-news-input");
+			if ($gn.length) {
+				const att = (this.s.meeting_attendees || [])[this.s.meeting_sharing_idx || 0];
+				if (att) {
+					this.s.meeting_good_news = this.s.meeting_good_news || {};
+					this.s.meeting_good_news[att] = $gn.val();
+				}
+			}
+
 			this.s.meeting_step = step_idx;
-			this.s.meeting_step_seconds = 0;
+			this.s.meeting_step_times = this.s.meeting_step_times || {};
+			this.s.meeting_step_seconds = this.s.meeting_step_times[step_idx] || 0;
 			this.render_l10_meeting_workspace();
 		}
 
@@ -3264,16 +3288,16 @@
 					</div>
 					<div class="nn-attendee-grid">
 						${attendees.map(att => {
-							const is_pres = !!s.meeting_attendance[att];
-							const av = this.get_initials(att);
-							return `
+				const is_pres = !!s.meeting_attendance[att];
+				const av = this.get_initials(att);
+				return `
 								<div class="nn-attendee-chip ${is_pres ? "present" : "absent"}" data-attendee="${this.esc(att)}">
 									<span class="nn-owner-circle" style="background:${is_pres ? "#059669" : "#9ca3af"}">${av}</span>
 									<span>${this.esc(att)}</span>
 									<span style="font-size:11px;font-weight:700">${is_pres ? "✓" : "×"}</span>
 								</div>
 							`;
-						}).join("")}
+			}).join("")}
 					</div>
 				</div>
 
@@ -3301,7 +3325,10 @@
 
 		/* Step 1: SCORECARD (PDF Page 2 bottom) */
 		render_l10_scorecard_step(team) {
-			const metrics = this.data.metrics || [];
+			let metrics = this.data.metrics || [];
+			if (team && team !== "All Teams") {
+				metrics = metrics.filter(m => !m.team || m.team === team);
+			}
 			const periods = (this.data.periods || []).slice(-6); // last 6 periods
 
 			return `
@@ -3329,23 +3356,23 @@
 							</thead>
 							<tbody>
 								${metrics.length ? metrics.map(m => {
-									const owner_name = this.get_user_display_name(m.owner);
-									const av = this.get_initials(owner_name);
-									const is_off = periods.some(p => {
-										const v = m.values && m.values[p.key];
-										return v != null && v < m.goal;
-									});
-									return `
+				const owner_name = this.get_user_display_name(m.owner);
+				const av = this.get_initials(owner_name);
+				const is_off = periods.some(p => {
+					const v = m.values && m.values[p.key];
+					return v != null && v < m.goal;
+				});
+				return `
 										<tr>
 											<td class="left nn-col-metric"><b>${this.esc(m.title)}</b></td>
 											<td class="nn-col-owner"><span class="nn-owner-circle">${av}</span></td>
 											<td class="nn-col-goal">${m.goal_op} ${m.goal} ${this.esc(m.unit || "")}</td>
 											${periods.map(p => {
-												const v = (m.values && m.values[p.key] != null) ? m.values[p.key] : "-";
-												const pass = v !== "-" && v >= m.goal;
-												const cls = v === "-" ? "" : (pass ? "pass" : "fail");
-												return `<td class="nn-sc-cell ${cls}" style="${cls === "fail" ? "background:#fee2e2;color:#dc2626;font-weight:700" : ""}">${v}</td>`;
-											}).join("")}
+					const v = (m.values && m.values[p.key] != null) ? m.values[p.key] : "-";
+					const pass = v !== "-" && v >= m.goal;
+					const cls = v === "-" ? "" : (pass ? "pass" : "fail");
+					return `<td class="nn-sc-cell ${cls}" style="${cls === "fail" ? "background:#fee2e2;color:#dc2626;font-weight:700" : ""}">${v}</td>`;
+				}).join("")}
 											<td style="text-align:center">
 												<button class="nn-btn-bar nn-drop-to-ids-btn" data-type="Scorecard" data-title="KPI off-track: ${this.esc(m.title)}" style="padding:2px 8px;font-size:11px">
 													${ic("alert-circle", 12)} ${__("Drop to IDS")}
@@ -3353,7 +3380,7 @@
 											</td>
 										</tr>
 									`;
-								}).join("") : `<tr><td colspan="8" style="padding:32px;text-align:center;color:#9ca3af">${__("No scorecard measurables found for this team.")}</td></tr>`}
+			}).join("") : `<tr><td colspan="8" style="padding:32px;text-align:center;color:#9ca3af">${__("No scorecard measurables found for this team.")}</td></tr>`}
 							</tbody>
 						</table>
 					</div>
@@ -3404,11 +3431,11 @@
 						</thead>
 						<tbody>
 							${rocks.length ? rocks.map(r => {
-								const owner_name = this.get_user_display_name(r.owner_user);
-								const av = this.get_initials(owner_name);
-								const st = r.status || "On Track";
-								const is_off = st === "Off-track" || st === "Not Started";
-								return `
+				const owner_name = this.get_user_display_name(r.owner_user);
+				const av = this.get_initials(owner_name);
+				const st = r.status || "On Track";
+				const is_off = st === "Off-track" || st === "Not Started";
+				return `
 									<tr class="nn-rock-row">
 										<td><b>${this.esc(r.title)}</b></td>
 										<td><span class="nn-owner-circle">${av}</span></td>
@@ -3426,7 +3453,7 @@
 										</td>
 									</tr>
 								`;
-							}).join("") : `<tr><td colspan="5" style="padding:32px;text-align:center;color:#9ca3af">${__("No Rocks found.")}</td></tr>`}
+			}).join("") : `<tr><td colspan="5" style="padding:32px;text-align:center;color:#9ca3af">${__("No Rocks found.")}</td></tr>`}
 						</tbody>
 					</table>
 				</div>
@@ -3542,11 +3569,11 @@
 
 					<div class="nn-todo-table-body">
 						${todos.length ? todos.map(t => {
-							const is_done = t.status === "Complete";
-							const owner_name = this.get_user_display_name(t.owner_user);
-							const av = this.get_initials(owner_name);
-							const due_str = t.due_date ? this.format_todo_date(t.due_date) : "7 Days";
-							return `
+				const is_done = t.status === "Complete";
+				const owner_name = this.get_user_display_name(t.owner_user);
+				const av = this.get_initials(owner_name);
+				const due_str = t.due_date ? this.format_todo_date(t.due_date) : "7 Days";
+				return `
 								<div class="nn-todo-row ${is_done ? "complete" : ""}">
 									<div class="nn-todo-col-check">
 										<div class="nn-todo-checkbox ${is_done ? "checked" : ""}" data-todo-id="${this.esc(t.name)}">
@@ -3572,7 +3599,7 @@
 									</div>
 								</div>
 							`;
-						}).join("") : `<div class="nn-todo-empty">${__("No To-Dos for this team.")}</div>`}
+			}).join("") : `<div class="nn-todo-empty">${__("No To-Dos for this team.")}</div>`}
 					</div>
 				</div>
 			`;
@@ -3609,9 +3636,9 @@
 
 					<div class="nn-todo-table-body">
 						${issues.length ? issues.map((iss, idx) => {
-							const owner_name = this.get_user_display_name(iss.owner_user);
-							const av = this.get_initials(owner_name);
-							return `
+				const owner_name = this.get_user_display_name(iss.owner_user);
+				const av = this.get_initials(owner_name);
+				return `
 								<div class="nn-todo-row">
 									<div style="width:40px;text-align:center;font-size:12px;font-weight:700;color:#064e3b">
 										${idx + 1}
@@ -3633,7 +3660,7 @@
 									</div>
 								</div>
 							`;
-						}).join("") : `
+			}).join("") : `
 							<div class="nn-issues-empty-wrap" style="padding:36px">
 								<div class="nn-issues-empty-icon">${ic("info", 24)}</div>
 								<div class="nn-issues-empty-title">${__("Your team hasn't added any issues yet.")}</div>
@@ -3704,14 +3731,14 @@
 					</div>
 					<div class="nn-rating-list">
 						${attendees.map(att => {
-							const cur_r = s.meeting_ratings[att] || 8;
-							return `
+				const cur_r = s.meeting_ratings[att] || 8;
+				return `
 								<div class="nn-rating-item">
 									<span style="font-size:13px;font-weight:600;color:#374151">${this.esc(att)}</span>
 									<input type="number" min="1" max="10" step="1" class="nn-rating-input" data-attendee="${this.esc(att)}" value="${cur_r}">
 								</div>
 							`;
-						}).join("")}
+			}).join("")}
 					</div>
 				</div>
 
@@ -3936,7 +3963,9 @@
 			const team_name = team !== "All Teams" ? team : (this.all_teams.find(t => t !== "All Teams") || "TG BPO");
 			const today_str = frappe.datetime.nowdate();
 			const doc_name = `${team_name}-${today_str}`;
-			const notes_str = `Duration: ${dur_min} min. Ratings: ${JSON.stringify(this.s.meeting_ratings || {})}. Attendees: ${(this.s.meeting_attendees || []).join(", ")}.`;
+			const step_names = ["Segue", "Scorecard", "Rock Review", "Headlines", "To-Dos", "IDS", "Conclude"];
+			const step_summary = step_names.map((nm, idx) => `${nm}: ${this.fmt_timer((this.s.meeting_step_times && this.s.meeting_step_times[idx]) || 0)}`).join(", ");
+			const notes_str = `Duration: ${dur_min} min. Sections: [${step_summary}]. Ratings: ${JSON.stringify(this.s.meeting_ratings || {})}. Attendees: ${(this.s.meeting_attendees || []).join(", ")}.`;
 
 			try {
 				const chk = await this.call("frappe.client.get_value", {
@@ -4030,7 +4059,7 @@
 					const d = new Date(base);
 					const day = (d.getDay() + 6) % 7;
 					d.setDate(d.getDate() - day - 7 * i);
-					
+
 					const a = new Date(d);
 					const b = new Date(d);
 					b.setDate(d.getDate() + 6);
@@ -4073,22 +4102,35 @@
 
 			const [sc_res, u_res] = await Promise.all(promises);
 			const scs = sc_res.ok ? sc_res.data : [];
-			const sc_match = scs.find(x => x.team === s.team && (x.timeframe === "Weekly" || x.timeframe === "Week")) || scs[0];
-			this.current_scorecard_id = sc_match ? sc_match.name : `${s.team}-Weekly`;
+			const is_all_teams = !s.team || s.team === "All Teams";
+			const sc_match = !is_all_teams
+				? (scs.find(x => x.team === s.team && (x.timeframe === "Weekly" || x.timeframe === "Week")) || scs.find(x => x.team === s.team))
+				: scs[0];
+			this.current_scorecard_id = sc_match ? sc_match.name : (!is_all_teams ? `${s.team}-Weekly` : "");
 
 			if (u_res.ok && u_res.data) this.users = u_res.data;
 
 			const m_fields = ["name", "metric_name as title", "description", "target_value as goal", "operator as goal_op", "unit", "unit_type", "rollup", "frequency", "owner_user", "team", "scorecard", "group as grp", "min_value", "max_value"];
-			
+
+			const m_filters = { archived: 0 };
+			if (!is_all_teams) {
+				m_filters.team = s.team;
+			}
+
+			const grp_filters = { archived: 0 };
+			if (!is_all_teams && this.current_scorecard_id) {
+				grp_filters.scorecard = this.current_scorecard_id;
+			}
+
 			const [grp_res, m_res] = await Promise.all([
-				this.list(C.group.doctype, ["name", "group_name"], { scorecard: this.current_scorecard_id, archived: 0 }),
-				this.list(C.measurable.doctype, m_fields, { team: s.team, archived: 0 }, "creation asc", 100)
+				this.list(C.group.doctype, ["name", "group_name"], grp_filters),
+				this.list(C.measurable.doctype, m_fields, m_filters, "creation asc", 200)
 			]);
 
 			if (grp_res.ok && grp_res.data && grp_res.data.length) this.current_group_id = grp_res.data[0].name;
 
 			let raw_metrics = (m_res.ok && m_res.data && m_res.data.length) ? m_res.data : [];
-			if (!raw_metrics.length) {
+			if (!raw_metrics.length && !is_all_teams && this.current_scorecard_id) {
 				const fallback_m = await this.list(C.measurable.doctype, m_fields, { scorecard: this.current_scorecard_id, archived: 0 }, "creation asc", 100);
 				if (fallback_m.ok && fallback_m.data) raw_metrics = fallback_m.data;
 			}
@@ -4098,6 +4140,7 @@
 				title: m.title || m.name,
 				desc: m.description || "",
 				owner: m.owner_user || "Administrator",
+				team: m.team || "",
 				goal_op: m.goal_op || ">=",
 				goal: m.goal != null ? Number(m.goal) : 0,
 				min_value: m.min_value != null ? Number(m.min_value) : null,
@@ -4115,7 +4158,7 @@
 				const [e_res, iss_res] = await Promise.all([
 					this.call("eos_core.eos_core.doctype.scorecard.scorecard.get_scorecard_entries", {
 						metrics: metric_ids,
-						team: s.team
+						team: is_all_teams ? "" : s.team
 					}),
 					this.list("Issue", ["name", "issue_name", "originating_metric"], {
 						originating_metric: ["in", metric_ids],
@@ -4243,7 +4286,7 @@
 				if (!self.all_teams || self.all_teams.length <= 1) {
 					await self.fetch_all_teams();
 				}
-				const teams_list = self.all_teams.filter(t => t !== "All Teams");
+				const teams_list = self.all_teams;
 				self.pick_menu(this, teams_list, s.team, v => {
 					s.team = v;
 					s.rock_team = v;
@@ -4840,7 +4883,7 @@
 					frappe.msgprint(__("Owner is mandatory."));
 					return;
 				}
-				const team = $drawer.find("#nn-d-team").val() || self.s.team;
+				const team = $drawer.find("#nn-d-team").val() || (self.s.team !== "All Teams" ? self.s.team : (self.all_teams.find(t => t !== "All Teams") || ""));
 				if (!team) {
 					frappe.msgprint(__("Team is mandatory."));
 					return;

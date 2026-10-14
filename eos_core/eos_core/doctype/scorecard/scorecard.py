@@ -787,6 +787,11 @@ def get_scorecard_entries(metrics=None, team=None, start_date=None, end_date=Non
 		if not team_metrics:
 			return []
 		filters["parent"] = ["in", team_metrics]
+	elif team == "All Teams":
+		all_metrics = frappe.get_list("EOS Metric", filters={"archived": 0}, pluck="name")
+		if not all_metrics:
+			return []
+		filters["parent"] = ["in", all_metrics]
 
 	if start_date and end_date:
 		filters["week_start_date"] = ["between", [start_date, end_date]]
