@@ -2913,7 +2913,7 @@
 				attendee_list = (this.users || []).slice(0, 4).map(u => u.full_name || u.first_name || u.name);
 			}
 			if (!attendee_list.length) {
-				attendee_list = ["Taher Jivanji", "Zafar Fakhri"];
+				attendee_list = [frappe.session.user_fullname || frappe.session.user || "User"];
 			}
 
 			this.s.meeting_attendees = attendee_list;

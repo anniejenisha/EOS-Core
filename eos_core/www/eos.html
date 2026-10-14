@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Burhani ERP - EOS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/eos_core/css/styles.css?v={{ cache_buster or '2.0.2' }}">
+<link rel="stylesheet" href="/assets/eos_core/css/eos.css?v={{ cache_buster or '2.0.2' }}">
+<!-- Fallback if served from a standalone directory -->
+<script>
+  if (!document.querySelector('link[href*="styles.css"]').sheet) {
+    document.write('<link rel="stylesheet" href="css/styles.css?v=2.0.2"><link rel="stylesheet" href="css/eos.css?v=2.0.2">');
+  }
+</script>
+</head>
+<body>
+<div class="app" id="app">
+  <nav class="rail" id="rail" aria-label="Modules"></nav>
+  <aside class="side" id="side" aria-label="Navigation"></aside>
+  <div class="work">
+    <header class="top" id="top"></header>
+    <main class="page"><div class="inner" id="main"></div></main>
+  </div>
+</div>
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-hidden="true" role="dialog" aria-label="New record"></aside>
+<div class="pal-wrap" id="palWrap"><div class="pal" role="dialog" aria-label="Command palette">
+  <input id="palIn" placeholder="Search records, documents or modules" autocomplete="off" aria-label="Command palette">
+  <ul id="palList"></ul>
+  <footer><span><kbd>↑</kbd> <kbd>↓</kbd> move</span><span><kbd>↵</kbd> open</span><span><kbd>esc</kbd> close</span></footer>
+</div></div>
+<div class="toast" id="toast" role="status"></div>
+
+<script id="eos-boot-data" type="application/json">{{ eos_boot | safe }}</script>
+<script>
+  window.csrf_token = "{{ frappe.session.csrf_token if frappe and frappe.session else '' }}";
+  window.frappe_user = "{{ frappe.session.user if frappe and frappe.session else '' }}";
+  window.frappe_user_name = "{{ user_fullname or '' }}";
+  try {
+    const rawBoot = document.getElementById('eos-boot-data');
+    window.__EOS_BOOT__ = rawBoot ? JSON.parse(rawBoot.textContent) : null;
+  } catch (e) {
+    window.__EOS_BOOT__ = null;
+  }
+</script>
+<script src="/assets/eos_core/js/registry.js?v={{ cache_buster or '2.0.2' }}" onerror="this.src='js/registry.js?v=2.0.2'"></script>
+<script src="/assets/eos_core/js/eos.js?v={{ cache_buster or '2.0.2' }}" onerror="this.src='js/eos.js?v=2.0.2'"></script>
+<script src="/assets/eos_core/js/app.js?v={{ cache_buster or '2.0.2' }}" onerror="this.src='js/app.js?v=2.0.2'"></script>
+</body>
+</html>

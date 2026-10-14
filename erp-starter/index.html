@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Burhani ERP - EOS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css?v=2.0.2">
+<link rel="stylesheet" href="css/eos.css?v=2.0.2">
+</head>
+<body>
+<div class="app" id="app">
+  <nav class="rail" id="rail" aria-label="Modules"></nav>
+  <aside class="side" id="side" aria-label="Navigation"></aside>
+  <div class="work">
+    <header class="top" id="top"></header>
+    <main class="page"><div class="inner" id="main"></div></main>
+  </div>
+</div>
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-hidden="true" role="dialog" aria-label="New record"></aside>
+<div class="pal-wrap" id="palWrap"><div class="pal" role="dialog" aria-label="Command palette">
+  <input id="palIn" placeholder="Search records, documents or modules" autocomplete="off" aria-label="Command palette">
+  <ul id="palList"></ul>
+  <footer><span><kbd>↑</kbd> <kbd>↓</kbd> move</span><span><kbd>↵</kbd> open</span><span><kbd>esc</kbd> close</span></footer>
+</div></div>
+<div class="toast" id="toast" role="status"></div>
+
+<script src="js/registry.js?v=2.0.2"></script>
+<script src="js/eos.js?v=2.0.2"></script>
+<script src="js/app.js?v=2.0.2"></script>
+</body>
+</html>
