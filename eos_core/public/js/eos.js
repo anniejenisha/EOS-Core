@@ -87,7 +87,7 @@ function eRelTime(iso) {
 const E = {
  tab: { scorecard: 'scorecards', sc_freq: 'weekly', rocks: 'list', todos: 'team', issues: 'short', meet: 'upcoming' },
  f: {
-   scorecard: { team: 'All Teams', q_id: '', q_meas: '', timeframe: 'All', per: '20', range: '13', page: 1, sort: 'Created On' },
+   scorecard: { team: 'All Teams', q_id: '', q_meas: '', timeframe: 'All', per: '20', range: '13', page: 1, sort: 'Created On', owners: null },
    rocks: { team: 'All Teams', owner: 'All', status: 'All', people: false },
    todos: { team: 'All Teams', owner: 'All', arch: false, per: '25', page: 1 },
    issues: { team: 'All Teams', owner: 'All', arch: false, per: '25', page: 1 },
@@ -96,6 +96,7 @@ const E = {
  },
  edit: null, menu: null, vto: false, vtoV: { rev: '', profit: '', meas: '' }, collapsed: new Set(), openRock: new Set(),
  form: null, preOwner: null, focusMs: null, live: null, past: [], upcoming: [], loaded: false,
+ owner_filter_open: false, owner_filter_search: '',
 
  meeting_in_progress: false,
  meeting_agenda_type: 'l10',
@@ -141,12 +142,21 @@ async function apiCall(method, args = {}) {
       headers: { ...headers, 'Content-Type': 'application/json' },
       body: JSON.stringify(args)
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) {
+      const errText = await res.text();
+      console.warn(`[EOS ERP API] ${method} (${res.status}):`, errText);
+      try {
+        const parsed = JSON.parse(errText);
+        return { error: true, message: parsed.message || parsed.exception || `HTTP ${res.status}` };
+      } catch (e) {
+        return { error: true, message: `HTTP ${res.status}` };
+      }
+    }
     const json = await res.json();
     return json.message || json;
   } catch (err) {
     console.warn(`[EOS ERP API] ${method}:`, err.message);
-    return null;
+    return { error: true, message: err.message };
   }
 }
 
@@ -279,9 +289,10 @@ function eosScorecard() {
     </div>
     <div style="display:flex;align-items:center;gap:8px">
       <button class="icon-btn" data-act="eos-refresh" title="Reload from ERP" style="width:32px;height:32px;border:1px solid var(--line-2);border-radius:6px;display:flex;align-items:center;justify-content:center">${icon('refresh')}</button>
-      <button class="btn primary" data-act="${curTab === 'scorecards' ? 'create' : 'eos-add-measurable'}" style="height:32px;font-size:13px;padding:0 14px;border-radius:6px;font-weight:600;background:var(--g900);color:#fff">
-        ${icon('plus')} ${curTab === 'scorecards' ? 'Add Scorecard' : 'New Measurable'}
-      </button>
+      ${curTab === 'scorecards' ? `
+      <button class="btn primary" data-act="create" style="height:32px;font-size:13px;padding:0 14px;border-radius:6px;font-weight:600;background:var(--g900);color:#fff">
+        ${icon('plus')} Add Scorecard
+      </button>` : ''}
     </div>
   </div>`;
 
@@ -340,6 +351,34 @@ function getMeasurableVal(m, curTab, i) {
   }
 }
 
+function renderOwnerFilterPopover(allOwners, selectedOwners, search) {
+  const isAll = !selectedOwners || selectedOwners.length === allOwners.length;
+  const q = (search || '').toLowerCase().trim();
+  const visibleOwners = allOwners.filter(o => !q || o.toLowerCase().includes(q));
+
+  return `
+    <div class="nn-owner-filter-popover" onclick="event.stopPropagation()">
+      <input type="text" class="nn-owner-filter-search" placeholder="Search..." value="${eEsc(search || '')}">
+      <div class="nn-owner-filter-list">
+        <label style="color:#111827;font-weight:600">
+          <input type="checkbox" class="nn-owner-filter-all" ${isAll ? 'checked' : ''}>
+          <span>(Select All)</span>
+        </label>
+        ${visibleOwners.map(o => {
+          const checked = isAll || (Array.isArray(selectedOwners) && selectedOwners.includes(o));
+          return `
+            <label class="nn-owner-filter-opt">
+              <input type="checkbox" class="nn-owner-filter-item" value="${eEsc(o)}" ${checked ? 'checked' : ''}>
+              <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${eEsc(o)}">${eEsc(o)}</span>
+            </label>
+          `;
+        }).join('')}
+        ${visibleOwners.length === 0 ? `<div style="padding:6px;font-size:11.5px;color:#9ca3af;text-align:center;">No owners found</div>` : ''}
+      </div>
+    </div>
+  `;
+}
+
 function renderMeasurablesGrid(curTab) {
   const F = E.f.scorecard;
   const defaultRange = curTab === 'monthly' ? 6 : curTab === 'quarterly' ? 4 : curTab === 'annual' ? 3 : 13;
@@ -353,6 +392,17 @@ function renderMeasurablesGrid(curTab) {
   const q = (F.q_meas || S.q || '').trim().toLowerCase();
   if (q) {
     metrics = metrics.filter(m => (m.name || '').toLowerCase().includes(q) || (m.owner || '').toLowerCase().includes(q));
+  }
+
+  const teamMetrics = (eMeas || []).filter(m => !F.team || F.team === 'All Teams' || !m.team || m.team === F.team);
+  const allOwners = Array.from(new Set([
+    ...teamMetrics.map(m => m.owner).filter(Boolean),
+    ...((EOS_PEOPLE || []).filter(p => p && p !== 'All'))
+  ])).sort((a, b) => a.localeCompare(b));
+
+  const isOwnerFiltered = Array.isArray(F.owners) && F.owners.length < allOwners.length;
+  if (Array.isArray(F.owners)) {
+    metrics = metrics.filter(m => F.owners.includes(m.owner));
   }
 
   let rangeOptions = [];
@@ -384,12 +434,6 @@ function renderMeasurablesGrid(curTab) {
         <input placeholder="Search Measurables…" value="${eEsc(F.q_meas || '')}" data-eos-f="scorecard.q_meas">
       </div>
       <div style="flex:1"></div>
-      <button class="nn-btn-bar" data-act="eos-sc-optimize" title="View Scorecard Health & Insights">
-        <span style="color:#047857">${icon('sparkle')}</span> <span>Optimize Scorecard</span>
-      </button>
-      <button class="nn-btn-bar" data-act="eos-sc-test-data" style="color:#047857" title="Create test data with red and green boxes">
-        <span style="color:#10b981">${icon('sparkle')}</span> <span>Generate Test Data</span>
-      </button>
       <button class="nn-btn-green" data-act="eos-add-measurable" style="height:32px;padding:0 14px;font-size:12px">
         + New Measurable
       </button>
@@ -405,21 +449,24 @@ function renderMeasurablesGrid(curTab) {
           </span>
           <span class="nn-badge-cnt">${metrics.length}</span>
         </div>
-        <div>
-          <button class="nn-btn-bar" data-act="eos-add-measurable">
-            + New Measurable
-          </button>
-        </div>
       </div>
 
       <div class="nn-table-scroll">
         <table class="nn-sc-tbl">
           <thead>
             <tr>
-              <th class="left nn-col-metric" style="min-width:240px">Measurable</th>
-              <th class="nn-col-owner" style="width:64px;min-width:64px;text-align:center">Owner</th>
-              <th class="nn-col-goal" style="width:90px;min-width:90px;text-align:center">Goal</th>
-              ${periods.map(p => `<th>${eEsc(p)}</th>`).join('')}
+              <th class="left nn-col-metric" style="width:240px;min-width:240px;max-width:240px">Measurable</th>
+              <th class="nn-col-owner" style="width:68px;min-width:68px;max-width:68px;text-align:center;position:relative;">
+                <div style="display:inline-flex;align-items:center;justify-content:center;gap:4px">
+                  <span>Owner</span>
+                  <button class="nn-owner-filter-btn ${isOwnerFiltered ? 'active' : ''}" data-act="eos-toggle-owner-filter" title="Filter by Owner" style="color:${isOwnerFiltered ? '#047857' : '#9ca3af'};">
+                    ${icon('filter')}
+                  </button>
+                </div>
+                ${E.owner_filter_open ? renderOwnerFilterPopover(allOwners, F.owners, E.owner_filter_search || '') : ''}
+              </th>
+              <th class="nn-col-goal" style="min-width:130px;text-align:center">Goal</th>
+              ${periods.map(p => `<th style="min-width:80px;text-align:center">${eEsc(p)}</th>`).join('')}
             </tr>
           </thead>
           <tbody>
@@ -458,16 +505,16 @@ function renderMeasurablesGrid(curTab) {
 
               return `
                 <tr>
-                  <td class="left nn-col-metric">
-                    <span class="nn-metric-title" data-act="eos-edit-measurable" data-id="${m.id}" style="cursor:pointer;font-weight:600;color:#111827">
+                  <td class="left nn-col-metric" style="width:240px;min-width:240px;max-width:240px;white-space:normal;word-break:break-word;overflow-wrap:break-word;line-height:1.35">
+                    <span class="nn-metric-title" data-act="eos-edit-measurable" data-id="${m.id}" style="cursor:pointer;font-weight:600;color:#111827;white-space:normal;word-break:break-word;overflow-wrap:break-word;display:block">
                       ${eEsc(m.name)}
                     </span>
                   </td>
-                  <td class="nn-col-owner" style="text-align:center">
+                  <td class="nn-col-owner" style="width:68px;min-width:68px;max-width:68px;text-align:center">
                     <span class="nn-owner-circle" style="width:24px;height:24px;font-size:10px" title="${eEsc(m.owner)}">${av}</span>
                   </td>
-                  <td class="nn-col-goal" style="text-align:center">
-                    <span style="font-weight:600;color:#374151">${m.op || '>='} ${eU(m, m.target)}</span>
+                  <td class="nn-col-goal" style="min-width:130px;text-align:center;white-space:nowrap">
+                    <span style="font-weight:600;color:#374151;white-space:nowrap">${m.op || '>='} ${eU(m, m.target)}</span>
                   </td>
                   ${cells}
                 </tr>
@@ -1221,7 +1268,7 @@ function renderL10ScorecardStep(team) {
               const av = initials(m.owner || 'U');
               return `
                 <tr>
-                  <td class="left nn-col-metric"><b>${eEsc(m.name)}</b></td>
+                  <td class="left nn-col-metric" style="white-space:normal;word-break:break-word;overflow-wrap:break-word;line-height:1.35"><b style="white-space:normal;word-break:break-word;display:block">${eEsc(m.name)}</b></td>
                   <td class="nn-col-owner"><span class="nn-owner-circle">${av}</span></td>
                   <td class="nn-col-goal">${m.op || '>='} ${eU(m, m.target)}</td>
                   ${periods.map((_, i) => {
@@ -2007,10 +2054,14 @@ function eosDrawer(kind, rec, pre) {
         Object.assign(rec, { name: v.name, desc: v.desc, team: v.team, freq: v.freq, op: v.op, target: parseFloat(v.target) || 0, unit: v.unit, owner: v.owner });
         toast('Updating Measurable in ERP...');
         renderMain();
-        await apiCall('eos_core.eos_api.save_measurable', {
-          name: v.name, freq: v.freq, team: v.team, owner: v.owner, unit: v.unit, op: v.op, target: parseFloat(v.target) || 0, desc: v.desc || ''
+        const res = await apiCall('eos_core.eos_api.save_measurable', {
+          name: v.name, freq: v.freq, team: v.team, owner: v.owner, unit: v.unit, op: v.op, target: parseFloat(v.target) || 0, desc: v.desc || '', docname: rec.docname || rec.name
         });
-        toast('Measurable updated in ERP DocType!');
+        if (res && res.error) {
+          toast(res.message || 'Error updating measurable', 'error');
+        } else {
+          toast('Measurable updated in ERP DocType!');
+        }
       } else {
         const newM = {
           id: ++eSeq,
@@ -2030,8 +2081,12 @@ function eosDrawer(kind, rec, pre) {
         const res = await apiCall('eos_core.eos_api.save_measurable', {
           name: v.name, freq: v.freq, team: v.team, owner: v.owner, unit: v.unit, op: v.op, target: parseFloat(v.target) || 0, desc: v.desc || ''
         });
-        if (res && res.docname) newM.docname = res.docname;
-        toast('Measurable saved in ERP Metric DocType!');
+        if (res && res.error) {
+          toast(res.message || 'Error saving measurable', 'error');
+        } else {
+          if (res && res.docname) newM.docname = res.docname;
+          toast('Measurable saved in ERP Metric DocType!');
+        }
       }
     });
   }
@@ -2525,6 +2580,18 @@ async function eosAct(a, el, e) {
    }
    case 'eos-add-measurable': eosDrawer('measurable', null); break;
    case 'eos-edit-measurable': eosDrawer('measurable', eMeas.find(x => x.id === +id)); break;
+   case 'eos-toggle-owner-filter': {
+     E.owner_filter_open = !E.owner_filter_open;
+     E.owner_filter_search = '';
+     renderMain();
+     if (E.owner_filter_open) {
+       setTimeout(() => {
+         const inp = document.querySelector('.nn-owner-filter-search');
+         if (inp) inp.focus();
+       }, 50);
+     }
+     break;
+   }
    case 'eos-sc-optimize': {
      const tf = E.tab.scorecard === 'scorecards' ? 'weekly' : (E.tab.scorecard || 'weekly');
      let mList = eMeas.filter(m => (!m.freq && tf === 'weekly') || m.freq === tf);
@@ -2645,6 +2712,11 @@ async function eosAct(a, el, e) {
 }
 
 document.addEventListener('click', e => {
+  if (E.owner_filter_open && !e.target.closest('.nn-owner-filter-popover, [data-act="eos-toggle-owner-filter"]')) {
+    E.owner_filter_open = false;
+    E.owner_filter_search = '';
+    renderMain();
+  }
   if (E.tools_menu_open && !e.target.closest('.nn-l10-tools-menu, [data-act="eos-l10-tools"]')) {
     E.tools_menu_open = false;
     renderMain();
@@ -2656,6 +2728,18 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('scroll', () => { if (E.menu) { E.menu = null; if (S.mod === 'eos') renderMain(); } }, true);
 document.addEventListener('input', e => {
+  if (e.target.classList.contains('nn-owner-filter-search')) {
+    E.owner_filter_search = e.target.value;
+    const q = e.target.value.toLowerCase().trim();
+    const popover = e.target.closest('.nn-owner-filter-popover');
+    if (popover) {
+      popover.querySelectorAll('.nn-owner-filter-opt').forEach(opt => {
+        const txt = opt.textContent.toLowerCase();
+        opt.style.display = (!q || txt.includes(q)) ? 'flex' : 'none';
+      });
+    }
+    return;
+  }
   if (e.target.id === 'eos-good-news-input') {
     const att = (E.meeting_attendees || [])[E.meeting_sharing_idx || 0];
     if (att) {
@@ -2692,6 +2776,34 @@ document.addEventListener('input', e => {
   if (el && pos != null) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (_) {} }
 });
 document.addEventListener('change', async e => {
+  if (e.target.classList.contains('nn-owner-filter-all')) {
+    if (e.target.checked) {
+      E.f.scorecard.owners = null;
+    } else {
+      E.f.scorecard.owners = [];
+    }
+    E.owner_filter_open = true;
+    renderMain();
+    return;
+  }
+  if (e.target.classList.contains('nn-owner-filter-item')) {
+    const popover = e.target.closest('.nn-owner-filter-popover');
+    const items = Array.from(popover.querySelectorAll('.nn-owner-filter-item'));
+    const checked = items.filter(cb => cb.checked).map(cb => cb.value);
+    const teamMetrics = (eMeas || []).filter(m => !E.f.scorecard.team || E.f.scorecard.team === 'All Teams' || !m.team || m.team === E.f.scorecard.team);
+    const allOwners = Array.from(new Set([
+      ...teamMetrics.map(m => m.owner).filter(Boolean),
+      ...((EOS_PEOPLE || []).filter(p => p && p !== 'All'))
+    ]));
+    if (checked.length === allOwners.length) {
+      E.f.scorecard.owners = null;
+    } else {
+      E.f.scorecard.owners = checked;
+    }
+    E.owner_filter_open = true;
+    renderMain();
+    return;
+  }
   if (e.target.classList.contains('nn-rating-input')) {
     const att = e.target.dataset.id;
     if (att) {
@@ -2735,7 +2847,12 @@ document.addEventListener('change', async e => {
 
 document.addEventListener('focusout', e => { if (e.target.hasAttribute && e.target.hasAttribute('data-eos-cell')) eosCommit(e.target); });
 document.addEventListener('keydown', async e => {
-  const t = e.target; if (!t.hasAttribute) return;
+  if (e.key === 'Escape' && E.owner_filter_open) {
+    E.owner_filter_open = false;
+    E.owner_filter_search = '';
+    renderMain();
+  }
+  const t = e.target; if (!t || !t.hasAttribute) return;
   if (e.key === 'Escape' && E.menu) { E.menu = null; if (S.mod === 'eos') renderMain(); }
   if (t.hasAttribute('data-eos-cell')) {
     if (e.key === 'Enter') { e.preventDefault(); eosCommit(t); }

@@ -97,8 +97,7 @@ function renderTop() {
   const exp = S.hidden;
   const top = $('#top');
   if (!top) return;
-  top.innerHTML = `<button class="icon-btn menu-btn" data-act="menu" aria-label="Open navigation">${icon('menu')}</button>
-   ${exp ? `<button class="icon-btn exp" data-act="sbtoggle" aria-label="Show sidebar" title="Show sidebar">${icon('panel')}</button>` : ''}
+  top.innerHTML = `${exp ? `<button class="icon-btn exp" data-act="sbtoggle" aria-label="Show sidebar" title="Show sidebar">${icon('panel')}</button>` : ''}
    <div class="crumbs" style="display:flex;align-items:center;gap:8px">
      ${crumbs()}
    </div>
@@ -108,7 +107,7 @@ function renderTop() {
 
 function renderSide() {
   const m = MODULES[0];
-  const head = `<div><h2>${m.name}</h2><p>${m.blurb}</p></div><button class="icon-btn" data-act="sbtoggle" aria-label="Hide sidebar" title="Hide sidebar">${icon('panel')}</button>`;
+  const head = `<h2>${m.name}</h2><button class="icon-btn" data-act="sbtoggle" aria-label="Hide sidebar" title="Hide sidebar">${icon('panel')}</button>`;
   const nav = m.nav.map(([l, ic, kids]) => {
     const id = slug(l);
     if (!kids) return `<button class="nv" data-act="nav" data-id="${id}" ${S.page === id ? 'aria-current="page"' : ''}>${icon(ic)}<span class="lbl">${l}</span></button>`;

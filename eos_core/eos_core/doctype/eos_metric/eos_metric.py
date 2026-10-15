@@ -53,13 +53,19 @@ class EOSMetric(Document):
 			return
 		if frappe.db.exists("Player", {"user": self.owner_user, "team": self.team}):
 			return
-		if not frappe.db.exists("Player", {"user": self.owner_user}):
-			frappe.throw(
-				f"Owner {frappe.bold(self.owner_user)} has no Player record in team {frappe.bold(self.team)}."
-			)
-		frappe.throw(
-			f"Owner {frappe.bold(self.owner_user)} is not a Player in team {frappe.bold(self.team)}."
-		)
+		fullname = frappe.utils.get_fullname(self.owner_user) or self.owner_user
+		player_name = f"{fullname} ({self.team})"
+		if frappe.db.exists("Player", player_name):
+			player_name = f"{fullname} ({self.team}) - {frappe.generate_hash()[:4]}"
+		try:
+			frappe.get_doc({
+				"doctype": "Player",
+				"player_name": player_name,
+				"user": self.owner_user,
+				"team": self.team
+			}).insert(ignore_permissions=True)
+		except Exception:
+			pass
 
 	def validate_range_target(self):
 		if self.min_value == 0:

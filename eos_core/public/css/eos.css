@@ -310,14 +310,17 @@ td .icon-btn svg{width:16px;height:16px}
 
 .nn-card-wrap { border: 1px solid #e5e7eb; border-radius: 8px; background: #ffffff; overflow: hidden; margin-bottom: 20px; }
 .nn-table-scroll { overflow-x: auto; max-width: 100%; position: relative; }
-.nn-sc-tbl { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12.5px; white-space: nowrap; }
-.nn-sc-tbl th { padding: 8px 12px; background: #fafafa; border-bottom: 1px solid #e5e7eb; border-right: 1px solid #f1f3f5; font-size: 11px; font-weight: 600; color: #6b7280; text-align: right; }
+.nn-sc-tbl { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12.5px; }
+.nn-sc-tbl th { padding: 8px 12px; background: #fafafa; border-bottom: 1px solid #e5e7eb; border-right: 1px solid #f1f3f5; font-size: 11px; font-weight: 600; color: #6b7280; text-align: right; white-space: nowrap; }
 .nn-sc-tbl th.left { text-align: left; }
-.nn-sc-tbl td { padding: 10px 12px; border-bottom: 1px solid #f1f3f5; border-right: 1px solid #f8fafc; text-align: right; vertical-align: middle; background: #fff; }
+.nn-sc-tbl td { padding: 10px 12px; border-bottom: 1px solid #f1f3f5; border-right: 1px solid #f8fafc; text-align: right; vertical-align: middle; background: #fff; white-space: nowrap; }
 .nn-sc-tbl td.left { text-align: left; }
-.nn-col-metric { position: sticky; left: 0; z-index: 4; min-width: 220px; max-width: 240px; background: #fff; }
-.nn-col-owner { width: 64px; text-align: center; }
-.nn-col-goal { width: 90px; text-align: center; }
+.nn-sc-tbl th.nn-col-metric, .nn-sc-tbl td.nn-col-metric, .nn-col-metric { position: sticky; left: 0; z-index: 5; width: 240px; min-width: 240px; max-width: 240px; background: #fff; white-space: normal !important; word-break: break-word !important; overflow-wrap: break-word !important; line-height: 1.35; box-sizing: border-box; }
+.nn-sc-tbl thead th.nn-col-metric { background: #fafafa !important; z-index: 6; }
+.nn-sc-tbl tbody tr:hover td.nn-col-metric { background: #f9fafb !important; }
+.nn-col-metric .nn-metric-title { white-space: normal !important; word-break: break-word !important; overflow-wrap: break-word !important; display: block; max-width: 100%; }
+.nn-col-owner { width: 68px; min-width: 68px; max-width: 68px; text-align: center; }
+.nn-col-goal { min-width: 130px; text-align: center; white-space: nowrap; padding: 10px 14px; }
 .nn-sc-cell { min-width: 68px; text-align: center; }
 .nn-sc-cell.pass { background-color: #dcfce7 !important; color: #15803d !important; font-weight: 700; }
 .nn-sc-cell.fail { background-color: #fee2e2 !important; color: #dc2626 !important; font-weight: 700; }
@@ -342,5 +345,17 @@ td .icon-btn svg{width:16px;height:16px}
 .nn-search-input-wrap input { border: none; outline: none; font-size: 12px; color: #111827; background: transparent; width: 140px; }
 .nn-card-header { padding: 14px 18px; border-bottom: 1px solid #f1f3f5; display: flex; align-items: center; justify-content: space-between; }
 .nn-metric-title:hover { color: #064e3b; text-decoration: underline; }
+
+.nn-owner-filter-btn { background: transparent; border: none; padding: 2px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; border-radius: 4px; transition: all 0.15s ease; line-height: 1; }
+.nn-owner-filter-btn:hover { background: #f3f4f6; color: #047857 !important; }
+.nn-owner-filter-btn.active { color: #047857 !important; }
+.nn-owner-filter-popover { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 6px; width: 220px; background: #ffffff; border: 1px solid #d1d5db; border-radius: 6px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1); z-index: 99999; padding: 8px; text-align: left; font-family: inherit; font-weight: normal; cursor: default; }
+.nn-owner-filter-popover input[type="text"] { width: 100%; height: 28px; padding: 4px 8px; font-size: 12px; border: 1px solid #d1d5db; border-radius: 4px; outline: none; box-sizing: border-box; margin-bottom: 6px; color: #111827; background: #ffffff; }
+.nn-owner-filter-popover input[type="text"]:focus { border-color: #047857; }
+.nn-owner-filter-list { max-height: 190px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.nn-owner-filter-opt, .nn-owner-filter-popover label { display: flex; align-items: center; gap: 8px; padding: 4px 6px; font-size: 12px; color: #374151; cursor: pointer; border-radius: 4px; user-select: none; transition: background 0.1s ease; }
+.nn-owner-filter-opt:hover, .nn-owner-filter-popover label:hover { background: #f3f4f6; color: #111827; }
+.nn-owner-filter-popover input[type="checkbox"] { cursor: pointer; accent-color: #047857; margin: 0; width: 14px; height: 14px; }
+
 
 

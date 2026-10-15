@@ -24,6 +24,7 @@
 	const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 	const IC = {
+		"filter": '<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>',
 		"chevron-down": '<path d="m6 9 6 6 6-6"/>',
 		"chevron-up": '<path d="m18 15-6-6-6 6"/>',
 		"chevron-right": '<path d="m9 18 6-6-6-6"/>',
@@ -81,6 +82,9 @@
 				timeframe: "All",
 				range: 13,
 				team: "All Teams",
+				owner_filter: null,
+				owner_popover_open: false,
+				owner_search: "",
 				sc_dir_team: "All Teams",
 				sc_dir_tf: "All",
 				sc_dir_id: "",
@@ -531,16 +535,27 @@
 			.nn-card-wrap { border: 1px solid #e5e7eb; border-radius: 8px; background: #ffffff; overflow: hidden; }
 			.nn-card-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid #f1f3f5; }
 			.nn-table-scroll { overflow-x: auto; max-width: 100%; position: relative; }
-			.nn-sc-tbl { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12.5px; white-space: nowrap; }
-			.nn-sc-tbl th { padding: 8px 12px; background: #fafafa; border-bottom: 1px solid #e5e7eb; border-right: 1px solid #f1f3f5; font-size: 11px; font-weight: 600; color: #6b7280; text-align: right; }
+			.nn-sc-tbl { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12.5px; }
+			.nn-sc-tbl th { padding: 8px 12px; background: #fafafa; border-bottom: 1px solid #e5e7eb; border-right: 1px solid #f1f3f5; font-size: 11px; font-weight: 600; color: #6b7280; text-align: right; white-space: nowrap; }
 			.nn-sc-tbl th.left { text-align: left; }
-			.nn-sc-tbl td { padding: 10px 12px; border-bottom: 1px solid #f1f3f5; border-right: 1px solid #f8fafc; text-align: right; vertical-align: middle; background: #fff; }
+			.nn-sc-tbl td { padding: 10px 12px; border-bottom: 1px solid #f1f3f5; border-right: 1px solid #f8fafc; text-align: right; vertical-align: middle; background: #fff; white-space: nowrap; }
 			.nn-sc-tbl td.left { text-align: left; }
-			.nn-col-metric { position: sticky; left: 0; z-index: 4; min-width: 240px; max-width: 240px; background: #fff; }
-			.nn-col-owner { position: sticky; left: 240px; z-index: 4; width: 64px; min-width: 64px; max-width: 64px; text-align: center; background: #fff; }
-			.nn-col-goal { position: sticky; left: 304px; z-index: 4; width: 90px; min-width: 90px; max-width: 90px; text-align: center; background: #fff; border-right: 2px solid #e2e8f0 !important; box-shadow: 3px 0 6px -2px rgba(0,0,0,0.08); }
+			.nn-sc-tbl th.nn-col-metric, .nn-sc-tbl td.nn-col-metric, .nn-col-metric { position: sticky; left: 0; z-index: 4; width: 240px; min-width: 240px; max-width: 240px; background: #fff; white-space: normal !important; word-break: break-word !important; overflow-wrap: break-word !important; line-height: 1.35; box-sizing: border-box; }
+			.nn-col-metric .nn-metric-title { white-space: normal !important; word-break: break-word !important; overflow-wrap: break-word !important; display: block; max-width: 100%; }
+			.nn-col-owner { position: sticky; left: 240px; z-index: 4; width: 76px; min-width: 76px; max-width: 76px; text-align: center; background: #fff; }
+			.nn-col-goal { position: sticky; left: 316px; z-index: 4; width: 90px; min-width: 90px; max-width: 90px; text-align: center; background: #fff; border-right: 2px solid #e2e8f0 !important; box-shadow: 3px 0 6px -2px rgba(0,0,0,0.08); }
 			.nn-sc-tbl thead th.nn-col-metric, .nn-sc-tbl thead th.nn-col-owner, .nn-sc-tbl thead th.nn-col-goal { background: #fafafa !important; z-index: 6; }
 			.nn-sc-tbl tbody tr:hover td.nn-col-metric, .nn-sc-tbl tbody tr:hover td.nn-col-owner, .nn-sc-tbl tbody tr:hover td.nn-col-goal { background: #f9fafb !important; }
+			.nn-owner-filter-btn { background: transparent; border: none; padding: 2px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; border-radius: 4px; transition: all 0.15s ease; line-height: 1; }
+			.nn-owner-filter-btn:hover { background: #f3f4f6; color: #047857 !important; }
+			.nn-owner-filter-btn.active { color: #047857 !important; }
+			.nn-owner-filter-popover { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 6px; width: 220px; background: #ffffff; border: 1px solid #d1d5db; border-radius: 6px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1); z-index: 99999; padding: 8px; text-align: left; font-family: inherit; font-weight: normal; cursor: default; }
+			.nn-owner-filter-popover input[type="text"] { width: 100%; height: 28px; padding: 4px 8px; font-size: 12px; border: 1px solid #d1d5db; border-radius: 4px; outline: none; box-sizing: border-box; margin-bottom: 6px; color: #111827; background: #ffffff; }
+			.nn-owner-filter-popover input[type="text"]:focus { border-color: #047857; }
+			.nn-owner-filter-list { max-height: 190px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+			.nn-owner-filter-opt, .nn-owner-filter-popover label { display: flex; align-items: center; gap: 8px; padding: 4px 6px; font-size: 12px; color: #374151; cursor: pointer; border-radius: 4px; user-select: none; transition: background 0.1s ease; }
+			.nn-owner-filter-opt:hover, .nn-owner-filter-popover label:hover { background: #f3f4f6; color: #111827; }
+			.nn-owner-filter-popover input[type="checkbox"] { cursor: pointer; accent-color: #047857; margin: 0; width: 14px; height: 14px; }
 			.nn-btn-bar { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 6px; border: 1px solid #e5e7eb; background: #fff; font-size: 12px; font-weight: 500; color: #374151; cursor: pointer; }
 			.nn-btn-bar:hover { background: #f9fafb; border-color: #cbd5e1; }
 
@@ -3564,7 +3579,7 @@
 				});
 				return `
 										<tr>
-											<td class="left nn-col-metric"><b>${this.esc(m.title)}</b></td>
+											<td class="left nn-col-metric" style="white-space:normal;word-break:break-word;overflow-wrap:break-word;line-height:1.35"><b style="white-space:normal;word-break:break-word;display:block">${this.esc(m.title)}</b></td>
 											<td class="nn-col-owner"><span class="nn-owner-circle">${av}</span></td>
 											<td class="nn-col-goal">${m.goal_op} ${m.goal} ${this.esc(m.unit || "")}</td>
 											${periods.map(p => {
@@ -4472,8 +4487,6 @@
 						<button class="nn-ibtn-bar" id="nn-sc-redo" title="${__("Redo")}">${ic("redo", 14)}</button>
 						<button class="nn-btn-bar" id="nn-new-group">+ ${__("New group")}</button>
 						<button class="nn-btn-bar" id="nn-mgr">${__("Go to Measurable Manager")}</button>
-						<button class="nn-btn-bar" id="nn-optimize"><span style="color:#047857">${ic("sparkle", 13)}</span> ${__("Optimize Scorecard")}</button>
-						<button class="nn-btn-bar" id="nn-gen-test-data" style="color:#047857" title="${__("Create test data with red and green boxes")}"><span style="color:#10b981">${ic("sparkle", 13)}</span> ${__("Generate Test Data")}</button>
 						<div class="nn-search-input-wrap">${ic("search", 13)}<input id="nn-search-input" placeholder="${__("Search")} ${this.get_doctype_label("EOS Metric", "Measurables")}…" value="${this.esc(s.search)}"></div>
 					</div>
 				</div>
@@ -4483,9 +4496,6 @@
 						<div style="display:flex;align-items:center;gap:8px">
 							<span style="font-size:16px;font-weight:700">${s.timeframe === "Month" ? __("Monthly KPIs") : s.timeframe === "Quarter" ? __("Quarterly KPIs") : s.timeframe === "Annual" ? __("Annual KPIs") : __("Weekly KPIs")}</span>
 							<span class="nn-badge-cnt">${this.data.metrics.length}</span>
-						</div>
-						<div>
-							<button class="nn-btn-bar" id="nn-new-meas">${__("New Measurable")} ${ic("chevron-down", 12)}</button>
 						</div>
 					</div>
 
@@ -4610,27 +4620,53 @@
 				frappe.set_route("List", "EOS Metric");
 			});
 
-			// Optimize Scorecard button
-			$m.find("#nn-optimize").off("click").on("click", function (e) {
-				e.preventDefault();
-				self.show_optimize_modal();
+			$m.find("#nn-sc-owner-filter").off("click").on("click", function (e) {
+				e.stopPropagation();
+				self.s.owner_popover_open = !self.s.owner_popover_open;
+				self.s.owner_search = "";
+				self.render_grid();
+				if (self.s.owner_popover_open) {
+					setTimeout(() => {
+						$m.find("#nn-owner-search").focus();
+					}, 50);
+				}
 			});
 
-			$m.find("#nn-gen-test-data").off("click").on("click", async function (e) {
-				e.preventDefault();
-				const metric_ids = (self.data.metrics || []).map(m => m.id);
-				frappe.show_alert({ message: __("Generating test data..."), indicator: "blue" });
-				try {
-					await self.call("eos_core.eos_core.doctype.scorecard.scorecard.generate_test_scorecard_data", {
-						team: self.s.team,
-						metrics: metric_ids,
-						force: 1
-					});
-					await self.load_scorecard();
-					frappe.show_alert({ message: __("Test data created with red and green boxes!"), indicator: "green" });
-				} catch (err) {
-					console.error("Test data generation error:", err);
-					frappe.show_alert({ message: __("Failed to generate test data"), indicator: "red" });
+			$m.find("#nn-owner-search").off("input").on("input", function () {
+				self.s.owner_search = $(this).val();
+				const q = self.s.owner_search.toLowerCase().trim();
+				$m.find(".nn-owner-filter-opt").each(function () {
+					const txt = $(this).text().toLowerCase();
+					$(this).css("display", (!q || txt.includes(q)) ? "flex" : "none");
+				});
+			});
+
+			$m.find("#nn-owner-all").off("change").on("change", function () {
+				const checked = $(this).prop("checked");
+				self.s.owner_filter = checked ? null : [];
+				self.render_grid();
+			});
+
+			$m.find(".nn-owner-filter-item").off("change").on("change", function () {
+				const items = $m.find(".nn-owner-filter-item");
+				const checked = [];
+				items.each(function () {
+					if ($(this).prop("checked")) checked.push($(this).val());
+				});
+				const all_owners = Array.from(new Set((self.data.metrics || []).map(m => m.owner).filter(Boolean)));
+				if (checked.length === all_owners.length) {
+					self.s.owner_filter = null;
+				} else {
+					self.s.owner_filter = checked;
+				}
+				self.render_grid();
+			});
+
+			$(document).off("click.nn_owner_filter").on("click.nn_owner_filter", function (e) {
+				if (self.s.owner_popover_open && !$(e.target).closest(".nn-owner-filter-popover, #nn-sc-owner-filter").length) {
+					self.s.owner_popover_open = false;
+					self.s.owner_search = "";
+					self.render_grid();
 				}
 			});
 
@@ -4737,19 +4773,50 @@
 			d.show();
 		}
 
+		render_owner_popover(all_owners) {
+			const self = this;
+			const is_all = !this.s.owner_filter || this.s.owner_filter.length === all_owners.length;
+			const q = (this.s.owner_search || "").toLowerCase().trim();
+			const visible_owners = all_owners.filter(o => !q || (self.get_user_display_name(o) || o).toLowerCase().includes(q));
+
+			return `
+				<div class="nn-owner-filter-popover" id="nn-owner-popover" onclick="event.stopPropagation()">
+					<input type="text" class="nn-owner-filter-search" id="nn-owner-search" placeholder="${__("Search")}..." value="${this.esc(this.s.owner_search || "")}">
+					<div class="nn-owner-filter-list">
+						<label style="color:#111827;font-weight:600">
+							<input type="checkbox" class="nn-owner-filter-all" id="nn-owner-all" ${is_all ? 'checked' : ''}>
+							<span>(${__("Select All")})</span>
+						</label>
+						${visible_owners.map(o => {
+							const name = self.get_user_display_name(o) || o;
+							const checked = is_all || (Array.isArray(self.s.owner_filter) && self.s.owner_filter.includes(o));
+							return `
+								<label class="nn-owner-filter-opt">
+									<input type="checkbox" class="nn-owner-filter-item" value="${self.esc(o)}" ${checked ? 'checked' : ''}>
+									<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${self.esc(name)}">${self.esc(name)}</span>
+								</label>
+							`;
+						}).join("")}
+						${visible_owners.length === 0 ? `<div style="padding:6px;font-size:11.5px;color:#9ca3af;text-align:center;">${__("No owners found")}</div>` : ""}
+					</div>
+				</div>
+			`;
+		}
+
 		render_grid() {
 			const self = this;
 			const P = this.data.periods;
 			const q = (this.s.search || "").toLowerCase().trim();
-			const metrics = this.data.metrics.filter(m => !q || m.title.toLowerCase().includes(q));
+			let metrics = this.data.metrics.filter(m => !q || m.title.toLowerCase().includes(q));
 
-			if (!metrics.length) {
-				this.$main.find("#nn-table-wrap").html(`<div style="padding:48px;text-align:center;color:#9ca3af">${__("No measurables found.")}</div>`);
-				return;
+			const all_owners = Array.from(new Set((this.data.metrics || []).map(m => m.owner).filter(Boolean))).sort();
+			const is_owner_filtered = Array.isArray(this.s.owner_filter) && this.s.owner_filter.length < all_owners.length;
+			if (Array.isArray(this.s.owner_filter)) {
+				metrics = metrics.filter(m => this.s.owner_filter.includes(m.owner));
 			}
 
 			const ths = P.map(p => `<th>${p.label}</th>`).join("");
-			const rows = metrics.map(m => {
+			const rows = metrics.length ? metrics.map(m => {
 				const owner_label = this.get_user_display_name(m.owner);
 				const initials = (owner_label || "TJ").split(/\s+/).slice(0, 2).map(w => w[0] || "").join("").toUpperCase();
 
@@ -4775,8 +4842,8 @@
 
 				return `
 					<tr>
-						<td class="left nn-col-metric" style="font-weight:600;color:#111827">
-							<span class="nn-metric-title" data-id="${m.id}" style="cursor:pointer">${this.esc(m.title)}</span>
+						<td class="left nn-col-metric" style="font-weight:600;color:#111827;white-space:normal;word-break:break-word;overflow-wrap:break-word;line-height:1.35">
+							<span class="nn-metric-title" data-id="${m.id}" style="cursor:pointer;white-space:normal;word-break:break-word;overflow-wrap:break-word;display:block">${this.esc(m.title)}</span>
 						</td>
 						<td class="nn-col-owner" style="text-align:center">
 							<span class="nn-av-circle" style="width:22px;height:22px;font-size:9.5px">${initials}</span>
@@ -4785,14 +4852,26 @@
 						${cells}
 					</tr>
 				`;
-			}).join("");
+			}).join("") : `
+				<tr>
+					<td colspan="${P.length + 3}" style="padding:48px;text-align:center;color:#9ca3af">${__("No measurables found.")}</td>
+				</tr>
+			`;
 
 			this.$main.find("#nn-table-wrap").html(`
 				<table class="nn-sc-tbl">
 					<thead>
 						<tr>
 							<th class="left nn-col-metric" style="min-width:240px">${this.get_field_label("EOS Metric", "metric_name", "Measurable")}</th>
-							<th class="nn-col-owner" style="width:64px;min-width:64px;text-align:center">${this.get_field_label("EOS Metric", "owner_user", "Owner")}</th>
+							<th class="nn-col-owner" style="width:76px;min-width:76px;text-align:center;position:relative;">
+								<div style="display:inline-flex;align-items:center;justify-content:center;gap:4px">
+									<span>${this.get_field_label("EOS Metric", "owner_user", "Owner")}</span>
+									<button class="nn-btn-icon nn-owner-filter-btn ${is_owner_filtered ? 'active' : ''}" id="nn-sc-owner-filter" title="${__("Filter by Owner")}" style="color:${is_owner_filtered ? '#047857' : '#9ca3af'};background:none;border:none;padding:1px;cursor:pointer;display:inline-flex;align-items:center;">
+										${ic("filter", 12)}
+									</button>
+								</div>
+								${this.s.owner_popover_open ? this.render_owner_popover(all_owners) : ''}
+							</th>
 							<th class="nn-col-goal" style="width:90px;min-width:90px;text-align:center">${this.get_field_label("EOS Metric", "target_value", "Goal")}</th>
 							${ths}
 						</tr>

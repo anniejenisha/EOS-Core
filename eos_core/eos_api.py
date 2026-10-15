@@ -567,23 +567,75 @@ def save_scorecard(team, timeframe="Weekly", description=None):
 	return {"status": "ok", "name": doc.name}
 
 
+def ensure_player_in_team(user, team):
+	if not user or not team:
+		return
+	if frappe.db.exists("Player", {"user": user, "team": team}):
+		return
+	fullname = frappe.utils.get_fullname(user) or user
+	player_name = f"{fullname} ({team})"
+	if frappe.db.exists("Player", player_name):
+		player_name = f"{fullname} ({team}) - {frappe.generate_hash()[:4]}"
+	try:
+		frappe.get_doc({
+			"doctype": "Player",
+			"player_name": player_name,
+			"user": user,
+			"team": team
+		}).insert(ignore_permissions=True)
+	except Exception:
+		pass
+
+
 @frappe.whitelist(allow_guest=True)
-def save_measurable(name, freq="Weekly", team=None, owner=None, unit="num", op=">=", target=0, desc=""):
-	owner_user = resolve_user_email(owner)
+def save_measurable(name, freq="Weekly", team=None, owner=None, unit="num", op=">=", target=0, desc="", docname=None):
+	owner_user = resolve_user_email(owner) or frappe.session.user or "Administrator"
+	target_team = team or "Leadership Team"
+	if target_team and not frappe.db.exists("Team", target_team):
+		try:
+			frappe.get_doc({
+				"doctype": "Team",
+				"team_name": target_team
+			}).insert(ignore_permissions=True)
+		except Exception:
+			pass
+	ensure_player_in_team(owner_user, target_team)
+
 	unit_type = "Currency" if unit == "kes" else ("Percentage" if unit == "pct" else "Number")
-	doc = frappe.get_doc({
-		"doctype": "EOS Metric",
-		"metric_name": name,
-		"frequency": freq.capitalize(),
-		"team": team or "Leadership Team",
-		"owner_user": owner_user or frappe.session.user or "Administrator",
-		"unit_type": unit_type,
-		"unit": "$" if unit == "kes" else ("%" if unit == "pct" else ""),
-		"operator": op,
-		"target_value": flt(target),
-		"description": desc,
-		"archived": 0
-	}).insert(ignore_permissions=True)
+	
+	existing_name = docname
+	if not existing_name and frappe.db.exists("EOS Metric", name):
+		existing_name = name
+	elif not existing_name and frappe.db.exists("EOS Metric", {"metric_name": name}):
+		existing_name = frappe.db.get_value("EOS Metric", {"metric_name": name}, "name")
+
+	if existing_name and frappe.db.exists("EOS Metric", existing_name):
+		doc = frappe.get_doc("EOS Metric", existing_name)
+		doc.metric_name = name
+		doc.frequency = freq.capitalize()
+		doc.team = target_team
+		doc.owner_user = owner_user
+		doc.unit_type = unit_type
+		doc.unit = "$" if unit == "kes" else ("%" if unit == "pct" else "")
+		doc.operator = op
+		doc.target_value = flt(target)
+		doc.description = desc
+		doc.archived = 0
+		doc.save(ignore_permissions=True)
+	else:
+		doc = frappe.get_doc({
+			"doctype": "EOS Metric",
+			"metric_name": name,
+			"frequency": freq.capitalize(),
+			"team": target_team,
+			"owner_user": owner_user,
+			"unit_type": unit_type,
+			"unit": "$" if unit == "kes" else ("%" if unit == "pct" else ""),
+			"operator": op,
+			"target_value": flt(target),
+			"description": desc,
+			"archived": 0
+		}).insert(ignore_permissions=True)
 	frappe.db.commit()
 	return {"status": "ok", "docname": doc.name}
 
