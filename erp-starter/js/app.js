@@ -100,7 +100,6 @@ function renderTop() {
   top.innerHTML = `<button class="icon-btn menu-btn" data-act="menu" aria-label="Open navigation">${icon('menu')}</button>
    ${exp ? `<button class="icon-btn exp" data-act="sbtoggle" aria-label="Show sidebar" title="Show sidebar">${icon('panel')}</button>` : ''}
    <div class="crumbs" style="display:flex;align-items:center;gap:8px">
-     <img src="${BRAND.logo}" style="width:22px;height:22px;object-fit:contain" alt="BEL" onerror="this.style.display='none'">
      ${crumbs()}
    </div>
    <button class="cmdk" data-act="pal" aria-label="Search">${icon('search')}<span>Search</span><kbd>Ctrl+K</kbd></button>
@@ -109,12 +108,7 @@ function renderTop() {
 
 function renderSide() {
   const m = MODULES[0];
-  const head = `<div style="display:flex;align-items:center;gap:10px">
-    <div style="width:32px;height:32px;border-radius:6px;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:transparent">
-      <img src="${BRAND.logo}" style="width:100%;height:100%;object-fit:contain" alt="BEL" onerror="if(!this.dataset.fallback){this.dataset.fallback=1;this.src='/files/bel-logo-256.png?v=2.0.6';}else{this.outerHTML='<span style=\\'font-weight:700\\'>B</span>';}">
-    </div>
-    <div><h2>${m.name}</h2><p>${m.blurb}</p></div>
-  </div><button class="icon-btn" data-act="sbtoggle" aria-label="Hide sidebar" title="Hide sidebar">${icon('panel')}</button>`;
+  const head = `<div><h2>${m.name}</h2><p>${m.blurb}</p></div><button class="icon-btn" data-act="sbtoggle" aria-label="Hide sidebar" title="Hide sidebar">${icon('panel')}</button>`;
   const nav = m.nav.map(([l, ic, kids]) => {
     const id = slug(l);
     if (!kids) return `<button class="nv" data-act="nav" data-id="${id}" ${S.page === id ? 'aria-current="page"' : ''}>${icon(ic)}<span class="lbl">${l}</span></button>`;
