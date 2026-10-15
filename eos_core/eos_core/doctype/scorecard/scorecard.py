@@ -823,24 +823,6 @@ def get_scorecard_entries(metrics=None, team=None, start_date=None, end_date=Non
 			limit=5000,
 		)
 
-	if len(entries) < 6:
-		generate_test_scorecard_data(team=team, metrics=metrics, force=1)
-		entries = frappe.get_all(
-			"Scorecard Entry",
-			filters=filters,
-			fields=["name", "metric", "parent", "week_start_date as d", "actual_value as v", "status"],
-			order_by="week_start_date asc",
-			limit=5000,
-		)
-		if not entries and metrics:
-			entries = frappe.get_all(
-				"Scorecard Entry",
-				filters={"metric": ["in", metrics]},
-				fields=["name", "metric", "parent", "week_start_date as d", "actual_value as v", "status"],
-				order_by="week_start_date asc",
-				limit=5000,
-			)
-
 	return entries
 
 

@@ -138,12 +138,6 @@ def get_measurables_list():
 			val_map = {str(e.week_start_date): e.actual_value for e in entries if e.week_start_date}
 			
 			vals = [val_map.get(d, None) for d in weekly_dates]
-			
-			# If vals are all null, see if any entries exist in order
-			if all(v is None for v in vals) and entries:
-				vals = [e.actual_value for e in entries[:13]]
-				while len(vals) < 13:
-					vals.append(None)
 
 			unit = "num"
 			if m.unit_type == "Currency" or "kes" in (m.unit or "").lower() or "$" in (m.unit or ""):
@@ -609,6 +603,16 @@ def save_measurable(name, freq="Weekly", team=None, owner=None, unit="num", op="
 	elif not existing_name and frappe.db.exists("EOS Metric", {"metric_name": name}):
 		existing_name = frappe.db.get_value("EOS Metric", {"metric_name": name}, "name")
 
+	op_str = str(op or ">=").strip()
+	if op_str in ("=", "=="):
+		op_str = "=="
+	elif op_str in (">", ">="):
+		op_str = ">="
+	elif op_str in ("<", "<="):
+		op_str = "<="
+	elif op_str not in (">=", "<=", "==", "Inside min/max", "Outside min/max"):
+		op_str = ">="
+
 	if existing_name and frappe.db.exists("EOS Metric", existing_name):
 		doc = frappe.get_doc("EOS Metric", existing_name)
 		doc.metric_name = name
@@ -617,7 +621,7 @@ def save_measurable(name, freq="Weekly", team=None, owner=None, unit="num", op="
 		doc.owner_user = owner_user
 		doc.unit_type = unit_type
 		doc.unit = "$" if unit == "kes" else ("%" if unit == "pct" else "")
-		doc.operator = op
+		doc.operator = op_str
 		doc.target_value = flt(target)
 		doc.description = desc
 		doc.archived = 0
@@ -631,7 +635,7 @@ def save_measurable(name, freq="Weekly", team=None, owner=None, unit="num", op="
 			"owner_user": owner_user,
 			"unit_type": unit_type,
 			"unit": "$" if unit == "kes" else ("%" if unit == "pct" else ""),
-			"operator": op,
+			"operator": op_str,
 			"target_value": flt(target),
 			"description": desc,
 			"archived": 0

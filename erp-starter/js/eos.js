@@ -42,7 +42,7 @@ function ePeriods(freq, n) {
   }
   return out;
 }
-const ePass = (m, v) => ({ '>=': v >= m.target, '<=': v <= m.target, '=': v == m.target, '>': v > m.target, '<': v < m.target }[m.op] ?? true);
+const ePass = (m, v) => ({ '>=': v >= m.target, '<=': v <= m.target, '=': v == m.target, '==': v == m.target, '>': v > m.target, '<': v < m.target }[m.op] ?? true);
 
 /* ---------- ERP Dynamic Data Stores ---------- */
 const DEFAULT_SCORECARDS = [
@@ -456,7 +456,7 @@ function renderMeasurablesGrid(curTab) {
           <thead>
             <tr>
               <th class="left nn-col-metric" style="width:240px;min-width:240px;max-width:240px">Measurable</th>
-              <th class="nn-col-owner" style="width:68px;min-width:68px;max-width:68px;text-align:center;position:relative;">
+              <th class="nn-col-owner" style="width:68px;min-width:68px;max-width:68px;text-align:center;">
                 <div style="display:inline-flex;align-items:center;justify-content:center;gap:4px">
                   <span>Owner</span>
                   <button class="nn-owner-filter-btn ${isOwnerFiltered ? 'active' : ''}" data-act="eos-toggle-owner-filter" title="Filter by Owner" style="color:${isOwnerFiltered ? '#047857' : '#9ca3af'};">
@@ -465,7 +465,7 @@ function renderMeasurablesGrid(curTab) {
                 </div>
                 ${E.owner_filter_open ? renderOwnerFilterPopover(allOwners, F.owners, E.owner_filter_search || '') : ''}
               </th>
-              <th class="nn-col-goal" style="min-width:130px;text-align:center">Goal</th>
+              <th class="nn-col-goal" style="width:130px;min-width:130px;max-width:130px;text-align:center">Goal</th>
               ${periods.map(p => `<th style="min-width:80px;text-align:center">${eEsc(p)}</th>`).join('')}
             </tr>
           </thead>
@@ -513,8 +513,8 @@ function renderMeasurablesGrid(curTab) {
                   <td class="nn-col-owner" style="width:68px;min-width:68px;max-width:68px;text-align:center">
                     <span class="nn-owner-circle" style="width:24px;height:24px;font-size:10px" title="${eEsc(m.owner)}">${av}</span>
                   </td>
-                  <td class="nn-col-goal" style="min-width:130px;text-align:center;white-space:nowrap">
-                    <span style="font-weight:600;color:#374151;white-space:nowrap">${m.op || '>='} ${eU(m, m.target)}</span>
+                  <td class="nn-col-goal" style="width:130px;min-width:130px;max-width:130px;text-align:center;white-space:nowrap">
+                    <span style="font-weight:600;color:#374151;white-space:nowrap">${(m.op === '==' || m.op === '=') ? '=' : (m.op || '>=')} ${eU(m, m.target)}</span>
                   </td>
                   ${cells}
                 </tr>
@@ -1821,7 +1821,7 @@ function eosSave() {
   E.form.save(vals); closeDrawer(); E.form = null; renderMain();
 }
 
-const eOps = [['>=', 'Greater than or equal to goal'], ['<=', 'Less than or equal to goal'], ['=', 'Equal to goal'], ['>', 'Greater than goal'], ['<', 'Less than goal']];
+const eOps = [['>=', '>= (Greater than or equal)'], ['<=', '<= (Less than or equal)'], ['==', '= (Equal to goal)'], ['Inside min/max', 'Inside min/max'], ['Outside min/max', 'Outside min/max']];
 
 function eosModal(title, contentHtml) {
   const existing = document.getElementById('eos-generic-modal');
@@ -2051,11 +2051,12 @@ function eosDrawer(kind, rec, pre) {
       { k: 'owner', l: 'Owner', req: true, ...own(r.owner) }
     ], async v => {
       if (rec) {
-        Object.assign(rec, { name: v.name, desc: v.desc, team: v.team, freq: v.freq, op: v.op, target: parseFloat(v.target) || 0, unit: v.unit, owner: v.owner });
+        const opCode = (v.op === '=' || v.op === '==') ? '==' : v.op;
+        Object.assign(rec, { name: v.name, desc: v.desc, team: v.team, freq: v.freq, op: opCode, target: parseFloat(v.target) || 0, unit: v.unit, owner: v.owner });
         toast('Updating Measurable in ERP...');
         renderMain();
         const res = await apiCall('eos_core.eos_api.save_measurable', {
-          name: v.name, freq: v.freq, team: v.team, owner: v.owner, unit: v.unit, op: v.op, target: parseFloat(v.target) || 0, desc: v.desc || '', docname: rec.docname || rec.name
+          name: v.name, freq: v.freq, team: v.team, owner: v.owner, unit: v.unit, op: opCode, target: parseFloat(v.target) || 0, desc: v.desc || '', docname: rec.docname || rec.name
         });
         if (res && res.error) {
           toast(res.message || 'Error updating measurable', 'error');
@@ -2063,13 +2064,14 @@ function eosDrawer(kind, rec, pre) {
           toast('Measurable updated in ERP DocType!');
         }
       } else {
+        const opCode = (v.op === '=' || v.op === '==') ? '==' : v.op;
         const newM = {
           id: ++eSeq,
           name: v.name,
           desc: v.desc,
           team: v.team,
           freq: v.freq,
-          op: v.op,
+          op: opCode,
           target: parseFloat(v.target) || 0,
           unit: v.unit,
           owner: v.owner,
@@ -2079,7 +2081,7 @@ function eosDrawer(kind, rec, pre) {
         toast('Saving Measurable to ERP EOS Metric...');
         renderMain();
         const res = await apiCall('eos_core.eos_api.save_measurable', {
-          name: v.name, freq: v.freq, team: v.team, owner: v.owner, unit: v.unit, op: v.op, target: parseFloat(v.target) || 0, desc: v.desc || ''
+          name: v.name, freq: v.freq, team: v.team, owner: v.owner, unit: v.unit, op: opCode, target: parseFloat(v.target) || 0, desc: v.desc || ''
         });
         if (res && res.error) {
           toast(res.message || 'Error saving measurable', 'error');

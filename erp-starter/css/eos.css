@@ -309,18 +309,20 @@ td .icon-btn svg{width:16px;height:16px}
 .nn-due-text.dark { color: #111827; font-weight: 600; }
 
 .nn-card-wrap { border: 1px solid #e5e7eb; border-radius: 8px; background: #ffffff; overflow: hidden; margin-bottom: 20px; }
-.nn-table-scroll { overflow-x: auto; max-width: 100%; position: relative; }
+.nn-table-scroll { overflow: auto; max-height: calc(100vh - 250px); max-width: 100%; position: relative; }
 .nn-sc-tbl { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12.5px; }
 .nn-sc-tbl th { padding: 8px 12px; background: #fafafa; border-bottom: 1px solid #e5e7eb; border-right: 1px solid #f1f3f5; font-size: 11px; font-weight: 600; color: #6b7280; text-align: right; white-space: nowrap; }
+.nn-sc-tbl thead th { position: sticky; top: 0; z-index: 10; background: #fafafa !important; box-shadow: 0 1px 0 #e5e7eb; }
 .nn-sc-tbl th.left { text-align: left; }
 .nn-sc-tbl td { padding: 10px 12px; border-bottom: 1px solid #f1f3f5; border-right: 1px solid #f8fafc; text-align: right; vertical-align: middle; background: #fff; white-space: nowrap; }
 .nn-sc-tbl td.left { text-align: left; }
 .nn-sc-tbl th.nn-col-metric, .nn-sc-tbl td.nn-col-metric, .nn-col-metric { position: sticky; left: 0; z-index: 5; width: 240px; min-width: 240px; max-width: 240px; background: #fff; white-space: normal !important; word-break: break-word !important; overflow-wrap: break-word !important; line-height: 1.35; box-sizing: border-box; }
-.nn-sc-tbl thead th.nn-col-metric { background: #fafafa !important; z-index: 6; }
-.nn-sc-tbl tbody tr:hover td.nn-col-metric { background: #f9fafb !important; }
-.nn-col-metric .nn-metric-title { white-space: normal !important; word-break: break-word !important; overflow-wrap: break-word !important; display: block; max-width: 100%; }
-.nn-col-owner { width: 68px; min-width: 68px; max-width: 68px; text-align: center; }
-.nn-col-goal { min-width: 130px; text-align: center; white-space: nowrap; padding: 10px 14px; }
+.nn-col-owner { position: sticky; left: 240px; z-index: 5; width: 68px; min-width: 68px; max-width: 68px; text-align: center; background: #fff; }
+.nn-col-goal { position: sticky; left: 308px; z-index: 5; width: 130px; min-width: 130px; max-width: 130px; text-align: center; white-space: nowrap; padding: 10px 14px; background: #fff; border-right: 2px solid #e2e8f0 !important; box-shadow: 3px 0 6px -2px rgba(0,0,0,0.06); }
+.nn-sc-tbl thead th.nn-col-metric { position: sticky; left: 0; top: 0; z-index: 25; background: #fafafa !important; box-shadow: 0 1px 0 #e5e7eb; }
+.nn-sc-tbl thead th.nn-col-owner { position: sticky; left: 240px; top: 0; z-index: 25; background: #fafafa !important; box-shadow: 0 1px 0 #e5e7eb; }
+.nn-sc-tbl thead th.nn-col-goal { position: sticky; left: 308px; top: 0; z-index: 25; background: #fafafa !important; border-right: 2px solid #e2e8f0 !important; box-shadow: 3px 1px 6px -2px rgba(0,0,0,0.06); }
+.nn-sc-tbl tbody tr:hover td.nn-col-metric, .nn-sc-tbl tbody tr:hover td.nn-col-owner, .nn-sc-tbl tbody tr:hover td.nn-col-goal { background: #f9fafb !important; }
 .nn-sc-cell { min-width: 68px; text-align: center; }
 .nn-sc-cell.pass { background-color: #dcfce7 !important; color: #15803d !important; font-weight: 700; }
 .nn-sc-cell.fail { background-color: #fee2e2 !important; color: #dc2626 !important; font-weight: 700; }
