@@ -85,9 +85,9 @@ function eRelTime(iso) {
 }
 
 const E = {
- tab: { scorecard: 'scorecards', sc_freq: 'weekly', rocks: 'list', todos: 'team', issues: 'short', meet: 'past' },
+ tab: { scorecard: 'scorecards', sc_freq: 'weekly', rocks: 'list', todos: 'team', issues: 'short', meet: 'upcoming' },
  f: {
-   scorecard: { team: 'All Teams', q_id: '', timeframe: 'All', per: '20', page: 1, sort: 'Created On' },
+   scorecard: { team: 'All Teams', q_id: '', q_meas: '', timeframe: 'All', per: '20', range: '13', page: 1, sort: 'Created On' },
    rocks: { team: 'All Teams', owner: 'All', status: 'All', people: false },
    todos: { team: 'All Teams', owner: 'All', arch: false, per: '25', page: 1 },
    issues: { team: 'All Teams', owner: 'All', arch: false, per: '25', page: 1 },
@@ -95,7 +95,27 @@ const E = {
    my: { team: 'All Teams', priv: 'Incomplete', rocks: 'All' }
  },
  edit: null, menu: null, vto: false, vtoV: { rev: '', profit: '', meas: '' }, collapsed: new Set(), openRock: new Set(),
- form: null, preOwner: null, focusMs: null, live: null, past: [], upcoming: [], loaded: false
+ form: null, preOwner: null, focusMs: null, live: null, past: [], upcoming: [], loaded: false,
+
+ meeting_in_progress: false,
+ meeting_agenda_type: 'l10',
+ meeting_step: 0,
+ meeting_seconds: 0,
+ meeting_step_seconds: 0,
+ meeting_step_times: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 },
+ meeting_sharing_idx: 0,
+ meeting_notes: '',
+ meeting_ratings: {},
+ meeting_attendance: {},
+ meeting_attendees: [],
+ meeting_good_news: {},
+ headlines: [
+   { id: 1, type: 'Customer', title: 'Key client onboarding went live seamlessly with 100% SLA met', author: 'Team Lead', date: 'Today' }
+ ],
+ cascading_messages: [],
+ meeting_tools_open: false,
+ meeting_modal: false,
+ active_tool_drawer: null
 };
 
 const AGENDA = [
@@ -241,11 +261,242 @@ function eosMy90() {
     : '<div class="none">No measurables assigned to you in ERP.</div>'}</section>`;
 }
 
-/* ---------- Scorecard (DocType List Matching ERP Desk) ---------- */
+/* ---------- Scorecard (Measurables Grid & Directory Matching Ninety.io) ---------- */
 function eosScorecard() {
   const F = E.f.scorecard;
-  const timeframes = ['All', 'Weekly', 'Monthly', 'Quarterly', 'Annual'];
+  const curTab = E.tab.scorecard || 'scorecards';
 
+  const head = `<div class="ph desk-ph" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;padding:2px 0">
+    <div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:16px;color:var(--ink-2);cursor:pointer" data-act="home" title="Home">🏠</span>
+        <span style="color:var(--ink-3);font-size:14px">/</span>
+        <h1 style="font-size:18px;font-weight:700;color:var(--g900);margin:0">Scorecard</h1>
+      </div>
+      <p class="lead" style="margin:4px 0 0 0;font-size:13px;color:#6b7280">
+        ${curTab === 'monthly' ? 'Track monthly rolled-up measurables against target goals.' : curTab === 'quarterly' ? 'Track quarterly rolled-up measurables against target goals.' : curTab === 'annual' ? 'Track annual rolled-up measurables against target goals.' : curTab === 'scorecards' ? 'View and manage team scorecards directory.' : 'Track weekly and monthly measurables against target goals.'}
+      </p>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <button class="icon-btn" data-act="eos-refresh" title="Reload from ERP" style="width:32px;height:32px;border:1px solid var(--line-2);border-radius:6px">🔄</button>
+      <button class="btn primary" data-act="${curTab === 'scorecards' ? 'create' : 'eos-add-measurable'}" style="height:32px;font-size:13px;padding:0 14px;border-radius:6px;font-weight:600;background:var(--g900);color:#fff">
+        ${icon('plus')} ${curTab === 'scorecards' ? 'Add Scorecard' : 'New Measurable'}
+      </button>
+    </div>
+  </div>`;
+
+  const tabsHtml = `
+    <div class="tabs" role="tablist" style="margin-bottom:14px">
+      <button class="tab" role="tab" aria-selected="${curTab === 'scorecards'}" data-act="eos-tab" data-id="scorecard:scorecards">All Scorecards</button>
+      <button class="tab" role="tab" aria-selected="${curTab === 'weekly'}" data-act="eos-tab" data-id="scorecard:weekly">Weekly KPIs</button>
+      <button class="tab" role="tab" aria-selected="${curTab === 'monthly'}" data-act="eos-tab" data-id="scorecard:monthly">Monthly KPIs</button>
+      <button class="tab" role="tab" aria-selected="${curTab === 'quarterly'}" data-act="eos-tab" data-id="scorecard:quarterly">Quarterly KPIs</button>
+      <button class="tab" role="tab" aria-selected="${curTab === 'annual'}" data-act="eos-tab" data-id="scorecard:annual">Annual KPIs</button>
+    </div>
+  `;
+
+  if (curTab === 'scorecards') {
+    return head + tabsHtml + renderScorecardsDirectory();
+  }
+
+  return head + tabsHtml + renderMeasurablesGrid(curTab);
+}
+
+function getMeasurableVal(m, curTab, i) {
+  if (curTab === 'weekly') {
+    return (m.vals && m.vals[i] != null) ? m.vals[i] : null;
+  }
+  if (curTab === 'monthly' && m.monthly_vals && m.monthly_vals[i] != null) {
+    return m.monthly_vals[i];
+  }
+  if (curTab === 'quarterly' && m.quarterly_vals && m.quarterly_vals[i] != null) {
+    return m.quarterly_vals[i];
+  }
+  if (curTab === 'annual' && m.annual_vals && m.annual_vals[i] != null) {
+    return m.annual_vals[i];
+  }
+
+  // Roll up from weekly vals matching scorecard_grid.js
+  if (!m.vals || !m.vals.length) return null;
+  let chunk = [];
+  if (curTab === 'monthly') {
+    const start = i * 4;
+    chunk = m.vals.slice(start, start + 4).filter(v => v != null);
+  } else if (curTab === 'quarterly') {
+    const start = i * 13;
+    chunk = m.vals.slice(start, start + 13).filter(v => v != null);
+  } else if (curTab === 'annual') {
+    chunk = m.vals.filter(v => v != null);
+  }
+
+  if (!chunk.length) return null;
+  const isAvg = m.unit === 'pct' || m.noTotal || m.rollup === 'Average';
+  if (isAvg) {
+    const avg = chunk.reduce((a, b) => a + Number(b), 0) / chunk.length;
+    return Math.round(avg * 100) / 100;
+  } else {
+    const sum = chunk.reduce((a, b) => a + Number(b), 0);
+    return Math.round(sum * 100) / 100;
+  }
+}
+
+function renderMeasurablesGrid(curTab) {
+  const F = E.f.scorecard;
+  const defaultRange = curTab === 'monthly' ? 6 : curTab === 'quarterly' ? 4 : curTab === 'annual' ? 3 : 13;
+  const rangeCount = parseInt(F.range, 10) || defaultRange;
+  const periods = ePeriods(curTab === 'weekly' ? 'weekly' : curTab, rangeCount);
+
+  let metrics = eMeas || [];
+  if (F.team && F.team !== 'All Teams') {
+    metrics = metrics.filter(m => !m.team || m.team === F.team);
+  }
+  const q = (F.q_meas || S.q || '').trim().toLowerCase();
+  if (q) {
+    metrics = metrics.filter(m => (m.name || '').toLowerCase().includes(q) || (m.owner || '').toLowerCase().includes(q));
+  }
+
+  let rangeOptions = [];
+  if (curTab === 'monthly') {
+    rangeOptions = [[3, 'Last 3 Months'], [6, 'Last 6 Months'], [12, 'Last 12 Months']];
+  } else if (curTab === 'quarterly') {
+    rangeOptions = [[4, 'Last 4 Quarters'], [8, 'Last 8 Quarters']];
+  } else if (curTab === 'annual') {
+    rangeOptions = [[3, 'Last 3 Years'], [5, 'Last 5 Years']];
+  } else {
+    rangeOptions = [[13, 'Last 13 Weeks'], [26, 'Last 26 Weeks'], [52, 'Last 52 Weeks']];
+  }
+
+  const bar = `
+    <div class="fbar sc-fbar" style="display:flex;align-items:center;gap:10px;padding:8px 0;margin-bottom:14px;flex-wrap:wrap">
+      <div class="sc-input-box">
+        <select class="field sc-team-sel" style="height:32px;padding:0 10px;font-size:12.5px;border-radius:6px;background:var(--g50);min-width:140px" data-eos-f="scorecard.team">
+          <option value="All Teams">Team: All Teams</option>
+          ${EOS_TEAMS.map(t => `<option value="${eEsc(t)}" ${F.team === t ? 'selected' : ''}>${eEsc(t)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="sc-input-box">
+        <select class="field" style="height:32px;padding:0 10px;font-size:12.5px;border-radius:6px;background:var(--g50)" data-eos-f="scorecard.range">
+          ${rangeOptions.map(([val, label]) => `<option value="${val}" ${rangeCount === val ? 'selected' : ''}>Date Range: ${label}</option>`).join('')}
+        </select>
+      </div>
+      <div class="nn-search-input-wrap">
+        ${icon('search')}
+        <input placeholder="Search Measurables…" value="${eEsc(F.q_meas || '')}" data-eos-f="scorecard.q_meas">
+      </div>
+      <div style="flex:1"></div>
+      <button class="nn-btn-bar" data-act="eos-sc-optimize" title="View Scorecard Health & Insights">
+        <span style="color:#047857">${icon('sparkle')}</span> <span>Optimize Scorecard</span>
+      </button>
+      <button class="nn-btn-bar" data-act="eos-sc-test-data" style="color:#047857" title="Create test data with red and green boxes">
+        <span style="color:#10b981">${icon('sparkle')}</span> <span>Generate Test Data</span>
+      </button>
+      <button class="nn-btn-green" data-act="eos-add-measurable" style="height:32px;padding:0 14px;font-size:12px">
+        + New Measurable
+      </button>
+    </div>
+  `;
+
+  const body = `
+    <div class="nn-card-wrap">
+      <div class="nn-card-header">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:16px;font-weight:700;color:#111827">
+            ${curTab === 'monthly' ? 'Monthly KPIs' : curTab === 'quarterly' ? 'Quarterly KPIs' : curTab === 'annual' ? 'Annual KPIs' : 'Weekly KPIs'}
+          </span>
+          <span class="nn-badge-cnt">${metrics.length}</span>
+        </div>
+        <div>
+          <button class="nn-btn-bar" data-act="eos-add-measurable">
+            + New Measurable
+          </button>
+        </div>
+      </div>
+
+      <div class="nn-table-scroll">
+        <table class="nn-sc-tbl">
+          <thead>
+            <tr>
+              <th class="left nn-col-metric" style="min-width:240px">Measurable</th>
+              <th class="nn-col-owner" style="width:64px;min-width:64px;text-align:center">Owner</th>
+              <th class="nn-col-goal" style="width:90px;min-width:90px;text-align:center">Goal</th>
+              ${periods.map(p => `<th>${eEsc(p)}</th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>
+            ${metrics.length ? metrics.map(m => {
+              const av = initials(m.owner || 'U');
+              let cells = "";
+              for (let i = 0; i < rangeCount; i++) {
+                const isEditing = E.edit && E.edit.id === m.id && E.edit.i === i;
+                const val = getMeasurableVal(m, curTab, i);
+                if (isEditing) {
+                  cells += `
+                    <td class="nn-sc-cell">
+                      <input class="nn-sc-cell-input" data-eos-cell autofocus value="${val != null ? val : ''}">
+                    </td>
+                  `;
+                } else {
+                  if (val == null) {
+                    cells += `
+                      <td class="nn-sc-cell" data-act="eos-cell" data-id="${m.id}:${i}">
+                        <span class="nn-cell-val empty">–</span>
+                      </td>
+                    `;
+                  } else {
+                    const pass = ePass(m, val);
+                    const cls = pass ? "pass" : "fail";
+                    cells += `
+                      <td class="nn-sc-cell ${cls}" data-act="eos-cell" data-id="${m.id}:${i}">
+                        <div class="nn-cell-wrap">
+                          <span class="nn-cell-badge ${cls}">${eU(m, val)}</span>
+                          ${!pass ? `
+                            <button class="nn-btn-make-issue" title="Make it an Issue" data-act="eos-drop-ids" data-type="Scorecard" data-title="KPI off-track: ${eEsc(m.name)}" onclick="event.stopPropagation()">
+                              ${icon('alert')} <span>Issue</span>
+                            </button>
+                          ` : ''}
+                        </div>
+                      </td>
+                    `;
+                  }
+                }
+              }
+
+              return `
+                <tr>
+                  <td class="left nn-col-metric">
+                    <span class="nn-metric-title" data-act="eos-edit-measurable" data-id="${m.id}" style="cursor:pointer;font-weight:600;color:#111827">
+                      ${eEsc(m.name)}
+                    </span>
+                  </td>
+                  <td class="nn-col-owner" style="text-align:center">
+                    <span class="nn-owner-circle" style="width:24px;height:24px;font-size:10px" title="${eEsc(m.owner)}">${av}</span>
+                  </td>
+                  <td class="nn-col-goal" style="text-align:center">
+                    <span style="font-weight:600;color:#374151">${m.op || '>='} ${eU(m, m.target)}</span>
+                  </td>
+                  ${cells}
+                </tr>
+              `;
+            }).join('') : `
+              <tr>
+                <td colspan="${rangeCount + 3}" style="padding:48px;text-align:center;color:#9ca3af">
+                  <div style="font-size:14px;font-weight:600;color:#374151;margin-bottom:6px">No measurables found for this view.</div>
+                  <div style="font-size:12.5px;color:#6b7280;margin-bottom:14px">Track numbers weekly to predict trends and keep your team accountable.</div>
+                  <button class="nn-btn-green" data-act="eos-add-measurable">+ Add First Measurable</button>
+                </td>
+              </tr>
+            `}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+  return bar + body;
+}
+
+function renderScorecardsDirectory() {
+  const F = E.f.scorecard;
   let rows = eScorecards.filter(sc => {
     const matchTeam = (F.team === 'All Teams' || sc.team === F.team);
     const matchTf = (F.timeframe === 'All' || sc.timeframe === F.timeframe);
@@ -266,21 +517,6 @@ function eosScorecard() {
   const allCount = eScorecards.length;
   const visCount = rows.length;
   const allSelected = rows.length > 0 && rows.every(r => S.sel && S.sel.has(r.id));
-
-  const head = `<div class="ph desk-ph" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;padding:2px 0">
-    <div style="display:flex;align-items:center;gap:8px">
-      <span style="font-size:16px;color:var(--ink-2);cursor:pointer" data-act="home" title="Home">🏠</span>
-      <span style="color:var(--ink-3);font-size:14px">/</span>
-      <h1 style="font-size:18px;font-weight:700;color:var(--g900);margin:0">Scorecard</h1>
-    </div>
-    <div style="display:flex;align-items:center;gap:8px">
-      <button class="btn sec" style="height:32px;font-size:12.5px;padding:0 10px;border-radius:6px;border:1px solid var(--line-2)">List View ↕</button>
-      <button class="btn sec" style="height:32px;font-size:12.5px;padding:0 10px;border-radius:6px;border:1px solid var(--line-2)">Saved Filters ↕</button>
-      <button class="icon-btn" data-act="eos-refresh" title="Reload from ERP" style="width:32px;height:32px;border:1px solid var(--line-2);border-radius:6px">🔄</button>
-      <button class="icon-btn" title="More options" style="width:32px;height:32px;border:1px solid var(--line-2);border-radius:6px">···</button>
-      <button class="btn primary" data-act="create" style="height:32px;font-size:13px;padding:0 14px;border-radius:6px;font-weight:600;background:var(--g900);color:#fff">${icon('plus')}Add Scorecard</button>
-    </div>
-  </div>`;
 
   const bar = `<div class="fbar sc-fbar" style="display:flex;align-items:center;gap:10px;padding:8px 0;margin-bottom:14px;flex-wrap:wrap">
     <div class="sc-input-box" style="position:relative;display:inline-flex;align-items:center">
@@ -355,7 +591,7 @@ function eosScorecard() {
     </div>
   </div>`;
 
-  return head + bar + body;
+  return bar + body;
 }
 
 /* ---------- Rocks ---------- */
@@ -440,27 +676,1059 @@ function eosIssues() {
 
 /* ---------- Meetings ---------- */
 const eDur = s => s < 60 ? s + ' sec' : s < 3600 ? Math.round(s / 60) + ' min' : Math.floor(s / 3600) + ' hr ' + Math.round(s % 3600 / 60) + ' min';
+
+function eFmtTimer(sec) {
+  const m = Math.floor((sec || 0) / 60);
+  const s = (sec || 0) % 60;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+function startMeetingTimer() {
+  if (E.meeting_interval) clearInterval(E.meeting_interval);
+  E.meeting_interval = setInterval(() => {
+    if (!E.meeting_in_progress) {
+      clearInterval(E.meeting_interval);
+      return;
+    }
+    E.meeting_seconds = (E.meeting_seconds || 0) + 1;
+    const step = E.meeting_step || 0;
+    E.meeting_step_times = E.meeting_step_times || {};
+    E.meeting_step_times[step] = (E.meeting_step_times[step] || 0) + 1;
+    E.meeting_step_seconds = E.meeting_step_times[step];
+    updateMeetingTimerDisplay();
+  }, 1000);
+}
+
+function updateMeetingTimerDisplay() {
+  const cur_step = E.meeting_step || 0;
+  const cur_step_sec = (E.meeting_step_times && E.meeting_step_times[cur_step]) || 0;
+  const tot = document.getElementById('nn-l10-total-timer');
+  if (tot) tot.textContent = eFmtTimer(E.meeting_seconds);
+  const step = document.getElementById('nn-l10-step-timer');
+  if (step) step.textContent = eFmtTimer(cur_step_sec);
+  const row = document.querySelector(`.nn-l10-agenda-item[data-step="${cur_step}"] .nn-l10-agenda-elapsed`);
+  if (row) row.textContent = eFmtTimer(cur_step_sec);
+}
+
+function getL10AgendaSteps() {
+  return [
+    { idx: 0, num: '1.', name: 'SEGUE', target_sec: 300, target_str: '05:00' },
+    { idx: 1, num: '2.', name: 'SCORECARD', target_sec: 300, target_str: '05:00' },
+    { idx: 2, num: '3.', name: 'ROCK REVIEW', target_sec: 300, target_str: '05:00' },
+    { idx: 3, num: '4.', name: 'CUSTOMER / EMPLOYEE HEADLINES', target_sec: 300, target_str: '05:00' },
+    { idx: 4, num: '5.', name: 'TO-DO LIST', target_sec: 300, target_str: '05:00' },
+    { idx: 5, num: '6.', name: 'IDS™', target_sec: 3600, target_str: '60:00' },
+    { idx: 6, num: '7.', name: 'CONCLUDE', target_sec: 300, target_str: '05:00' }
+  ];
+}
+
+async function startL10Meeting(agenda_id = 'l10') {
+  const team = (E.f.meet && E.f.meet.team !== 'All Teams') ? E.f.meet.team : (EOS_TEAMS[0] || 'Leadership Team');
+  E.meeting_in_progress = true;
+  E.meeting_modal = false;
+  E.meeting_agenda_type = agenda_id;
+  E.meeting_step = 0;
+  E.meeting_seconds = 0;
+  E.meeting_step_seconds = 0;
+  E.meeting_step_times = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
+  E.meeting_sharing_idx = 0;
+  E.meeting_good_news = {};
+  E.meeting_ratings = {};
+  E.meeting_notes = '';
+
+  let attendee_list = [];
+  if (EOS_PEOPLE && EOS_PEOPLE.length) {
+    attendee_list = EOS_PEOPLE.filter(p => p !== 'All' && !p.includes('@'));
+  }
+  if (!attendee_list.length) {
+    attendee_list = [EOS_ME || 'Administrator'];
+  }
+  E.meeting_attendees = attendee_list.slice(0, 8);
+  E.meeting_attendance = {};
+  E.meeting_attendees.forEach((att, idx) => {
+    E.meeting_attendance[att] = (idx < 2);
+    E.meeting_ratings[att] = 8;
+  });
+
+  if (!E.headlines || !E.headlines.length) {
+    E.headlines = [
+      { id: 1, type: 'Customer', title: 'Key client onboarding went live seamlessly with 100% SLA met', author: E.meeting_attendees[0] || 'Team Lead', date: 'Today' }
+    ];
+  }
+  if (!E.cascading_messages) {
+    E.cascading_messages = [];
+  }
+
+  startMeetingTimer();
+  toast('Starting meeting in Level 10 Meeting DocType...');
+  renderMain();
+  const res = await apiCall('eos_core.eos_api.start_meeting', { team, title: `${team} Level 10 Meeting™` });
+  if (res && res.docname) {
+    E.live = { docname: res.docname, team, title: `${team} Level 10 Meeting™`, start: Date.now() };
+  }
+  toast('Meeting active and recording to ERP!');
+}
+
+async function eosDropToIds(title, type) {
+  const team = (E.f.meet && E.f.meet.team !== 'All Teams') ? E.f.meet.team : (EOS_TEAMS[0] || 'Leadership Team');
+  const newI = {
+    id: ++eSeq,
+    name: title || 'New Meeting Issue',
+    desc: `Identified during Level 10 Meeting (${type || 'Meeting'})`,
+    team: team,
+    owner: EOS_ME,
+    term: 'short',
+    pri: 'High',
+    archived: false,
+    raised: eRel(0)
+  };
+  eIssues.unshift(newI);
+  toast(`Dropped to IDS: ${title}`);
+  renderMain();
+  const res = await apiCall('eos_core.eos_api.save_issue', {
+    name: newI.name,
+    desc: newI.desc,
+    pri: 'High',
+    team: newI.team,
+    owner: newI.owner,
+    term: 'short'
+  });
+  if (res && res.docname) newI.docname = res.docname;
+  toast('Issue saved to ERP database!');
+}
+
+async function eosFinishMeeting() {
+  if (E.meeting_interval) clearInterval(E.meeting_interval);
+  const chkArch = document.getElementById('eos-chk-archive');
+  const team = (E.f.meet && E.f.meet.team !== 'All Teams') ? E.f.meet.team : (EOS_TEAMS[0] || 'Leadership Team');
+  if (chkArch && chkArch.checked) {
+    try {
+      const completedTds = eTodos.filter(t => t.done && !t.archived && (team === 'All Teams' || !t.team || t.team === team));
+      for (const td of completedTds) {
+        td.archived = true;
+        await apiCall('eos_core.eos_api.archive_todo', { docname: td.docname || td.name, archived: 1 });
+      }
+      const solvedIss = eIssues.filter(i => i.archived && (team === 'All Teams' || !i.team || i.team === team));
+      for (const iss of solvedIss) {
+        await apiCall('eos_core.eos_api.toggle_issue', { docname: iss.docname || iss.name, solved: 1 });
+      }
+    } catch (e) {
+      console.warn('Archiving meeting items:', e);
+    }
+  }
+
+  const dur_min = Math.max(1, Math.round((E.meeting_seconds || 0) / 60));
+  const step_names = ["Segue", "Scorecard", "Rock Review", "Headlines", "To-Dos", "IDS", "Conclude"];
+  const step_summary = step_names.map((nm, idx) => `${nm}: ${eFmtTimer((E.meeting_step_times && E.meeting_step_times[idx]) || 0)}`).join(', ');
+
+  let rating_sum = 0, rating_cnt = 0;
+  (E.meeting_attendees || []).forEach(a => {
+    rating_sum += Number(E.meeting_ratings[a] || 8);
+    rating_cnt++;
+  });
+  const avg_rating = rating_cnt ? (rating_sum / rating_cnt).toFixed(1) : '8.5';
+  const notes_str = `Duration: ${dur_min} min. Sections: [${step_summary}]. Ratings: ${JSON.stringify(E.meeting_ratings || {})}. Attendees: ${(E.meeting_attendees || []).join(', ')}.`;
+
+  toast('Saving completed meeting to ERP...');
+  const res = await apiCall('eos_core.eos_api.end_meeting', {
+    docname: E.live && E.live.docname ? E.live.docname : null,
+    team: team,
+    secs: E.meeting_seconds,
+    rating: parseFloat(avg_rating),
+    notes: notes_str
+  });
+
+  const when_str = eISO(eToday());
+  const now_time = new Date().toLocaleTimeString('en-KE', { hour: 'numeric', minute: '2-digit' });
+  const entry = {
+    docname: (res && res.docname) || (E.live && E.live.docname) || `${team}-${when_str}`,
+    when: when_str,
+    time: now_time,
+    secs: E.meeting_seconds,
+    fac: EOS_ME,
+    rating: parseFloat(avg_rating),
+    team: team,
+    title: `${team} Level 10 Meeting™`,
+    notes: notes_str
+  };
+  E.past.unshift(entry);
+  E.live = null;
+  E.meeting_in_progress = false;
+  E.tab.meet = 'past';
+  toast('Level 10 Meeting completed and archived successfully!');
+  renderMain();
+}
+
 function eosMeet() {
-  const F = E.f.meet, tab = E.tab.meet;
-  const head = eHead('Meetings', 'Level 10 Meeting™ integration with Frappe Level 10 Meeting DocType.', eCreate('Schedule Meeting'));
+  if (E.meeting_in_progress) {
+    return renderL10MeetingWorkspace();
+  }
+  return renderMeetingsDashboard();
+}
+
+function renderMeetingsDashboard() {
+  const F = E.f.meet, tab = E.tab.meet || 'upcoming';
+  const team = F.team || (EOS_TEAMS[0] || 'Leadership Team');
+  const head = `<div class="ph eos-ph">
+    <div>
+      <h1>Meetings</h1>
+      <p class="lead">Improve alignment and transparency across your organization.</p>
+    </div>
+    <div class="row" style="display:flex;gap:10px;align-items:center">
+      <button class="btn" data-act="eos-print-agenda">${icon('printer')}Print Meeting Agenda</button>
+      <button class="btn primary" data-act="eos-open-start-modal">${icon('plus')}${tab === 'agenda' ? 'Create Agenda' : 'Create'}</button>
+    </div>
+  </div>`;
+
   const tabs = eTabs('meet', [['upcoming', 'Upcoming'], ['past', 'Past Meetings'], ['agenda', 'Agendas']]);
-  const bar = `<div class="fbar">${tab === 'agenda' ? '' : eSel('meet', 'team', 'Team', eTeams(), F.team)}<div class="grow"><button class="btn" data-act="eos-print">${icon('printer')}Print Meeting Agenda</button></div></div>`;
+  const bar = `<div class="fbar">
+    ${tab === 'agenda' ? '' : eSel('meet', 'team', 'Team', eTeams(), F.team)}
+  </div>`;
+
   let body = '';
   if (tab === 'upcoming') {
     const up = E.upcoming.filter(m => F.team === 'All Teams' || m.team === F.team);
-    const hero = E.live ? `<div class="panel hero"><span class="e-st done">In progress</span><h2>${eEsc(E.live.title)}</h2><div class="row"><button class="btn" data-act="eos-tab" data-id="meet:agenda">View agenda</button><button class="btn primary" data-act="eos-meet-end">End meeting &amp; Save</button></div><p class="muted-s" style="margin-top:16px">Started ${new Date(E.live.start).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}</p></div>`
-      : `<div class="panel hero"><small>${F.team === 'All Teams' ? (EOS_TEAMS[0] || 'Team') : F.team}</small><h2>No Meetings in progress</h2><div class="row"><button class="btn primary" data-act="eos-meet-start">${icon('play')}Start a Meeting</button><button class="btn" data-act="create">${icon('calendar')}Schedule a Meeting</button></div></div>`;
-    body = hero + `<section class="panel" style="margin-top:16px"><div class="pnl-h"><h2>Upcoming Meetings<span class="pcount">${up.length}</span></h2></div>${up.length ? up.map(m => `<div class="mrow"><div><b>${eEsc(m.title)}</b><small>${eEsc(m.team)}</small></div><span class="sp"></span><span>${eShort(m.date)}${m.time ? ' · ' + eEsc(m.time) : ''}</span></div>`).join('')
-      : `<div class="empty"><div class="eic">${icon('chat')}</div><h3>No scheduled meetings in ERP yet.</h3><p>Start a meeting to record it to the database.</p></div>`}</section>`;
+    const hero = `<div class="nn-meeting-hero">
+      <div class="nn-meeting-hero-tag">${eEsc(team)}</div>
+      <h3 class="nn-meeting-hero-title">No Meetings in progress</h3>
+      <div class="nn-meeting-hero-btns">
+        <button class="nn-btn-green" data-act="eos-open-start-modal">
+          ${icon('play')} <span>Start a Meeting</span>
+        </button>
+        <button class="nn-btn-bar" data-act="eos-schedule-meet">
+          ${icon('calendar')} <span>Schedule a Meeting</span>
+        </button>
+      </div>
+    </div>`;
+
+    const upList = up.length ? `
+      <section class="panel" style="margin-top:16px">
+        <div class="pnl-h"><h2>Upcoming Meetings<span class="pcount">${up.length}</span></h2></div>
+        ${up.map(m => `<div class="mrow"><div><b>${eEsc(m.title)}</b><small>${eEsc(m.team)}</small></div><span class="sp"></span><span>${eShort(m.date)}${m.time ? ' · ' + eEsc(m.time) : ''}</span></div>`).join('')}
+      </section>
+    ` : `
+      <div style="margin-top:28px">
+        <div style="font-size:15px;font-weight:700;color:#111827;margin-bottom:14px;display:flex;align-items:center;gap:6px">
+          <span>Upcoming Meetings</span>
+          <span style="font-size:12px;color:#9ca3af;font-weight:400">(0)</span>
+        </div>
+        <div class="nn-upcoming-box">
+          <div class="nn-empty-icon-circle">${icon('chat')}</div>
+          <div class="nn-empty-box-title">Your team hasn't created any scheduled Meetings yet.</div>
+          <div class="nn-empty-box-sub">Scheduled Meetings are a quick way to keep your team aligned.</div>
+          <a href="javascript:void(0)" class="link" style="color:#064e3b;text-decoration:underline;font-size:12.5px;font-weight:500" data-act="eos-schedule-meet">Learn more about Scheduled Meetings</a>
+        </div>
+      </div>
+    `;
+
+    body = hero + upList;
   } else if (tab === 'past') {
-    const ps = E.past.filter(m => F.team === 'All Teams' || m.team === F.team), vis = eSlice('meet', ps);
-    body = `<section class="panel"><div class="pnl-h"><h2>Meeting History (From ERP DocTypes)<span class="pcount">${ps.length}</span></h2></div><div class="pnl-sub">All completed Level 10 Meetings recorded in the database.</div>${ps.length ? `<div class="scroll"><table class="eos-t"><thead><tr><th>Date</th><th>Agenda</th><th>Duration</th><th>Facilitator</th><th>Rating</th></tr></thead><tbody>
-      ${vis.map(m => `<tr><td><b>${eShort(m.when)}</b><div class="muted-s">${eEsc(m.time)}</div></td><td>${eEsc(m.title)}</td><td>${eDur(m.secs)}</td><td>${eAv(m.fac)}</td><td>${m.rating == null ? '–' : m.rating}</td></tr>`).join('')}</tbody></table></div><div class="pager">${ePager('meet', ps.length)}</div>`
-      : `<div class="empty"><div class="eic">${icon('chat')}</div><h3>No past meetings recorded in ERP yet.</h3><p>Meetings you conclude will be saved to Level 10 Meeting DocType.</p></div>`}</section>`;
+    const ps = (E.past || []).filter(m => F.team === 'All Teams' || !m.team || m.team === F.team);
+    if (!ps.length) {
+      body = `
+        <div class="nn-upcoming-box" style="margin-top:10px">
+          <div class="nn-empty-icon-circle">${icon('calendar')}</div>
+          <div class="nn-empty-box-title">No past meetings recorded yet.</div>
+          <div class="nn-empty-box-sub">Completed meetings will be archived here for review.</div>
+        </div>
+      `;
+    } else {
+      body = `
+        <div class="nn-rock-card" style="margin-top:10px">
+          <div class="nn-rock-header">
+            <div class="nn-rock-title-group">
+              <span class="nn-rock-title">Past Meetings</span>
+              <span class="nn-badge-cnt">${ps.length}</span>
+            </div>
+          </div>
+          <table class="nn-rock-tbl">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Team</th>
+                <th>Status</th>
+                <th>Notes / Summary</th>
+                <th style="text-align:right">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${ps.map(m => `
+                <tr class="nn-rock-row">
+                  <td><b>${eShort(m.when)}</b><div style="font-size:11px;color:#9ca3af">${eEsc(m.time || '')}</div></td>
+                  <td>${eEsc(m.team || team)}</td>
+                  <td><span class="nn-status-badge complete">Complete</span></td>
+                  <td style="color:#6b7280">${eEsc(m.notes || 'Level 10 Meeting completed')}</td>
+                  <td style="text-align:right">
+                    ${m.docname ? `<a href="/app/level-10-meeting/${encodeURIComponent(m.docname)}" target="_blank" class="nn-btn-bar" style="padding:3px 8px;font-size:11px;display:inline-flex">View</a>` : `<span style="color:#9ca3af;font-size:11px">—</span>`}
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
   } else {
-    body = `<section class="panel"><div class="pnl-h"><h2>Level 10 Meeting™ agenda<span class="pcount">90 min</span></h2></div>${AGENDA.map(a => `<div class="mrow"><div><b>${a[0]}</b><small>${a[1]}</small></div><span class="sp"></span><span class="muted-s">${a[2]} min</span></div>`).join('')}</section>`;
+    // tab === 'agenda'
+    const agendas = [
+      { id: "l10", title: "Level 10 Meeting™", dur: "90 min", desc: "Weekly leadership & team pulse: Segue, Scorecard, Rocks, Headlines, To-Dos, IDS (60m), Conclude." },
+      { id: "quarterly", title: "Quarterly Session", dur: "Full Day", desc: "Review past quarter results, refresh V/TO®, set 90-day Rocks, tackle major strategic issues." },
+      { id: "annual", title: "Annual Session", dur: "2 Days", desc: "2-day deep dive into Vision, Core Values, 1-Year Plan, and upcoming quarterly priorities." },
+      { id: "1on1", title: "Weekly 1-on-1", dur: "30 min", desc: "Manager & employee alignment check-in, reviewing weekly to-dos, measurables, and feedback." }
+    ];
+    body = `
+      <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(290px, 1fr));gap:18px;">
+        ${agendas.map(a => `
+          <div class="nn-l10-card" style="display:flex;flex-direction:column;justify-content:space-between;margin-bottom:0">
+            <div>
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+                <h4 style="margin:0;font-size:15px;font-weight:700;color:#111827">${eEsc(a.title)}</h4>
+                <span style="font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:12px;background:#ecfdf5;color:#064e3b">${a.dur}</span>
+              </div>
+              <p style="font-size:13px;color:#4b5563;line-height:1.5;margin-bottom:18px">${eEsc(a.desc)}</p>
+            </div>
+            <div>
+              <button class="nn-btn-green" data-act="eos-start-l10" data-agenda="${a.id}" style="width:100%">Start This Meeting</button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
   }
-  return head + tabs + bar + `<div class="eos-col">${body}</div>`;
+
+  const modalHtml = E.meeting_modal ? renderStartMeetingModal() : '';
+  return head + tabs + bar + `<div class="eos-col" style="max-width:1080px">${body}</div>` + modalHtml;
+}
+
+function renderStartMeetingModal() {
+  const agendas = [
+    { id: "l10", title: "Level 10 Meeting™" },
+    { id: "quarterly", title: "Quarterly Session" },
+    { id: "annual", title: "Annual Session" },
+    { id: "1on1", title: "Weekly 1-on-1" }
+  ];
+  return `
+    <div class="nn-modal-backdrop" data-act="eos-close-modal"></div>
+    <div class="nn-modal-card">
+      <div class="nn-modal-header">
+        <div>
+          <h3 class="nn-modal-title">Start Meeting</h3>
+          <p class="nn-modal-sub">Select an agenda for your meeting</p>
+        </div>
+        <button class="nn-modal-close-btn" data-act="eos-close-modal">${icon('x')}</button>
+      </div>
+      <div class="nn-modal-body">
+        <div style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;margin-bottom:12px">All Agendas</div>
+        <div class="nn-agenda-select-list">
+          ${agendas.map(a => `
+            <div class="nn-agenda-select-item">
+              <div class="nn-agenda-select-left">
+                <div class="nn-agenda-select-icon">${icon('filetext')}</div>
+                <span class="nn-agenda-select-title">${eEsc(a.title)}</span>
+              </div>
+              <button class="nn-btn-green" data-act="eos-start-l10" data-agenda="${a.id}" style="height:30px;padding:0 14px;font-size:12px">Start</button>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+      <div class="nn-modal-footer" style="padding:14px 24px;border-top:1px solid #f1f3f5;display:flex;justify-content:flex-start">
+        <button class="link" style="background:none;border:none;cursor:pointer;color:#064e3b;font-weight:600;font-size:12.5px" data-act="eos-meet-tab" data-id="agenda">Manage agendas...</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderL10MeetingWorkspace() {
+  const team = (E.f.meet && E.f.meet.team !== 'All Teams') ? E.f.meet.team : (EOS_TEAMS[0] || 'Leadership Team');
+  const steps = getL10AgendaSteps();
+
+  const toolsMenuHtml = E.meeting_tools_open ? `
+    <div class="nn-l10-tools-menu" style="left:20px;bottom:120px;">
+      <div style="padding:6px 12px 4px;font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase">Meeting Tools</div>
+      <div class="nn-l10-tools-item" data-act="eos-open-tool-drawer" data-id="scorecard">${icon('chart')} <span>Scorecard</span></div>
+      <div class="nn-l10-tools-item" data-act="eos-open-tool-drawer" data-id="todos">${icon('checksq')} <span>To-Dos</span></div>
+      <div class="nn-l10-tools-item" data-act="eos-open-tool-drawer" data-id="issues">${icon('alert')} <span>Issues</span></div>
+      <div class="nn-l10-tools-item" data-act="eos-open-tool-drawer" data-id="rocks">${icon('mountain')} <span>Rocks</span></div>
+    </div>
+  ` : '';
+
+  const toolDrawerHtml = E.active_tool_drawer ? renderL10ToolDrawer(team) : '';
+
+  return `
+    <div class="nn-l10-wrap">
+      <!-- Left Agenda Sidebar -->
+      <div class="nn-l10-side">
+        <div class="nn-l10-side-top">
+          <div class="nn-l10-timer-display">
+            <span>Total: <span id="nn-l10-total-timer">${eFmtTimer(E.meeting_seconds)}</span></span>
+            <span class="nn-l10-step-timer-badge" id="nn-l10-step-timer">${eFmtTimer(E.meeting_step_seconds)}</span>
+          </div>
+        </div>
+
+        <div class="nn-l10-agenda-list">
+          ${steps.map(st => {
+            const elapsed = (E.meeting_step_times && E.meeting_step_times[st.idx]) || 0;
+            return `
+              <div class="nn-l10-agenda-item ${st.idx === E.meeting_step ? 'on' : ''}" data-act="eos-step" data-id="${st.idx}">
+                <div class="nn-l10-agenda-left">
+                  <span>${st.num}</span>
+                  <span>${st.name}</span>
+                </div>
+                <div class="nn-l10-agenda-times">
+                  <span class="nn-l10-agenda-elapsed">${eFmtTimer(elapsed)}</span> / ${st.target_str}
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+
+        <div class="nn-l10-side-foot" style="position:relative">
+          ${toolsMenuHtml}
+          <div class="nn-l10-foot-actions">
+            <button class="nn-l10-foot-btn" data-act="eos-l10-tools" title="Open Tools">
+              ${icon('tool')} <span>Tools</span>
+            </button>
+            <button class="nn-l10-foot-btn" data-act="eos-l10-notes" title="Notes">
+              ${icon('filetext')} <span>Notes</span>
+            </button>
+          </div>
+          <div class="nn-l10-foot-actions">
+            <button class="nn-l10-foot-btn" data-act="eos-step-prev" ${E.meeting_step === 0 ? "disabled style='opacity:0.5'" : ""}>
+              Previous
+            </button>
+            <button class="nn-btn-green" data-act="eos-step-next" style="flex:1;height:32px;font-size:12px">
+              ${E.meeting_step === steps.length - 1 ? 'Finish' : 'Next'}
+            </button>
+          </div>
+          <button class="nn-btn-bar" data-act="eos-l10-exit" style="width:100%;font-size:11.5px;color:#dc2626;border-color:#fecaca">
+            Exit Meeting
+          </button>
+        </div>
+      </div>
+
+      <!-- Main Step Area -->
+      <div class="nn-l10-main">
+        ${renderL10StepContent(E.meeting_step, team)}
+      </div>
+    </div>
+    ${toolDrawerHtml}
+  `;
+}
+
+function renderL10StepContent(step_idx, team) {
+  if (step_idx === 0) return renderL10SegueStep(team);
+  if (step_idx === 1) return renderL10ScorecardStep(team);
+  if (step_idx === 2) return renderL10RockReviewStep(team);
+  if (step_idx === 3) return renderL10HeadlinesStep(team);
+  if (step_idx === 4) return renderL10TodosStep(team);
+  if (step_idx === 5) return renderL10IdsStep(team);
+  if (step_idx === 6) return renderL10ConcludeStep(team);
+  return '';
+}
+
+function renderL10SegueStep(team) {
+  const attendees = E.meeting_attendees || [];
+  const present_cnt = attendees.filter(a => E.meeting_attendance[a]).length;
+  const total_cnt = attendees.length;
+  const sharer_idx = E.meeting_sharing_idx || 0;
+  const cur_sharer = attendees[sharer_idx] || attendees[0] || 'User';
+  const cur_av = initials(cur_sharer);
+  const sharer_notes = (E.meeting_good_news && E.meeting_good_news[cur_sharer]) || '';
+
+  return `
+    <div class="nn-l10-header">
+      <div>
+        <h3 class="nn-l10-title">SEGUE | Level 10 Meeting™ - ${eEsc(team)}</h3>
+        <div class="nn-l10-sub">Transition from working IN the business to ON the business.</div>
+      </div>
+    </div>
+
+    <!-- Attendance Card -->
+    <div class="nn-l10-card">
+      <div class="nn-l10-card-head">
+        <div style="display:flex;align-items:center;gap:12px">
+          <h4 class="nn-l10-card-title">Attendance</h4>
+          <span style="font-size:12px;font-weight:600;color:#6b7280">${present_cnt} of ${total_cnt} present</span>
+        </div>
+        <button class="nn-btn-bar" data-act="eos-mark-all-present">Mark all present</button>
+      </div>
+      <div class="nn-attendee-grid">
+        ${attendees.map(att => {
+          const is_pres = !!E.meeting_attendance[att];
+          const av = initials(att);
+          return `
+            <div class="nn-attendee-chip ${is_pres ? 'present' : 'absent'}" data-act="eos-toggle-attendance" data-id="${eEsc(att)}">
+              <span class="nn-owner-circle" style="background:${is_pres ? '#059669' : '#9ca3af'}">${av}</span>
+              <span>${eEsc(att)}</span>
+              <span style="font-size:11px;font-weight:700">${is_pres ? '✓' : '×'}</span>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+
+    <!-- Sharing Card: Good News -->
+    <div class="nn-l10-card">
+      <div class="nn-l10-card-head">
+        <div>
+          <h4 class="nn-l10-card-title">Sharing</h4>
+          <div style="font-size:12.5px;color:#6b7280;margin-top:2px">Share your personal and professional best</div>
+        </div>
+      </div>
+      <div class="nn-sharing-box">
+        <div class="nn-sharing-av">${cur_av}</div>
+        <div class="nn-sharing-name">${eEsc(cur_sharer)}</div>
+        <div class="nn-sharing-badge">Currently sharing…</div>
+        <textarea id="eos-good-news-input" class="field" style="max-width:540px;margin:0 auto 16px;border-radius:6px;font-size:13px;resize:vertical;height:80px;display:block" placeholder="Record personal and professional best here…">${eEsc(sharer_notes)}</textarea>
+        <div style="display:flex;align-items:center;justify-content:center;gap:10px">
+          <button class="nn-btn-bar" data-act="eos-sharer-prev" ${sharer_idx === 0 ? "disabled style='opacity:0.5'" : ""}>Previous attendee</button>
+          <button class="nn-btn-green" data-act="eos-sharer-next">${sharer_idx === attendees.length - 1 ? 'Done' : 'Next'}</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderL10ScorecardStep(team) {
+  let metrics = eMeas || [];
+  if (team && team !== 'All Teams') {
+    metrics = metrics.filter(m => !m.team || m.team === team);
+  }
+  const periods = ePeriods('weekly', 6).reverse(); // Last 6 weeks
+
+  return `
+    <div class="nn-l10-header">
+      <div>
+        <h3 class="nn-l10-title">Scorecard - ${eEsc(team)}</h3>
+        <div class="nn-l10-sub">Review weekly numbers. Drop any off-track measurables directly to IDS.</div>
+      </div>
+      <div>
+        <span class="nn-btn-bar">Weekly KPIs <b>${metrics.length}</b></span>
+      </div>
+    </div>
+
+    <div class="nn-card-wrap">
+      <div class="nn-table-scroll">
+        <table class="nn-sc-tbl">
+          <thead>
+            <tr>
+              <th class="left nn-col-metric">Weekly KPIs</th>
+              <th class="nn-col-owner">Owner</th>
+              <th class="nn-col-goal">Goal</th>
+              ${periods.map(p => `<th>${eEsc(p)}</th>`).join('')}
+              <th style="text-align:center">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${metrics.length ? metrics.map(m => {
+              const av = initials(m.owner || 'U');
+              return `
+                <tr>
+                  <td class="left nn-col-metric"><b>${eEsc(m.name)}</b></td>
+                  <td class="nn-col-owner"><span class="nn-owner-circle">${av}</span></td>
+                  <td class="nn-col-goal">${m.op || '>='} ${eU(m, m.target)}</td>
+                  ${periods.map((_, i) => {
+                    const v = (m.vals && m.vals[i] != null) ? m.vals[i] : null;
+                    const pass = v != null ? ePass(m, v) : null;
+                    const cls = pass === null ? '' : (pass ? 'pass' : 'fail');
+                    return `<td class="nn-sc-cell ${cls}">${v != null ? eU(m, v) : '–'}</td>`;
+                  }).join('')}
+                  <td style="text-align:center">
+                    <button class="nn-btn-bar" data-act="eos-drop-ids" data-type="Scorecard" data-title="KPI off-track: ${eEsc(m.name)}" style="padding:2px 8px;font-size:11px">
+                      ${icon('alert')} <span>Drop to IDS</span>
+                    </button>
+                  </td>
+                </tr>
+              `;
+            }).join('') : `<tr><td colspan="9" style="padding:32px;text-align:center;color:#9ca3af">No scorecard measurables found for this team.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function renderL10RockReviewStep(team) {
+  let rocks = eRocks || [];
+  if (team && team !== 'All Teams') {
+    rocks = rocks.filter(r => !r.team || r.team === team);
+  }
+
+  return `
+    <div class="nn-l10-header">
+      <div>
+        <h3 class="nn-l10-title">ROCK REVIEW | Level 10 Meeting™ - ${eEsc(team)}</h3>
+        <div class="nn-l10-sub">Quick status check on 90-day priorities.</div>
+      </div>
+    </div>
+
+    <!-- V/TO Card -->
+    <div class="nn-vto-card" data-act="eos-vto">
+      <div class="nn-vto-left">
+        <div class="nn-vto-icon">${icon('target')}</div>
+        <span class="nn-vto-title">V/TO® | Revenue, Profit, Measurables</span>
+      </div>
+      ${icon('chev')}
+    </div>
+
+    <!-- Rocks Table Card -->
+    <div class="nn-rock-card">
+      <div class="nn-rock-header">
+        <div class="nn-rock-title-group">
+          <span class="nn-rock-title">Team Rocks</span>
+          <span class="nn-badge-cnt">${rocks.length}</span>
+        </div>
+        <button class="nn-btn-green" data-act="eos-add-rock" style="height:30px;padding:0 12px;font-size:12px">+ Add Rock</button>
+      </div>
+
+      <table class="nn-rock-tbl">
+        <thead>
+          <tr>
+            <th>Rock Title</th>
+            <th>Owner</th>
+            <th>Status</th>
+            <th style="text-align:right">Progress</th>
+            <th style="text-align:center">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rocks.length ? rocks.map(r => {
+            const av = initials(r.owner || 'U');
+            const st = r.status || 'On-track';
+            const is_off = st === 'Off-track' || st === 'Not Started';
+            const st_cls = st === 'Done' ? 'complete' : is_off ? 'off-track' : 'on-track';
+            return `
+              <tr class="nn-rock-row">
+                <td><b>${eEsc(r.name)}</b></td>
+                <td><span class="nn-owner-circle">${av}</span></td>
+                <td>
+                  <span class="nn-status-badge ${st_cls}" data-act="eos-rock-st-cycle" data-id="${r.id}" title="Click to cycle status">${eEsc(st)}</span>
+                </td>
+                <td style="text-align:right">
+                  <div class="nn-progress-wrap">
+                    <div class="nn-prog-bar"><div class="nn-prog-fill" style="width:${st === 'Done' ? '100%' : is_off ? '35%' : '75%'};background:${st === 'Done' ? '#16a34a' : is_off ? '#ef4444' : '#059669'}"></div></div>
+                    <span class="nn-prog-txt">${st === 'Done' ? '100%' : is_off ? '35%' : '75%'}</span>
+                  </div>
+                </td>
+                <td style="text-align:center">
+                  <button class="nn-btn-bar" data-act="eos-drop-ids" data-type="Rock" data-title="Rock off-track: ${eEsc(r.name)}" style="padding:2px 8px;font-size:11px">
+                    ${icon('alert')} <span>Drop to IDS</span>
+                  </button>
+                </td>
+              </tr>
+            `;
+          }).join('') : `<tr><td colspan="5" style="padding:32px;text-align:center;color:#9ca3af">No Rocks found.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderL10HeadlinesStep(team) {
+  const headlines = E.headlines || [];
+  const cascading = E.cascading_messages || [];
+
+  return `
+    <div class="nn-l10-header">
+      <div>
+        <h3 class="nn-l10-title">Headlines - ${eEsc(team)}</h3>
+        <div class="nn-l10-sub">Share client and employee announcements with your team.</div>
+      </div>
+    </div>
+
+    <!-- Customer / Employee Headlines Card -->
+    <div class="nn-l10-card">
+      <div class="nn-l10-card-head">
+        <div>
+          <h4 class="nn-l10-card-title">Headlines (${headlines.length})</h4>
+          <div style="font-size:12px;color:#6b7280;margin-top:2px">Customer/Employee Headlines</div>
+        </div>
+        <button class="nn-btn-green" data-act="eos-create-headline" style="height:30px;padding:0 12px;font-size:12px">+ Create Headline</button>
+      </div>
+
+      ${headlines.length ? `
+        <div style="display:flex;flex-direction:column;gap:8px">
+          ${headlines.map(h => `
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border:1px solid #e5e7eb;border-radius:6px;background:#fff">
+              <div style="display:flex;align-items:center;gap:10px">
+                <span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;background:#f3f4f6;color:#374151">${eEsc(h.type)}</span>
+                <span style="font-size:13.5px;font-weight:600;color:#111827">${eEsc(h.title)}</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px">
+                <span style="font-size:12px;color:#6b7280">${eEsc(h.author)}</span>
+                <button class="nn-btn-bar" data-act="eos-drop-ids" data-type="Headline" data-title="Headline Issue: ${eEsc(h.title)}" style="padding:2px 8px;font-size:11px">
+                  ${icon('alert')} <span>Drop to IDS</span>
+                </button>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      ` : `
+        <div class="nn-upcoming-box" style="padding:28px">
+          <div class="nn-empty-icon-circle">${icon('bell')}</div>
+          <div class="nn-empty-box-title">Your team hasn't added any Headlines yet.</div>
+          <div class="nn-empty-box-sub">Headlines are a quick way to share important updates.</div>
+        </div>
+      `}
+    </div>
+
+    <!-- Cascading Messages Card -->
+    <div class="nn-l10-card">
+      <div class="nn-l10-card-head">
+        <div>
+          <h4 class="nn-l10-card-title">Cascading Messages (${cascading.length})</h4>
+          <div style="font-size:12px;color:#6b7280;margin-top:2px">Information to communicate across departments</div>
+        </div>
+        <button class="nn-btn-bar" data-act="eos-create-cascading" style="height:30px;padding:0 12px;font-size:12px">+ Create Cascading Message</button>
+      </div>
+
+      ${cascading.length ? `
+        <div style="display:flex;flex-direction:column;gap:8px">
+          ${cascading.map(c => `
+            <div style="padding:10px 14px;border:1px solid #e5e7eb;border-radius:6px;background:#fff;font-size:13px;font-weight:500;color:#111827">
+              ${eEsc(c.message)}
+            </div>
+          `).join('')}
+        </div>
+      ` : `
+        <div class="nn-upcoming-box" style="padding:28px">
+          <div class="nn-empty-icon-circle">${icon('chat')}</div>
+          <div class="nn-empty-box-title">Your company hasn't added any Cascading Messages yet.</div>
+          <div class="nn-empty-box-sub">Cascading messages keep organization units synced.</div>
+        </div>
+      `}
+    </div>
+  `;
+}
+
+function renderL10TodosStep(team) {
+  let todos = eTodos || [];
+  if (team && team !== 'All Teams') {
+    todos = todos.filter(t => !t.team || t.team === team);
+  }
+
+  return `
+    <div class="nn-l10-header">
+      <div>
+        <h3 class="nn-l10-title">To-Dos - ${eEsc(team)}</h3>
+        <div class="nn-l10-sub">Quickly review, complete, and add 7-day action items.</div>
+      </div>
+      <button class="nn-btn-green" data-act="eos-add-todo" style="height:32px;padding:0 14px;font-size:12px">+ Add To-Do</button>
+    </div>
+
+    <div class="nn-todo-card">
+      <div class="nn-todo-card-header">
+        <div class="nn-todo-card-title">
+          <span>Team To-Dos</span>
+          <span class="nn-todo-count">${todos.length}</span>
+        </div>
+      </div>
+
+      <div class="nn-todo-table-head">
+        <div class="nn-todo-col-check"></div>
+        <div class="nn-todo-col-title">Title</div>
+        <div class="nn-todo-col-due">Due</div>
+        <div class="nn-todo-col-owner">Assignee</div>
+        <div style="text-align:right">Action</div>
+      </div>
+
+      <div class="nn-todo-table-body">
+        ${todos.length ? todos.map(t => {
+          const is_done = !!t.done;
+          const av = initials(t.owner || 'U');
+          const due_str = t.due ? eShort(t.due) : '7 Days';
+          return `
+            <div class="nn-todo-row ${is_done ? 'complete' : ''}">
+              <div class="nn-todo-col-check">
+                <div class="nn-todo-checkbox ${is_done ? 'checked' : ''}" data-act="eos-l10-todo-toggle" data-id="${t.id}">
+                  ${is_done ? icon('check') : ''}
+                </div>
+              </div>
+              <div class="nn-todo-col-title">
+                <span style="${is_done ? 'text-decoration:line-through;color:#9ca3af' : ''}">${eEsc(t.name)}</span>
+              </div>
+              <div class="nn-todo-col-due">
+                <div class="nn-due-badge">
+                  <span class="clock">${icon('clock')}</span>
+                  <span class="nn-due-text dark">${eEsc(due_str)}</span>
+                </div>
+              </div>
+              <div class="nn-todo-col-owner">
+                <span class="nn-owner-circle" title="${eEsc(t.owner)}">${av}</span>
+              </div>
+              <div style="text-align:right">
+                <button class="nn-btn-bar" data-act="eos-drop-ids" data-type="To-Do" data-title="Blocked To-Do: ${eEsc(t.name)}" style="padding:2px 8px;font-size:11px">
+                  ${icon('alert')} <span>Drop to IDS</span>
+                </button>
+              </div>
+            </div>
+          `;
+        }).join('') : `<div style="padding:32px;text-align:center;color:#9ca3af;font-size:13px">No To-Dos for this team.</div>`}
+      </div>
+    </div>
+  `;
+}
+
+function renderL10IdsStep(team) {
+  let issues = eIssues.filter(iss => !iss.archived);
+  if (team && team !== 'All Teams') {
+    issues = issues.filter(iss => !iss.team || iss.team === team);
+  }
+
+  return `
+    <div class="nn-l10-header">
+      <div>
+        <h3 class="nn-l10-title">IDS™ | Level 10 Meeting™ - ${eEsc(team)}</h3>
+        <div class="nn-l10-sub">Identify, Discuss, Solve. Dedicate 60 minutes to resolving the most critical obstacles.</div>
+      </div>
+      <button class="nn-btn-green" data-act="eos-add-issue" style="height:32px;padding:0 14px;font-size:12px">+ Add Issue</button>
+    </div>
+
+    <div class="nn-todo-card">
+      <div class="nn-todo-card-header">
+        <div class="nn-todo-card-title">
+          <span>Ranked Issues List</span>
+          <span class="nn-todo-count">${issues.length}</span>
+        </div>
+      </div>
+
+      <div class="nn-todo-table-head">
+        <div style="width:40px;text-align:center;font-size:12px;font-weight:600;color:#6b7280">#</div>
+        <div class="nn-todo-col-title">Issue</div>
+        <div style="width:90px;font-size:12px;font-weight:600;color:#6b7280">Priority</div>
+        <div class="nn-todo-col-owner">Owner</div>
+        <div style="text-align:right">Action</div>
+      </div>
+
+      <div class="nn-todo-table-body">
+        ${issues.length ? issues.map((iss, idx) => {
+          const av = initials(iss.owner || 'U');
+          return `
+            <div class="nn-todo-row">
+              <div style="width:40px;text-align:center;font-size:12px;font-weight:700;color:#064e3b">
+                ${idx + 1}
+              </div>
+              <div class="nn-todo-col-title">
+                <span style="font-weight:600;color:#111827">${eEsc(iss.name)}</span>
+                ${iss.desc ? `<div style="font-size:11.5px;color:#6b7280;margin-top:2px">${eEsc(iss.desc)}</div>` : ''}
+              </div>
+              <div style="width:90px">
+                <span class="nn-status-badge off-track">${eEsc(iss.pri || 'Medium')}</span>
+              </div>
+              <div class="nn-todo-col-owner">
+                <span class="nn-owner-circle">${av}</span>
+              </div>
+              <div style="text-align:right">
+                <button class="nn-btn-green" data-act="eos-solve-issue" data-id="${iss.id}" style="height:28px;padding:0 10px;font-size:11.5px">
+                  ${icon('check')} <span>Solve Issue</span>
+                </button>
+              </div>
+            </div>
+          `;
+        }).join('') : `
+          <div style="padding:36px;text-align:center">
+            <div style="font-size:15px;font-weight:700;color:#111827;margin-bottom:4px">Your team hasn't added any issues yet.</div>
+            <div style="font-size:13px;color:#6b7280">Identify matters that need resolution before moving forward.</div>
+          </div>
+        `}
+      </div>
+    </div>
+  `;
+}
+
+function renderL10ConcludeStep(team) {
+  const attendees = E.meeting_attendees || [];
+  let todos = eTodos || [];
+  if (team && team !== 'All Teams') {
+    todos = todos.filter(t => !t.team || t.team === team);
+  }
+  const recentTodos = todos.slice(0, 8);
+  const cascading = E.cascading_messages || [];
+
+  let rating_sum = 0, rating_cnt = 0;
+  attendees.forEach(att => {
+    const r = E.meeting_ratings[att] || 8;
+    rating_sum += Number(r);
+    rating_cnt++;
+  });
+  const avg_rating = rating_cnt ? (rating_sum / rating_cnt).toFixed(1) : '8.5';
+
+  return `
+    <div class="nn-l10-header">
+      <div>
+        <h3 class="nn-l10-title">CONCLUDE | Level 10 Meeting™ - ${eEsc(team)}</h3>
+        <div class="nn-l10-sub">Recap To-Dos, cascading messages, and rate the meeting from 1-10.</div>
+      </div>
+    </div>
+
+    <!-- Recap To-Dos -->
+    <div class="nn-l10-card">
+      <div class="nn-l10-card-head">
+        <h4 class="nn-l10-card-title">Recap To-Dos (${recentTodos.length})</h4>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${recentTodos.length ? recentTodos.map(t => `
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid #f1f3f5">
+            <span style="font-size:13px;color:#111827">${eEsc(t.name)}</span>
+            <span style="font-size:11.5px;color:#6b7280">${eEsc(t.owner || '')} &bull; ${t.due ? eShort(t.due) : '7 Days'}</span>
+          </div>
+        `).join('') : `<div style="font-size:12.5px;color:#9ca3af">No To-Dos created or assigned.</div>`}
+      </div>
+    </div>
+
+    <!-- Cascading Messages -->
+    <div class="nn-l10-card">
+      <div class="nn-l10-card-head">
+        <h4 class="nn-l10-card-title">Cascading Messages</h4>
+      </div>
+      ${cascading.length ? `
+        <div style="display:flex;flex-direction:column;gap:6px">
+          ${cascading.map(c => `<div style="font-size:13px;color:#374151">• ${eEsc(c.message)}</div>`).join('')}
+        </div>
+      ` : `<div style="font-size:12.5px;color:#9ca3af">No Cascading Messages were cascaded during this Meeting.</div>`}
+    </div>
+
+    <!-- Ratings (1-10) -->
+    <div class="nn-l10-card">
+      <div class="nn-l10-card-head">
+        <h4 class="nn-l10-card-title">Ratings (1–10)</h4>
+        <span style="font-size:13px;font-weight:700;color:#064e3b">Average Rating: <span id="eos-avg-rating">${avg_rating}</span> / 10</span>
+      </div>
+      <div class="nn-rating-list">
+        ${attendees.map(att => {
+          const cur_r = E.meeting_ratings[att] || 8;
+          return `
+            <div class="nn-rating-item">
+              <span style="font-size:13px;font-weight:600;color:#374151">${eEsc(att)}</span>
+              <input type="number" min="1" max="10" step="1" class="nn-rating-input" data-id="${eEsc(att)}" value="${cur_r}">
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+
+    <!-- Wrap-up Checkboxes & Finish -->
+    <div class="nn-l10-card">
+      <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:20px">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#374151;cursor:pointer">
+          <input type="checkbox" id="eos-chk-archive" checked>
+          <span>Archive All Completed Headlines, To-Dos and Issues for the ${eEsc(team)}</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#374151;cursor:pointer">
+          <input type="checkbox" id="eos-chk-email" checked>
+          <span>Send Meeting Recap Email</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#374151;cursor:pointer">
+          <input type="checkbox" id="eos-chk-desc">
+          <span>Show Issue description on recap emails</span>
+        </label>
+      </div>
+      <div style="display:flex;justify-content:flex-end">
+        <button class="nn-btn-green" data-act="eos-finish-meeting" style="height:40px;padding:0 24px;font-size:13.5px">
+          ${icon('checkcircle')} <span>Finish Meeting</span>
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function renderL10ToolDrawer(team) {
+  const tool = E.active_tool_drawer;
+  let title = "Meeting Tool";
+  let body_html = "";
+
+  if (tool === 'scorecard') {
+    title = "Scorecard Quick View";
+    let metrics = eMeas || [];
+    if (team && team !== 'All Teams') metrics = metrics.filter(m => !m.team || m.team === team);
+    body_html = `
+      <div style="padding:16px">
+        <p style="font-size:12.5px;color:#6b7280;margin-bottom:14px">View team metrics and identify off-track items.</p>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          ${metrics.map(m => `
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid #e5e7eb;border-radius:6px;background:#fff">
+              <div>
+                <div style="font-size:13px;font-weight:600;color:#111827">${eEsc(m.name)}</div>
+                <div style="font-size:11.5px;color:#6b7280">Goal: ${m.op || '>='} ${eU(m, m.target)}</div>
+              </div>
+              <button class="nn-btn-bar" data-act="eos-drop-ids" data-type="Scorecard" data-title="KPI off-track: ${eEsc(m.name)}" style="padding:3px 8px;font-size:11px">
+                ${icon('alert')} <span>Drop to IDS</span>
+              </button>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  } else if (tool === 'rocks') {
+    title = "Rocks Quick View";
+    let rocks = eRocks || [];
+    if (team && team !== 'All Teams') rocks = rocks.filter(r => !r.team || r.team === team);
+    body_html = `
+      <div style="padding:16px">
+        <p style="font-size:12.5px;color:#6b7280;margin-bottom:14px">Quick status check on 90-day priorities.</p>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          ${rocks.map(r => `
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid #e5e7eb;border-radius:6px;background:#fff">
+              <div>
+                <div style="font-size:13px;font-weight:600;color:#111827">${eEsc(r.name)}</div>
+                <div style="font-size:11.5px;color:#6b7280">${eEsc(r.owner || '')} &bull; ${eEsc(r.status || 'On-track')}</div>
+              </div>
+              <button class="nn-btn-bar" data-act="eos-drop-ids" data-type="Rock" data-title="Rock off-track: ${eEsc(r.name)}" style="padding:3px 8px;font-size:11px">
+                ${icon('alert')} <span>Drop to IDS</span>
+              </button>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  } else if (tool === 'todos') {
+    title = "To-Dos Quick View";
+    let todos = eTodos || [];
+    if (team && team !== 'All Teams') todos = todos.filter(t => !t.team || t.team === team);
+    body_html = `
+      <div style="padding:16px">
+        <button class="nn-btn-green" data-act="eos-add-todo" style="width:100%;margin-bottom:14px">+ Add To-Do</button>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          ${todos.map(t => `
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid #e5e7eb;border-radius:6px;background:#fff">
+              <div style="font-size:13px;font-weight:500;color:#111827">${eEsc(t.name)}</div>
+              <span style="font-size:11px;color:#6b7280">${eEsc(t.owner || '')}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  } else if (tool === 'issues') {
+    title = "Issues Quick View";
+    let issues = eIssues.filter(i => !i.archived);
+    if (team && team !== 'All Teams') issues = issues.filter(i => !i.team || i.team === team);
+    body_html = `
+      <div style="padding:16px">
+        <button class="nn-btn-green" data-act="eos-add-issue" style="width:100%;margin-bottom:14px">+ Add Issue</button>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          ${issues.map(iss => `
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid #e5e7eb;border-radius:6px;background:#fff">
+              <div style="font-size:13px;font-weight:600;color:#111827">${eEsc(iss.name)}</div>
+              <span class="nn-status-badge off-track">${eEsc(iss.pri || 'Medium')}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="nn-modal-backdrop" data-act="eos-close-tool-drawer"></div>
+    <aside class="drawer show" style="right:0;z-index:99999;width:440px;max-width:100vw;background:#fff;position:fixed;top:0;height:100vh;box-shadow:-4px 0 24px rgba(0,0,0,0.15);display:flex;flex-direction:column;">
+      <header style="padding:18px 22px;border-bottom:1px solid #f1f3f5;display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:16px;font-weight:700;color:#111827">${eEsc(title)}</span>
+        <button class="icon-btn" data-act="eos-close-tool-drawer" aria-label="Close">${icon('x')}</button>
+      </header>
+      <div style="flex:1;overflow-y:auto;padding:0">
+        ${body_html}
+      </div>
+    </aside>
+  `;
 }
 
 /* ---------- entry point ---------- */
@@ -511,11 +1779,75 @@ function eosSave() {
 
 const eOps = [['>=', 'Greater than or equal to goal'], ['<=', 'Less than or equal to goal'], ['=', 'Equal to goal'], ['>', 'Greater than goal'], ['<', 'Less than goal']];
 
+function eosModal(title, contentHtml) {
+  const existing = document.getElementById('eos-generic-modal');
+  if (existing) existing.remove();
+  const modal = document.createElement('div');
+  modal.id = 'eos-generic-modal';
+  modal.innerHTML = `
+    <div class="nn-modal-backdrop" onclick="document.getElementById('eos-generic-modal').remove()"></div>
+    <div class="nn-modal" style="width:560px;max-width:92vw;background:#fff;border-radius:12px;box-shadow:0 20px 40px rgba(0,0,0,0.2);position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:999999;overflow:hidden">
+      <div style="padding:16px 20px;border-bottom:1px solid #f1f3f5;display:flex;align-items:center;justify-content:space-between">
+        <h3 style="font-size:16px;font-weight:700;color:#111827;margin:0">${title}</h3>
+        <button class="icon-btn" onclick="document.getElementById('eos-generic-modal').remove()">${icon('x')}</button>
+      </div>
+      <div>${contentHtml}</div>
+      <div style="padding:12px 20px;border-top:1px solid #f1f3f5;background:#f9fafb;display:flex;justify-content:flex-end">
+        <button class="nn-btn-green" onclick="document.getElementById('eos-generic-modal').remove()">Close</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
 function eosDrawer(kind, rec, pre) {
   const own = v => ({ t: 'select', o: EOS_PEOPLE, v: v || EOS_ME }), team = v => ({ t: 'select', o: EOS_TEAMS, v: v || EOS_TEAMS[0] });
-  const p = kind || ({ overview: 'to-dos', scorecard: 'scorecard', rocks: 'rocks', 'to-dos': 'to-dos', issues: 'issues', meetings: 'meetings' }[S.page]);
+  const p = kind || (S.page === 'scorecard' && E.tab.scorecard !== 'scorecards' ? 'measurable' : { overview: 'to-dos', scorecard: 'scorecard', rocks: 'rocks', 'to-dos': 'to-dos', issues: 'issues', meetings: 'meetings' }[S.page]);
   const r = rec || {}, q = pre || {};
-  if (p === 'scorecard') {
+  if (p === 'measurable') {
+    return eosForm(rec ? 'Edit Measurable in ERP' : 'Create Measurable in ERP', [
+      { k: 'name', l: 'Measurable Title', req: true, v: r.name, ph: 'e.g. Weekly Qualified Leads' },
+      { k: 'desc', l: 'Description', opt: true, t: 'textarea', v: r.desc || '' },
+      { k: 'team', l: 'Team', req: true, ...team(r.team || (E.f.scorecard.team === 'All Teams' ? null : E.f.scorecard.team)) },
+      { k: 'freq', l: 'Frequency', req: true, t: 'select', o: [['weekly', 'Weekly'], ['monthly', 'Monthly'], ['quarterly', 'Quarterly'], ['annual', 'Annual']], v: r.freq || (E.tab.scorecard !== 'scorecards' ? E.tab.scorecard : 'weekly') },
+      { k: 'op', l: 'Goal Operator', req: true, t: 'select', o: eOps, v: r.op || '>=' },
+      { k: 'target', l: 'Goal Target', req: true, t: 'number', v: r.target != null ? String(r.target) : '10' },
+      { k: 'unit', l: 'Unit Type', req: true, t: 'select', o: [['num', 'Number / Count'], ['kes', 'Currency ($)'], ['pct', 'Percentage (%)']], v: r.unit || 'num' },
+      { k: 'owner', l: 'Owner', req: true, ...own(r.owner) }
+    ], async v => {
+      if (rec) {
+        Object.assign(rec, { name: v.name, desc: v.desc, team: v.team, freq: v.freq, op: v.op, target: parseFloat(v.target) || 0, unit: v.unit, owner: v.owner });
+        toast('Updating Measurable in ERP...');
+        renderMain();
+        await apiCall('eos_core.eos_api.save_measurable', {
+          name: v.name, freq: v.freq, team: v.team, owner: v.owner, unit: v.unit, op: v.op, target: parseFloat(v.target) || 0, desc: v.desc || ''
+        });
+        toast('Measurable updated in ERP DocType!');
+      } else {
+        const newM = {
+          id: ++eSeq,
+          name: v.name,
+          desc: v.desc,
+          team: v.team,
+          freq: v.freq,
+          op: v.op,
+          target: parseFloat(v.target) || 0,
+          unit: v.unit,
+          owner: v.owner,
+          vals: [null, null, null, null, null, null, null, null, null, null, null, null, null]
+        };
+        eMeas.push(newM);
+        toast('Saving Measurable to ERP EOS Metric...');
+        renderMain();
+        const res = await apiCall('eos_core.eos_api.save_measurable', {
+          name: v.name, freq: v.freq, team: v.team, owner: v.owner, unit: v.unit, op: v.op, target: parseFloat(v.target) || 0, desc: v.desc || ''
+        });
+        if (res && res.docname) newM.docname = res.docname;
+        toast('Measurable saved in ERP Metric DocType!');
+      }
+    });
+  }
+  else if (p === 'scorecard') {
     return eosForm('Add Scorecard in ERP', [
       { k: 'team', l: 'Team', req: true, ...team(E.f.scorecard.team === 'All Teams' ? null : E.f.scorecard.team) },
       { k: 'timeframe', l: 'Timeframe', req: true, t: 'select', o: [['Weekly', 'Weekly'], ['Monthly', 'Monthly'], ['Quarterly', 'Quarterly'], ['Annual', 'Annual']] },
@@ -589,19 +1921,50 @@ function eosDrawer(kind, rec, pre) {
 async function eosCommit(el) {
   if (!E.edit) return;
   const m = eMeas.find(x => x.id === E.edit.id), i = E.edit.i, v = el.value.trim();
+  const curTab = E.tab.scorecard || 'weekly';
   E.edit = null;
-  while ((m.vals || []).length <= i) m.vals.push(null);
-  m.vals[i] = v === '' ? null : Number(v);
+  const numVal = v === '' ? null : Number(v);
+  if (curTab === 'monthly') {
+    if (!m.monthly_vals) m.monthly_vals = [];
+    while (m.monthly_vals.length <= i) m.monthly_vals.push(null);
+    m.monthly_vals[i] = numVal;
+  } else if (curTab === 'quarterly') {
+    if (!m.quarterly_vals) m.quarterly_vals = [];
+    while (m.quarterly_vals.length <= i) m.quarterly_vals.push(null);
+    m.quarterly_vals[i] = numVal;
+  } else if (curTab === 'annual') {
+    if (!m.annual_vals) m.annual_vals = [];
+    while (m.annual_vals.length <= i) m.annual_vals.push(null);
+    m.annual_vals[i] = numVal;
+  } else {
+    while ((m.vals || []).length <= i) m.vals.push(null);
+    m.vals[i] = numVal;
+  }
   renderMain();
   if (v !== '' && !ePass(m, Number(v))) toast('Off goal. Hover the value to add it to Issues');
 
   // Sync to Scorecard Entry DocType
-  const t = eToday(), mon = eAdd(t, -((t.getDay() + 6) % 7)), weekDate = eISO(eAdd(mon, -7 * i));
+  const t = eToday();
+  let cellDate = '';
+  if (curTab === 'monthly') {
+    const d = new Date(t.getFullYear(), t.getMonth() - i, 1);
+    cellDate = eISO(d);
+  } else if (curTab === 'quarterly') {
+    const tot = t.getFullYear() * 4 + Math.floor(t.getMonth() / 3) - i;
+    const q = ((tot % 4) + 4) % 4, y = Math.floor(tot / 4);
+    cellDate = eISO(new Date(y, q * 3, 1));
+  } else if (curTab === 'annual') {
+    cellDate = `${t.getFullYear() - i}-01-01`;
+  } else {
+    const mon = eAdd(t, -((t.getDay() + 6) % 7));
+    cellDate = eISO(eAdd(mon, -7 * i));
+  }
+
   toast('Saving cell to Scorecard Entry DocType...');
   await apiCall('eos_core.eos_api.save_scorecard_cell', {
     docname_or_metric: m.docname || m.name,
-    week_start_date: weekDate,
-    value: v === '' ? null : Number(v)
+    week_start_date: cellDate,
+    value: numVal
   });
   toast('Scorecard Entry saved to ERP!');
 }
@@ -615,7 +1978,16 @@ async function eosAct(a, el, e) {
      if (E.menu && E.menu.t === t && String(E.menu.id) === i) E.menu = null; else { const b = el.getBoundingClientRect(); E.menu = { t, id: i, x: b.right, y: b.bottom, top: b.top }; }
      renderMain(); break;
    }
-   case 'eos-tab': { const [k, t] = id.split(':'); E.tab[k] = t; S.q = ''; renderMain(); break; }
+   case 'eos-tab': {
+     const [k, t] = id.split(':');
+     E.tab[k] = t;
+     if (k === 'scorecard') {
+       E.f.scorecard.range = null;
+     }
+     S.q = '';
+     renderMain();
+     break;
+   }
    case 'eos-tog': { const [p, k] = id.split('.'); E.f[p][k] = !E.f[p][k]; if (E.f[p].page) E.f[p].page = 1; renderMain(); break; }
    case 'eos-cell': { if (e && e.target.tagName === 'INPUT') return; const [m, i] = id.split(':').map(Number); E.edit = { id: m, i }; renderMain(); break; }
    case 'eos-issue-from': {
@@ -701,52 +2073,325 @@ async function eosAct(a, el, e) {
    }
    case 'eos-edit-issue': eosDrawer('issues', eIssues.find(x => x.id === +id)); break;
    case 'eos-page': { const [p, d] = id.split(':'); E.f[p].page += +d; renderMain(); break; }
-   case 'eos-meet-start': {
-     const t = E.f.meet.team === 'All Teams' ? (EOS_TEAMS[0] || 'Team') : E.f.meet.team;
-     E.live = { title: t + ' Level 10 Meeting™', team: t, start: Date.now() };
-     toast('Starting meeting in Level 10 Meeting DocType...');
+   case 'eos-add-issue': eosDrawer('issues', null); break;
+   case 'eos-meet-tab': {
+     E.tab.meet = id || 'upcoming';
      renderMain();
-     const res = await apiCall('eos_core.eos_api.start_meeting', { team: t, title: E.live.title });
-     if (res && res.docname) E.live.docname = res.docname;
-     toast('Meeting active and recording to ERP!');
+     break;
+   }
+   case 'eos-open-start-modal': {
+     E.meeting_modal = true;
+     renderMain();
+     break;
+   }
+   case 'eos-close-modal': {
+     E.meeting_modal = false;
+     renderMain();
+     break;
+   }
+   case 'eos-start-l10': {
+     const agendaId = (el && el.dataset.agenda) || id || 'l10';
+     E.meeting_modal = false;
+     await startL10Meeting(agendaId);
+     break;
+   }
+   case 'eos-print-agenda': {
+     window.print();
+     break;
+   }
+   case 'eos-schedule-meet': {
+     toast('Scheduled Meetings sync with your team calendar in ERP.');
+     break;
+   }
+   case 'eos-step': {
+     const gn = document.getElementById('eos-good-news-input');
+     const curAtt = (E.meeting_attendees || [])[E.meeting_sharing_idx || 0];
+     if (gn && curAtt && E.meeting_step === 0) {
+       E.meeting_good_news = E.meeting_good_news || {};
+       E.meeting_good_news[curAtt] = gn.value;
+     }
+     E.meeting_step_times = E.meeting_step_times || {};
+     E.meeting_step_times[E.meeting_step] = E.meeting_step_seconds || 0;
+     E.meeting_step = parseInt(id, 10) || 0;
+     E.meeting_step_seconds = E.meeting_step_times[E.meeting_step] || 0;
+     renderMain();
+     break;
+   }
+   case 'eos-step-prev': {
+     const gn = document.getElementById('eos-good-news-input');
+     const curAtt = (E.meeting_attendees || [])[E.meeting_sharing_idx || 0];
+     if (gn && curAtt && E.meeting_step === 0) {
+       E.meeting_good_news = E.meeting_good_news || {};
+       E.meeting_good_news[curAtt] = gn.value;
+     }
+     if (E.meeting_step > 0) {
+       E.meeting_step_times = E.meeting_step_times || {};
+       E.meeting_step_times[E.meeting_step] = E.meeting_step_seconds || 0;
+       E.meeting_step--;
+       E.meeting_step_seconds = E.meeting_step_times[E.meeting_step] || 0;
+       renderMain();
+     }
+     break;
+   }
+   case 'eos-step-next': {
+     const gn = document.getElementById('eos-good-news-input');
+     const curAtt = (E.meeting_attendees || [])[E.meeting_sharing_idx || 0];
+     if (gn && curAtt && E.meeting_step === 0) {
+       E.meeting_good_news = E.meeting_good_news || {};
+       E.meeting_good_news[curAtt] = gn.value;
+     }
+     const steps = getL10AgendaSteps(E.meeting_agenda_type);
+     if (E.meeting_step < steps.length - 1) {
+       E.meeting_step_times = E.meeting_step_times || {};
+       E.meeting_step_times[E.meeting_step] = E.meeting_step_seconds || 0;
+       E.meeting_step++;
+       E.meeting_step_seconds = E.meeting_step_times[E.meeting_step] || 0;
+       renderMain();
+     } else {
+       await eosFinishMeeting();
+     }
+     break;
+   }
+   case 'eos-mark-all-present': {
+     (E.meeting_attendees || []).forEach(att => {
+       E.meeting_attendance = E.meeting_attendance || {};
+       E.meeting_attendance[att] = true;
+     });
+     renderMain();
+     break;
+   }
+   case 'eos-toggle-attendance': {
+     if (id) {
+       E.meeting_attendance = E.meeting_attendance || {};
+       E.meeting_attendance[id] = !E.meeting_attendance[id];
+       renderMain();
+     }
+     break;
+   }
+   case 'eos-sharer-prev': {
+     const gn = document.getElementById('eos-good-news-input');
+     const curAtt = (E.meeting_attendees || [])[E.meeting_sharing_idx || 0];
+     if (gn && curAtt) {
+       E.meeting_good_news = E.meeting_good_news || {};
+       E.meeting_good_news[curAtt] = gn.value;
+     }
+     if (E.meeting_sharing_idx > 0) {
+       E.meeting_sharing_idx--;
+       renderMain();
+     }
+     break;
+   }
+   case 'eos-sharer-next': {
+     const gn = document.getElementById('eos-good-news-input');
+     const curAtt = (E.meeting_attendees || [])[E.meeting_sharing_idx || 0];
+     if (gn && curAtt) {
+       E.meeting_good_news = E.meeting_good_news || {};
+       E.meeting_good_news[curAtt] = gn.value;
+     }
+     const atts = E.meeting_attendees || [];
+     if (E.meeting_sharing_idx < atts.length - 1) {
+       E.meeting_sharing_idx++;
+       renderMain();
+     } else {
+       E.meeting_step_times = E.meeting_step_times || {};
+       E.meeting_step_times[0] = E.meeting_step_seconds || 0;
+       E.meeting_step = 1;
+       E.meeting_step_seconds = E.meeting_step_times[1] || 0;
+       renderMain();
+     }
+     break;
+   }
+   case 'eos-drop-ids': {
+     const title = (el && el.dataset.title) || 'Meeting Issue';
+     const type = (el && el.dataset.type) || 'Meeting';
+     await eosDropToIds(title, type);
+     break;
+   }
+   case 'eos-create-headline': {
+     eosForm('Create Headline', [
+       { k: 'title', l: 'Headline Title', req: true, t: 'text' },
+       { k: 'type', l: 'Category', req: true, t: 'select', o: [['Customer', 'Customer Headline'], ['Employee', 'Employee Headline']] },
+       { k: 'author', l: 'Author / Owner', req: true, t: 'text', v: EOS_ME }
+     ], async vals => {
+       if (!E.headlines) E.headlines = [];
+       E.headlines.push({ title: vals.title, type: vals.type, author: vals.author });
+       toast('Headline added to meeting!');
+       renderMain();
+     });
+     break;
+   }
+   case 'eos-create-cascading': {
+     eosForm('Create Cascading Message', [
+       { k: 'message', l: 'Message to cascade to company / departments', req: true, t: 'textarea' }
+     ], async vals => {
+       if (!E.cascading_messages) E.cascading_messages = [];
+       E.cascading_messages.push({ message: vals.message });
+       toast('Cascading message added!');
+       renderMain();
+     });
+     break;
+   }
+   case 'eos-l10-todo-toggle': {
+     const item = eTodos.find(x => x.id === +id);
+     if (item) {
+       item.done = !item.done;
+       renderMain();
+       await apiCall('eos_core.eos_api.toggle_todo', { docname: item.docname || item.name, done: item.done ? 1 : 0 });
+     }
+     break;
+   }
+   case 'eos-solve-issue': {
+     const item = eIssues.find(x => x.id === +id);
+     if (item) {
+       item.archived = true;
+       toast('Solving issue in ERP...');
+       renderMain();
+       await apiCall('eos_core.eos_api.toggle_issue', { docname: item.docname || item.name, solved: 1 });
+       toast('Issue solved and marked in DocType!');
+     }
+     break;
+   }
+   case 'eos-rock-st-cycle': {
+     const r = eRocks.find(x => x.id === +id);
+     if (r) {
+       const order = ['On-track', 'Off-track', 'Done'];
+       const next = order[(order.indexOf(r.status) + 1) % order.length] || 'On-track';
+       r.status = next;
+       renderMain();
+       await apiCall('eos_core.eos_api.update_rock_status', { docname: r.docname || r.name, status: next });
+       toast(`Rock status updated to ${next}!`);
+     }
+     break;
+   }
+   case 'eos-l10-tools': {
+     E.tools_menu_open = !E.tools_menu_open;
+     renderMain();
+     break;
+   }
+   case 'eos-open-tool-drawer': {
+     E.tools_menu_open = false;
+     E.active_tool_drawer = id;
+     renderMain();
+     break;
+   }
+   case 'eos-close-tool-drawer': {
+     E.active_tool_drawer = null;
+     renderMain();
+     break;
+   }
+   case 'eos-l10-notes': {
+     eosForm('Meeting Notes', [
+       { k: 'notes', l: 'Meeting Notes & Takeaways', opt: true, t: 'textarea', v: E.meeting_notes || '' }
+     ], vals => {
+       E.meeting_notes = vals.notes;
+       toast('Meeting notes saved!');
+       renderMain();
+     });
+     break;
+   }
+   case 'eos-l10-exit': {
+     if (confirm('Are you sure you want to exit this meeting session? Progress will be saved.')) {
+       if (E.meeting_interval) clearInterval(E.meeting_interval);
+       E.meeting_in_progress = false;
+       renderMain();
+     }
+     break;
+   }
+   case 'eos-finish-meeting': {
+     await eosFinishMeeting();
+     break;
+   }
+   case 'eos-meet-start': {
+     await startL10Meeting('l10');
      break;
    }
    case 'eos-meet-end': {
-     const secs = Math.round((Date.now() - E.live.start) / 1000), n = new Date();
-     const meetingEntry = {
-       docname: E.live.docname,
-       when: eISO(eToday()),
-       time: n.toLocaleTimeString('en-KE', { hour: 'numeric', minute: '2-digit' }),
-       secs,
-       fac: EOS_ME,
-       rating: 8.5,
-       team: E.live.team,
-       title: E.live.title || 'Level 10 Meeting™'
-     };
-     E.past.unshift(meetingEntry);
-     const docname = E.live.docname;
-     E.live = null;
-     E.tab.meet = 'past';
-     toast('Saving meeting to Level 10 Meeting DocType...');
-     renderMain();
-     await apiCall('eos_core.eos_api.end_meeting', { docname, team: meetingEntry.team, secs, rating: meetingEntry.rating });
-     toast('Meeting completed and saved to ERP DocType!');
+     await eosFinishMeeting();
      break;
    }
    case 'eos-open-sc': {
      const sc = eScorecards.find(x => x.name === id || x.id === id);
      if (sc) {
-       eosForm(`Scorecard: ${sc.name || sc.id}`, [
-         { k: 'team', l: 'Team', req: true, t: 'text', v: sc.team },
-         { k: 'timeframe', l: 'Timeframe', req: true, t: 'select', o: [['Weekly', 'Weekly'], ['Monthly', 'Monthly'], ['Quarterly', 'Quarterly'], ['Annual', 'Annual']], v: sc.timeframe },
-         { k: 'desc', l: 'Description', opt: true, t: 'textarea', v: sc.desc || sc.description || '' }
-       ], async vals => {
-         sc.desc = vals.desc;
-         toast('Updating Scorecard in ERP...');
-         await apiCall('eos_core.eos_api.save_scorecard', { team: sc.team, timeframe: sc.timeframe, description: vals.desc });
-         toast('Scorecard updated in ERP!');
-         renderMain();
+       E.f.scorecard.team = sc.team;
+       const tf = (sc.timeframe || 'weekly').toLowerCase();
+       E.tab.scorecard = (tf === 'week' || tf === 'weekly') ? 'weekly' : (tf === 'month' || tf === 'monthly') ? 'monthly' : (tf === 'quarter' || tf === 'quarterly') ? 'quarterly' : (tf === 'annual') ? 'annual' : 'weekly';
+       E.f.scorecard.range = null;
+       renderMain();
+     }
+     break;
+   }
+   case 'eos-add-measurable': eosDrawer('measurable', null); break;
+   case 'eos-edit-measurable': eosDrawer('measurable', eMeas.find(x => x.id === +id)); break;
+   case 'eos-sc-optimize': {
+     const tf = E.tab.scorecard === 'scorecards' ? 'weekly' : (E.tab.scorecard || 'weekly');
+     let mList = eMeas.filter(m => (!m.freq && tf === 'weekly') || m.freq === tf);
+     if (E.f.scorecard.team && E.f.scorecard.team !== 'All Teams') {
+       mList = mList.filter(m => !m.team || m.team === E.f.scorecard.team);
+     }
+     let onTrack = 0, offTrack = 0;
+     mList.forEach(m => {
+       const v = (m.vals || []).find(x => x != null);
+       if (v != null) {
+         if (ePass(m, v)) onTrack++; else offTrack++;
+       }
+     });
+     const passRate = (onTrack + offTrack) > 0 ? Math.round((onTrack / (onTrack + offTrack)) * 100) : 100;
+     
+     eosModal('Optimize Scorecard', `
+       <div style="padding:16px">
+         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;text-align:center">
+           <div style="background:#f8fafc;padding:12px;border-radius:8px;border:1px solid #e2e8f0">
+             <div style="font-size:11px;color:#64748b;font-weight:600">MEASURABLES</div>
+             <div style="font-size:22px;font-weight:700;color:#1e293b">${mList.length}</div>
+           </div>
+           <div style="background:#dcfce7;padding:12px;border-radius:8px;border:1px solid #86efac">
+             <div style="font-size:11px;color:#15803d;font-weight:600">ON TRACK</div>
+             <div style="font-size:22px;font-weight:700;color:#15803d">${onTrack}</div>
+           </div>
+           <div style="background:#fee2e2;padding:12px;border-radius:8px;border:1px solid #fca5a5">
+             <div style="font-size:11px;color:#dc2626;font-weight:600">OFF TRACK</div>
+             <div style="font-size:22px;font-weight:700;color:#dc2626">${offTrack}</div>
+           </div>
+           <div style="background:#f1f5f9;padding:12px;border-radius:8px;border:1px solid #cbd5e1">
+             <div style="font-size:11px;color:#475569;font-weight:600">PASS RATE</div>
+             <div style="font-size:22px;font-weight:700;color:#0f172a">${passRate}%</div>
+           </div>
+         </div>
+         <div style="font-size:13px;line-height:1.6;color:#334155;background:#ffffff;padding:12px;border:1px solid #e2e8f0;border-radius:6px">
+           <b>Optimization Insights:</b>
+           <ul style="margin:8px 0 0 18px;padding:0">
+             ${offTrack > 0 ? `<li>${offTrack} measurables are currently off-track. Drop off-track numbers to IDS during Level 10 meetings.</li>` : `<li>All recorded measurables are currently hitting or exceeding targets!</li>`}
+             <li>Keep 5 to 15 key measurables per scorecard to maintain high-focus organizational traction.</li>
+             <li>Enter weekly data consistently to ensure accurate trailing trends and rollups.</li>
+           </ul>
+         </div>
+       </div>
+     `);
+     break;
+   }
+   case 'eos-sc-test-data': {
+     toast('Generating sample scorecard test data with red and green boxes...');
+     const team = E.f.scorecard.team && E.f.scorecard.team !== 'All Teams' ? E.f.scorecard.team : null;
+     try {
+       await apiCall('eos_core.eos_core.doctype.scorecard.scorecard.generate_test_scorecard_data', {
+         team: team,
+         force: 1
        });
+       await loadEosFromDocTypes();
+       toast('Test data generated with red and green boxes!');
+       renderMain();
+     } catch (err) {
+       eMeas.forEach(m => {
+         m.vals = m.vals || [];
+         for (let i = 0; i < 13; i++) {
+           const target = m.target || 10;
+           const pass = (i % 3 !== 0);
+           const factor = pass ? (1 + (i % 4) * 0.1) : 0.8;
+           m.vals[i] = Math.round(target * factor * 10) / 10;
+         }
+       });
+       toast('Sample test data generated across measurables!');
+       renderMain();
      }
      break;
    }
@@ -796,9 +2441,44 @@ async function eosAct(a, el, e) {
   }
 }
 
-document.addEventListener('click', e => { if (E.menu && !e.target.closest('[data-menu],[data-act="eos-menu"]')) { E.menu = null; if (S.mod === 'eos') renderMain(); } });
+document.addEventListener('click', e => {
+  if (E.tools_menu_open && !e.target.closest('.nn-l10-tools-menu, [data-act="eos-l10-tools"]')) {
+    E.tools_menu_open = false;
+    renderMain();
+  }
+  if (E.menu && !e.target.closest('[data-menu],[data-act="eos-menu"]')) {
+    E.menu = null;
+    if (S.mod === 'eos') renderMain();
+  }
+});
 document.addEventListener('scroll', () => { if (E.menu) { E.menu = null; if (S.mod === 'eos') renderMain(); } }, true);
 document.addEventListener('input', e => {
+  if (e.target.id === 'eos-good-news-input') {
+    const att = (E.meeting_attendees || [])[E.meeting_sharing_idx || 0];
+    if (att) {
+      E.meeting_good_news = E.meeting_good_news || {};
+      E.meeting_good_news[att] = e.target.value;
+    }
+    return;
+  }
+  if (e.target.classList.contains('nn-rating-input')) {
+    const att = e.target.dataset.id;
+    if (att) {
+      E.meeting_ratings = E.meeting_ratings || {};
+      E.meeting_ratings[att] = parseFloat(e.target.value) || 8;
+      const inputs = document.querySelectorAll('.nn-rating-input');
+      let sum = 0, count = 0;
+      inputs.forEach(inp => {
+        sum += parseFloat(inp.value) || 0;
+        count++;
+      });
+      const avgEl = document.getElementById('eos-avg-rating');
+      if (avgEl && count > 0) {
+        avgEl.textContent = (sum / count).toFixed(1);
+      }
+    }
+    return;
+  }
   const d = e.target.dataset; if (!d || !d.eosF) return;
   const [p, key] = d.eosF.split('.');
   E.f[p][key] = e.target.value;
@@ -809,6 +2489,24 @@ document.addEventListener('input', e => {
   if (el && pos != null) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (_) {} }
 });
 document.addEventListener('change', async e => {
+  if (e.target.classList.contains('nn-rating-input')) {
+    const att = e.target.dataset.id;
+    if (att) {
+      E.meeting_ratings = E.meeting_ratings || {};
+      E.meeting_ratings[att] = parseFloat(e.target.value) || 8;
+      const inputs = document.querySelectorAll('.nn-rating-input');
+      let sum = 0, count = 0;
+      inputs.forEach(inp => {
+        sum += parseFloat(inp.value) || 0;
+        count++;
+      });
+      const avgEl = document.getElementById('eos-avg-rating');
+      if (avgEl && count > 0) {
+        avgEl.textContent = (sum / count).toFixed(1);
+      }
+    }
+    return;
+  }
   const d = e.target.dataset; if (!d) return;
   if (d.eosF) { const [p, key] = d.eosF.split('.'); E.f[p][key] = e.target.value; if (key !== 'page' && E.f[p].page) E.f[p].page = 1; renderMain(); return; }
   if (d.eosPri) {

@@ -85,7 +85,7 @@ function toast(m) {
    E. SHELL RENDER (100% EOS ONLY)
    ===================================================================== */
 function renderRail() {
-  const brand = BRAND.logo ? `<img src="${BRAND.logo}" alt="${BRAND.name}" onerror="this.outerHTML='<span>${BRAND.mono}</span>'">` : `<span>${BRAND.mono}</span>`;
+  const brand = BRAND.logo ? `<img src="${BRAND.logo}" alt="${BRAND.name}" style="width:38px;height:38px;object-fit:contain" onerror="if(!this.dataset.fallback){this.dataset.fallback=1;this.src='/files/bel-logo-256.png?v=2.0.6';}else{this.outerHTML='<span>${BRAND.mono}</span>';}">` : `<span>${BRAND.mono}</span>`;
   const rail = $('#rail');
   if (!rail) return;
   rail.innerHTML = `<button class="brand ${BRAND.logo ? 'has-logo' : ''}" data-act="home" title="${BRAND.name}" aria-label="${BRAND.name} home">${brand}</button>` +
@@ -99,14 +99,22 @@ function renderTop() {
   if (!top) return;
   top.innerHTML = `<button class="icon-btn menu-btn" data-act="menu" aria-label="Open navigation">${icon('menu')}</button>
    ${exp ? `<button class="icon-btn exp" data-act="sbtoggle" aria-label="Show sidebar" title="Show sidebar">${icon('panel')}</button>` : ''}
-   <div class="crumbs">${crumbs()}</div>
+   <div class="crumbs" style="display:flex;align-items:center;gap:8px">
+     <img src="${BRAND.logo}" style="width:22px;height:22px;object-fit:contain" alt="BEL" onerror="this.style.display='none'">
+     ${crumbs()}
+   </div>
    <button class="cmdk" data-act="pal" aria-label="Search">${icon('search')}<span>Search</span><kbd>⌘K</kbd></button>
    <button class="icon-btn" aria-label="Notifications" style="position:relative">${icon('bell')}<span class="dot"></span></button><div class="avatar" title="${USER.name}">${USER.initial}</div>`;
 }
 
 function renderSide() {
   const m = MODULES[0];
-  const head = `<div><h2>${m.name}</h2><p>${m.blurb}</p></div><button class="icon-btn" data-act="sbtoggle" aria-label="Hide sidebar" title="Hide sidebar">${icon('panel')}</button>`;
+  const head = `<div style="display:flex;align-items:center;gap:10px">
+    <div style="width:32px;height:32px;border-radius:6px;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:transparent">
+      <img src="${BRAND.logo}" style="width:100%;height:100%;object-fit:contain" alt="BEL" onerror="if(!this.dataset.fallback){this.dataset.fallback=1;this.src='/files/bel-logo-256.png?v=2.0.6';}else{this.outerHTML='<span style=\\'font-weight:700\\'>B</span>';}">
+    </div>
+    <div><h2>${m.name}</h2><p>${m.blurb}</p></div>
+  </div><button class="icon-btn" data-act="sbtoggle" aria-label="Hide sidebar" title="Hide sidebar">${icon('panel')}</button>`;
   const nav = m.nav.map(([l, ic, kids]) => {
     const id = slug(l);
     if (!kids) return `<button class="nv" data-act="nav" data-id="${id}" ${S.page === id ? 'aria-current="page"' : ''}>${icon(ic)}<span class="lbl">${l}</span></button>`;

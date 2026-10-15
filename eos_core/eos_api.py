@@ -637,7 +637,7 @@ def start_meeting(team=None, title=None):
 
 
 @frappe.whitelist(allow_guest=True)
-def end_meeting(docname=None, team=None, secs=0, rating=None):
+def end_meeting(docname=None, team=None, secs=0, rating=None, notes=None):
 	if docname and frappe.db.exists("Level 10 Meeting", docname):
 		doc = frappe.get_doc("Level 10 Meeting", docname)
 	else:
@@ -651,7 +651,7 @@ def end_meeting(docname=None, team=None, secs=0, rating=None):
 				"meeting_date": nowdate()
 			})
 	doc.status = "Complete"
-	doc.notes = f"Completed in {round(flt(secs)/60)} min. Rating: {rating or '8.5'}"
+	doc.notes = notes or f"Completed in {round(flt(secs)/60)} min. Rating: {rating or '8.5'}"
 	doc.save(ignore_permissions=True)
 	frappe.db.commit()
 	return {"status": "ok", "docname": doc.name}
