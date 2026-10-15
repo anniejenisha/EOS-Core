@@ -269,7 +269,7 @@ function eosScorecard() {
   const head = `<div class="ph desk-ph" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;padding:2px 0">
     <div>
       <div style="display:flex;align-items:center;gap:8px">
-        <span style="font-size:16px;color:var(--ink-2);cursor:pointer" data-act="home" title="Home">🏠</span>
+        <span style="display:inline-flex;align-items:center;color:var(--ink-2);cursor:pointer" data-act="home" title="Home">${icon('home')}</span>
         <span style="color:var(--ink-3);font-size:14px">/</span>
         <h1 style="font-size:18px;font-weight:700;color:var(--g900);margin:0">Scorecard</h1>
       </div>
@@ -278,7 +278,7 @@ function eosScorecard() {
       </p>
     </div>
     <div style="display:flex;align-items:center;gap:8px">
-      <button class="icon-btn" data-act="eos-refresh" title="Reload from ERP" style="width:32px;height:32px;border:1px solid var(--line-2);border-radius:6px">🔄</button>
+      <button class="icon-btn" data-act="eos-refresh" title="Reload from ERP" style="width:32px;height:32px;border:1px solid var(--line-2);border-radius:6px;display:flex;align-items:center;justify-content:center">${icon('refresh')}</button>
       <button class="btn primary" data-act="${curTab === 'scorecards' ? 'create' : 'eos-add-measurable'}" style="height:32px;font-size:13px;padding:0 14px;border-radius:6px;font-weight:600;background:var(--g900);color:#fff">
         ${icon('plus')} ${curTab === 'scorecards' ? 'Add Scorecard' : 'New Measurable'}
       </button>
@@ -449,11 +449,6 @@ function renderMeasurablesGrid(curTab) {
                       <td class="nn-sc-cell ${cls}" data-act="eos-cell" data-id="${m.id}:${i}">
                         <div class="nn-cell-wrap">
                           <span class="nn-cell-badge ${cls}">${eU(m, val)}</span>
-                          ${!pass ? `
-                            <button class="nn-btn-make-issue" title="Make it an Issue" data-act="eos-drop-ids" data-type="Scorecard" data-title="KPI off-track: ${eEsc(m.name)}" onclick="event.stopPropagation()">
-                              ${icon('alert')} <span>Issue</span>
-                            </button>
-                          ` : ''}
                         </div>
                       </td>
                     `;
@@ -535,18 +530,18 @@ function renderScorecardsDirectory() {
         ${['Weekly', 'Monthly', 'Quarterly', 'Annual'].map(tf => `<option value="${tf}" ${F.timeframe === tf ? 'selected' : ''}>${tf}</option>`).join('')}
       </select>
     </div>
-    <button class="btn sec" data-act="eos-sc-clear-f" style="height:32px;font-size:12px;padding:0 10px;border-radius:6px;border:1px solid var(--line-2);color:var(--ink-2)">Filter ✕</button>
+    <button class="btn sec" data-act="eos-sc-clear-f" style="height:32px;font-size:12px;padding:0 10px;border-radius:6px;border:1px solid var(--line-2);color:var(--ink-2)">Clear Filters</button>
     <div style="flex:1"></div>
     <div class="sc-input-box">
       <select class="field sc-sort-sel" style="height:32px;padding:0 10px;font-size:12px;border-radius:6px;border:1px solid var(--line-2);background:transparent" data-eos-f="scorecard.sort">
-        <option value="Created On" ${F.sort === 'Created On' ? 'selected' : ''}>Created On ⌄</option>
+        <option value="Created On" ${F.sort === 'Created On' ? 'selected' : ''}>Created On</option>
         <option value="Team" ${F.sort === 'Team' ? 'selected' : ''}>Team</option>
         <option value="Timeframe" ${F.sort === 'Timeframe' ? 'selected' : ''}>Timeframe</option>
         <option value="ID" ${F.sort === 'ID' ? 'selected' : ''}>ID</option>
       </select>
     </div>
     <span style="font-size:12.5px;color:var(--ink-3);font-weight:500;padding:0 4px">${visCount} of ${allCount}</span>
-    <button class="icon-btn" data-act="eos-sc-fav-all" title="Favorites" style="width:30px;height:30px;color:var(--ink-3);font-size:14px">♡</button>
+    <button class="icon-btn" data-act="eos-sc-fav-all" title="Favorites" style="width:30px;height:30px;color:var(--ink-3);display:flex;align-items:center;justify-content:center">${icon('heart')}</button>
   </div>`;
 
   const body = `<div class="panel desk-panel" style="border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff">
@@ -573,8 +568,8 @@ function renderScorecardsDirectory() {
               <td style="color:var(--ink-2);font-size:13px;padding:10px 14px">${eEsc(sc.name || sc.id)}</td>
               <td style="text-align:right;color:var(--ink-3);font-size:12px;white-space:nowrap;padding:10px 24px 10px 14px" onclick="event.stopPropagation()">
                 <span>${eRelTime(sc.modified)}</span> &nbsp;&nbsp;&nbsp;
-                <span title="Comments" style="cursor:pointer">💬 0</span> &nbsp;&nbsp;&nbsp;
-                <span title="Favorite" data-act="eos-sc-fav" data-id="${eEsc(sc.id)}" style="cursor:pointer;font-size:13px">♡</span>
+                <span title="Comments" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px">${icon('chat')} 0</span> &nbsp;&nbsp;&nbsp;
+                <span title="Favorite" data-act="eos-sc-fav" data-id="${eEsc(sc.id)}" style="cursor:pointer;display:inline-flex;align-items:center">${icon('heart')}</span>
               </td>
             </tr>`;
           }).join('') : `<tr><td colspan="5" style="text-align:center;padding:36px;color:var(--ink-3)">No scorecards match the current filters.</td></tr>`}
@@ -1162,7 +1157,7 @@ function renderL10SegueStep(team) {
             <div class="nn-attendee-chip ${is_pres ? 'present' : 'absent'}" data-act="eos-toggle-attendance" data-id="${eEsc(att)}">
               <span class="nn-owner-circle" style="background:${is_pres ? '#059669' : '#9ca3af'}">${av}</span>
               <span>${eEsc(att)}</span>
-              <span style="font-size:11px;font-weight:700">${is_pres ? '✓' : '×'}</span>
+              <span style="display:inline-flex;align-items:center">${is_pres ? icon('check') : icon('x')}</span>
             </div>
           `;
         }).join('')}
@@ -1864,8 +1859,8 @@ function eosOpenPastMeetingDrawer(m, details) {
 
         <div style="background:#fff;border:1px solid var(--line);border-radius:8px;padding:12px 14px">
           <div style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px">Avg Rating</div>
-          <div style="margin-top:6px;font-size:15px;font-weight:700;color:#047857">
-            ★ ${rating} <span style="font-size:11px;font-weight:400;color:#9ca3af">/ 10</span>
+          <div style="margin-top:6px;font-size:15px;font-weight:700;color:#047857;display:flex;align-items:center;gap:4px">
+            ${icon('star')} ${rating} <span style="font-size:11px;font-weight:400;color:#9ca3af">/ 10</span>
           </div>
         </div>
       </div>
@@ -1908,7 +1903,7 @@ function eosOpenPastMeetingDrawer(m, details) {
       <div style="background:#fff;border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:18px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
           <h4 style="margin:0;font-size:12.5px;font-weight:700;color:var(--g900);text-transform:uppercase;letter-spacing:0.5px">L10 Agenda & Flow Covered</h4>
-          <span style="font-size:11.5px;color:#10b981;font-weight:600">✓ 7 Steps Complete</span>
+          <span style="font-size:11.5px;color:#10b981;font-weight:600;display:inline-flex;align-items:center;gap:4px">${icon('check')} 7 Steps Complete</span>
         </div>
         <div style="display:flex;flex-direction:column;gap:6px">
           ${[
@@ -1922,7 +1917,7 @@ function eosOpenPastMeetingDrawer(m, details) {
           ].map(s => `
             <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#f8fafc;border-radius:6px;font-size:12.5px">
               <div style="display:flex;align-items:center;gap:8px">
-                <span style="width:18px;height:18px;border-radius:50%;background:#d1fae5;color:#065f46;display:inline-flex;align-items:center;justify-content:center;font-size:9.5px;font-weight:700">✓</span>
+                <span style="width:18px;height:18px;border-radius:50%;background:#d1fae5;color:#065f46;display:inline-flex;align-items:center;justify-content:center">${icon('check')}</span>
                 <span style="font-weight:600;color:#111827">${s.num}. ${s.name}</span>
               </div>
               <span style="font-size:11.5px;color:#6b7280">${s.dur}</span>
@@ -1960,7 +1955,7 @@ function eosOpenPastMeetingDrawer(m, details) {
                 <div style="display:inline-flex;align-items:center;gap:8px;padding:5px 12px;background:#f3f4f6;border-radius:20px;font-size:12px">
                   <span class="avatar sm" style="width:20px;height:20px;font-size:9px">${initials(att)}</span>
                   <span style="font-weight:600;color:#111827">${eEsc(att)}</span>
-                  ${rat != null ? `<span style="background:#047857;color:#fff;padding:1px 6px;border-radius:10px;font-size:11px;font-weight:700">★ ${rat}</span>` : ''}
+                  ${rat != null ? `<span style="background:#047857;color:#fff;padding:1px 6px;border-radius:10px;font-size:11px;font-weight:700;display:inline-flex;align-items:center;gap:3px">${icon('star')} ${rat}</span>` : ''}
                 </div>
               `;
             }).join('')}
@@ -1973,7 +1968,7 @@ function eosOpenPastMeetingDrawer(m, details) {
       <div>
         ${docname ? `
           <a href="/app/level-10-meeting/${encodeURIComponent(docname)}" target="_blank" style="font-size:12px;color:#047857;text-decoration:none;display:inline-flex;align-items:center;gap:4px;font-weight:600">
-            Open in ERP Desk ↗
+            Open in ERP Desk
           </a>
         ` : ''}
       </div>

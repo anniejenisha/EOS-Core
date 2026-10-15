@@ -103,7 +103,7 @@ function renderTop() {
      <img src="${BRAND.logo}" style="width:22px;height:22px;object-fit:contain" alt="BEL" onerror="this.style.display='none'">
      ${crumbs()}
    </div>
-   <button class="cmdk" data-act="pal" aria-label="Search">${icon('search')}<span>Search</span><kbd>⌘K</kbd></button>
+   <button class="cmdk" data-act="pal" aria-label="Search">${icon('search')}<span>Search</span><kbd>Ctrl+K</kbd></button>
    <button class="icon-btn" aria-label="Notifications" style="position:relative">${icon('bell')}<span class="dot"></span></button><div class="avatar" title="${USER.name}">${USER.initial}</div>`;
 }
 

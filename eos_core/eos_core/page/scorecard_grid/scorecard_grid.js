@@ -70,7 +70,10 @@
 	class EOSNinety {
 		constructor(wrapper) {
 			this.wrapper = wrapper;
-			this.page = frappe.ui.make_app_page({ parent: wrapper, title: __("EOS"), single_column: true });
+			this.page = frappe.ui.make_app_page({ parent: wrapper, title: __("EOS"), single_column: true, hide_sidebar: true });
+			this.page.hide_sidebar = true;
+			if (wrapper && wrapper.page) wrapper.page.hide_sidebar = true;
+			if (frappe.app && frappe.app.sidebar) frappe.app.sidebar.toggle(true);
 			$(wrapper).find(".page-head").hide();
 
 			this.s = {
@@ -822,7 +825,7 @@
 				const is_sel = String(val).toLowerCase() === String(current).toLowerCase();
 				$(`<div class="nn-mi ${is_sel ? "on" : ""}">
 					<span>${this.esc(label)}</span>
-					${is_sel ? '<span style="color:#059669;font-weight:700">✓</span>' : ''}
+					${is_sel ? `<span style="color:#059669;display:inline-flex;align-items:center">${ic("check", 13)}</span>` : ''}
 				</div>`)
 					.on("click", (e) => {
 						e.stopPropagation();
@@ -2904,7 +2907,7 @@
 						</div>
 						<div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:12px 14px">
 							<div style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px">${__("Avg Rating")}</div>
-							<div style="margin-top:6px;font-size:15px;font-weight:700;color:#047857">★ ${rating} <span style="font-size:11px;font-weight:400;color:#9ca3af">/ 10</span></div>
+							<div style="margin-top:6px;font-size:15px;font-weight:700;color:#047857;display:flex;align-items:center;gap:4px">${ic("star", 13)} ${rating} <span style="font-size:11px;font-weight:400;color:#9ca3af">/ 10</span></div>
 						</div>
 					</div>
 
@@ -2943,7 +2946,7 @@
 					<div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:16px">
 						<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
 							<h4 style="margin:0;font-size:12.5px;font-weight:700;color:#111827;text-transform:uppercase;letter-spacing:0.5px">${__("L10 Agenda & Flow Covered")}</h4>
-							<span style="font-size:11.5px;color:#10b981;font-weight:600">✓ 7 Steps Complete</span>
+							<span style="font-size:11.5px;color:#10b981;font-weight:600;display:inline-flex;align-items:center;gap:4px">${ic("check", 12)} 7 Steps Complete</span>
 						</div>
 						<div style="display:flex;flex-direction:column;gap:6px">
 							${[
@@ -2957,7 +2960,7 @@
 							].map(s => `
 								<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#f8fafc;border-radius:6px;font-size:12.5px">
 									<div style="display:flex;align-items:center;gap:8px">
-										<span style="width:18px;height:18px;border-radius:50%;background:#d1fae5;color:#065f46;display:inline-flex;align-items:center;justify-content:center;font-size:9.5px;font-weight:700">✓</span>
+										<span style="width:18px;height:18px;border-radius:50%;background:#d1fae5;color:#065f46;display:inline-flex;align-items:center;justify-content:center">${ic("check", 11)}</span>
 										<span style="font-weight:600;color:#111827">${s.num}. ${s.name}</span>
 									</div>
 									<span style="font-size:11.5px;color:#6b7280">${s.dur}</span>
@@ -2994,7 +2997,7 @@
 									return `
 										<div style="display:inline-flex;align-items:center;gap:8px;padding:5px 12px;background:#f3f4f6;border-radius:20px;font-size:12px">
 											<span style="font-weight:600;color:#111827">${self.esc(att)}</span>
-											${rat != null ? `<span style="background:#047857;color:#fff;padding:1px 6px;border-radius:10px;font-size:11px;font-weight:700">★ ${rat}</span>` : ""}
+											${rat != null ? `<span style="background:#047857;color:#fff;padding:1px 6px;border-radius:10px;font-size:11px;font-weight:700;display:inline-flex;align-items:center;gap:3px">${ic("star", 11)} ${rat}</span>` : ""}
 										</div>
 									`;
 								}).join("")}
@@ -3007,7 +3010,7 @@
 					<div>
 						${docname ? `
 							<a href="/app/level-10-meeting/${encodeURIComponent(docname)}" target="_blank" style="font-size:12px;color:#047857;text-decoration:none;display:inline-flex;align-items:center;gap:4px;font-weight:600">
-								${__("Open in ERP Desk ↗")}
+								${__("Open in ERP Desk")}
 							</a>
 						` : ""}
 					</div>
@@ -3491,7 +3494,7 @@
 								<div class="nn-attendee-chip ${is_pres ? "present" : "absent"}" data-attendee="${this.esc(att)}">
 									<span class="nn-owner-circle" style="background:${is_pres ? "#059669" : "#9ca3af"}">${av}</span>
 									<span>${this.esc(att)}</span>
-									<span style="font-size:11px;font-weight:700">${is_pres ? "✓" : "×"}</span>
+									<span style="display:inline-flex;align-items:center">${is_pres ? ic("check", 11) : ic("close", 11)}</span>
 								</div>
 							`;
 			}).join("")}
@@ -4761,24 +4764,10 @@
 					} else {
 						const pass = self.check_goal_pass(val, m.goal, m.goal_op, m.min_value, m.max_value);
 						const cls = pass ? "pass" : "fail";
-						const existing_issue = self.created_issues && self.created_issues[`${m.id}_${p.key}`];
-						let issue_action = "";
-						if (!pass) {
-							if (existing_issue) {
-								issue_action = `<a href="/app/issue/${encodeURIComponent(existing_issue)}" class="nn-cell-issue-link" target="_blank" title="${__("View Issue: ")}${self.esc(existing_issue)}">${ic("arrow-up-right", 9)} ${__("Issue")}</a>`;
-							} else {
-								issue_action = `
-									<button class="nn-btn-make-issue" title="${__("Make it an Issue")}" data-metric="${self.esc(m.id)}" data-date="${p.key}">
-										${ic("alert-circle", 10)}
-										<span class="nn-make-issue-text">${__("Issue")}</span>
-									</button>`;
-							}
-						}
 						cells += `
 							<td class="nn-sc-cell ${cls}" data-metric="${self.esc(m.id)}" data-key="${p.key}" data-goal="${m.goal}" data-op="${self.esc(m.goal_op || '>=')}">
 								<div class="nn-cell-wrap">
 									<span class="nn-cell-badge ${cls}">${val}</span>
-									${issue_action}
 								</div>
 							</td>`;
 					}
@@ -4884,7 +4873,6 @@
 					$td.removeClass("pass fail").addClass(cls).html(`
 						<div class="nn-cell-wrap">
 							<span class="nn-cell-badge ${cls}">${new_val}</span>
-							${issue_html}
 						</div>
 					`);
 					self.bind_grid_cell_events();
@@ -4931,7 +4919,6 @@
 							$td.removeClass("pass fail").addClass(cls).html(`
 								<div class="nn-cell-wrap">
 									<span class="nn-cell-badge ${cls}">${cur_val}</span>
-									${issue_html}
 								</div>
 							`);
 							self.bind_grid_cell_events();
