@@ -321,7 +321,9 @@ def get_meetings_list():
 				"fac": fac,
 				"rating": rating,
 				"team": m.team or t_name,
-				"title": f"{t_name} Level 10 Meeting™"
+				"title": f"{t_name} Level 10 Meeting™",
+				"status": m.status or "Complete",
+				"notes": m.notes or "Level 10 Meeting completed"
 			})
 		return past
 	except Exception:
@@ -655,6 +657,35 @@ def end_meeting(docname=None, team=None, secs=0, rating=None, notes=None):
 	doc.save(ignore_permissions=True)
 	frappe.db.commit()
 	return {"status": "ok", "docname": doc.name}
+
+
+@frappe.whitelist(allow_guest=True)
+def get_meeting_details(docname=None):
+	if not docname or not frappe.db.exists("Level 10 Meeting", docname):
+		return None
+	try:
+		doc = frappe.get_doc("Level 10 Meeting", docname)
+		return {
+			"name": doc.name,
+			"team": doc.team,
+			"meeting_date": str(doc.meeting_date),
+			"status": doc.status,
+			"notes": doc.notes,
+			"creation": str(doc.creation),
+			"owner": doc.owner,
+			"owner_name": frappe.utils.get_fullname(doc.owner) or doc.owner,
+			"agenda_items": [
+				{"item_name": item.item_name, "duration_minutes": item.duration_minutes, "status": item.status}
+				for item in (doc.get("agenda_items") or [])
+			],
+			"todo_items": [
+				{"title": t.title, "owner": t.owner, "due_date": str(t.due_date) if t.due_date else None, "status": t.status}
+				for t in (doc.get("todo_items") or [])
+			]
+		}
+	except Exception as e:
+		frappe.log_error("get_meeting_details error", str(e))
+		return None
 
 
 def resolve_user_email(display_name):

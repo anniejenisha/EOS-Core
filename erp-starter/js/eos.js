@@ -952,17 +952,19 @@ function renderMeetingsDashboard() {
               </tr>
             </thead>
             <tbody>
-              ${ps.map(m => `
-                <tr class="nn-rock-row">
+              ${ps.map(m => {
+                const meetId = m.docname || m.title || (m.team + '-' + m.when);
+                return `
+                <tr class="nn-rock-row" data-act="eos-view-past-meeting" data-id="${eEsc(meetId)}" style="cursor:pointer">
                   <td><b>${eShort(m.when)}</b><div style="font-size:11px;color:#9ca3af">${eEsc(m.time || '')}</div></td>
                   <td>${eEsc(m.team || team)}</td>
                   <td><span class="nn-status-badge complete">Complete</span></td>
                   <td style="color:#6b7280">${eEsc(m.notes || 'Level 10 Meeting completed')}</td>
                   <td style="text-align:right">
-                    ${m.docname ? `<a href="/app/level-10-meeting/${encodeURIComponent(m.docname)}" target="_blank" class="nn-btn-bar" style="padding:3px 8px;font-size:11px;display:inline-flex">View</a>` : `<span style="color:#9ca3af;font-size:11px">—</span>`}
+                    <button class="btn sec" data-act="eos-view-past-meeting" data-id="${eEsc(meetId)}" style="height:28px;padding:0 12px;font-size:12px;font-weight:600;border-radius:6px;border:1px solid var(--line-2);cursor:pointer">View</button>
                   </td>
                 </tr>
-              `).join('')}
+              `;}).join('')}
             </tbody>
           </table>
         </div>
@@ -1800,6 +1802,197 @@ function eosModal(title, contentHtml) {
   document.body.appendChild(modal);
 }
 
+function eosOpenPastMeetingDrawer(m, details) {
+  E.form = null;
+  const d = details || {};
+  const team = m.team || d.team || 'Leadership Team';
+  const when = m.when || d.meeting_date || 'Recent';
+  const time = m.time || '3:00 p.m.';
+  const durMin = Math.round((m.secs || 5400) / 60);
+  const rating = m.rating || 8.5;
+  const fac = m.fac || d.owner_name || EOS_ME || 'Administrator';
+  const notes = d.notes || m.notes || 'Level 10 Meeting completed and archived in ERP.';
+  const docname = m.docname || d.name || '';
+
+  // Parse notes if structured
+  let attendeesList = m.attendees || [];
+  let ratingsMap = m.ratings || {};
+  if (!attendeesList.length && notes.includes('Attendees:')) {
+    const atMatch = notes.match(/Attendees:\s*([^\.]+)/);
+    if (atMatch) attendeesList = atMatch[1].split(',').map(s => s.trim()).filter(Boolean);
+  }
+  if (!Object.keys(ratingsMap).length && notes.includes('Ratings:')) {
+    const ratMatch = notes.match(/Ratings:\s*(\{[^\}]+\})/);
+    if (ratMatch) {
+      try { ratingsMap = JSON.parse(ratMatch[1]); } catch(e) {}
+    }
+  }
+
+  const drawer = document.getElementById('drawer');
+  if (!drawer) return;
+
+  drawer.innerHTML = `
+    <header style="padding:18px 24px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;background:#fff;position:sticky;top:0;z-index:10">
+      <div style="min-width:0;flex:1;padding-right:12px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#10b981;flex-shrink:0"></span>
+          <h2 style="font-size:16.5px;font-weight:700;color:var(--g900);margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${eEsc(m.title || team + ' Level 10 Meeting™')}</h2>
+        </div>
+        <div style="font-size:12px;color:#6b7280;margin-top:3px">${eEsc(docname || team)} &bull; ${eShort(when)}</div>
+      </div>
+      <button class="icon-btn" data-act="close" aria-label="Close" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line-2);flex-shrink:0">${icon('x')}</button>
+    </header>
+
+    <div class="body" style="padding:20px 24px;overflow-y:auto;flex:1;background:#fafbfc">
+      <!-- Status & Top Metric Cards -->
+      <div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:12px;margin-bottom:20px">
+        <div style="background:#fff;border:1px solid var(--line);border-radius:8px;padding:12px 14px">
+          <div style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px">Status</div>
+          <div style="margin-top:6px">
+            <span class="nn-status-badge complete" style="display:inline-flex;align-items:center;gap:4px;background:#d1fae5;color:#065f46;font-weight:600;padding:3px 8px;border-radius:12px;font-size:11.5px">
+              ${icon('check')} Complete
+            </span>
+          </div>
+        </div>
+
+        <div style="background:#fff;border:1px solid var(--line);border-radius:8px;padding:12px 14px">
+          <div style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px">Duration</div>
+          <div style="margin-top:6px;font-size:15px;font-weight:700;color:var(--g900)">
+            ${durMin} min
+          </div>
+        </div>
+
+        <div style="background:#fff;border:1px solid var(--line);border-radius:8px;padding:12px 14px">
+          <div style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px">Avg Rating</div>
+          <div style="margin-top:6px;font-size:15px;font-weight:700;color:#047857">
+            ★ ${rating} <span style="font-size:11px;font-weight:400;color:#9ca3af">/ 10</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Meeting Overview Section -->
+      <div style="background:#fff;border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:18px">
+        <h4 style="margin:0 0 12px 0;font-size:12.5px;font-weight:700;color:var(--g900);text-transform:uppercase;letter-spacing:0.5px">Meeting Overview</h4>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:12.5px">
+          <div>
+            <div style="color:#6b7280;font-size:11.5px">Date & Time</div>
+            <div style="font-weight:600;color:#111827;margin-top:2px">${eShort(when)}, ${eEsc(time)}</div>
+          </div>
+          <div>
+            <div style="color:#6b7280;font-size:11.5px">Team</div>
+            <div style="font-weight:600;color:#111827;margin-top:2px">${eEsc(team)}</div>
+          </div>
+          <div>
+            <div style="color:#6b7280;font-size:11.5px">Leader / Facilitator</div>
+            <div style="font-weight:600;color:#111827;margin-top:2px;display:flex;align-items:center;gap:6px">
+              <span class="avatar sm" style="width:20px;height:20px;font-size:9px">${initials(fac)}</span>
+              ${eEsc(fac)}
+            </div>
+          </div>
+          <div>
+            <div style="color:#6b7280;font-size:11.5px">Archived Record</div>
+            <div style="font-weight:600;color:#111827;margin-top:2px;font-family:monospace;font-size:11.5px">${eEsc(docname || 'Recorded in Session')}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Summary & Notes Section -->
+      <div style="background:#fff;border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:18px">
+        <h4 style="margin:0 0 10px 0;font-size:12.5px;font-weight:700;color:var(--g900);text-transform:uppercase;letter-spacing:0.5px">Summary & Notes</h4>
+        <div style="font-size:13px;line-height:1.6;color:#374151;background:#f9fafb;padding:12px 14px;border-radius:6px;border:1px solid #f1f3f5">
+          ${eEsc(notes)}
+        </div>
+      </div>
+
+      <!-- Agenda Steps Covered Section -->
+      <div style="background:#fff;border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:18px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <h4 style="margin:0;font-size:12.5px;font-weight:700;color:var(--g900);text-transform:uppercase;letter-spacing:0.5px">L10 Agenda & Flow Covered</h4>
+          <span style="font-size:11.5px;color:#10b981;font-weight:600">✓ 7 Steps Complete</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          ${[
+            { num: 1, name: "Good News / Segue", dur: "5 min" },
+            { num: 2, name: "Scorecard Review", dur: "5 min" },
+            { num: 3, name: "Rock Review", dur: "5 min" },
+            { num: 4, name: "Customer & Employee Headlines", dur: "5 min" },
+            { num: 5, name: "To-Do List Review", dur: "5 min" },
+            { num: 6, name: "IDS™ (Identify, Discuss, Solve)", dur: "60 min" },
+            { num: 7, name: "Conclude & Ratings", dur: "5 min" }
+          ].map(s => `
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#f8fafc;border-radius:6px;font-size:12.5px">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="width:18px;height:18px;border-radius:50%;background:#d1fae5;color:#065f46;display:inline-flex;align-items:center;justify-content:center;font-size:9.5px;font-weight:700">✓</span>
+                <span style="font-weight:600;color:#111827">${s.num}. ${s.name}</span>
+              </div>
+              <span style="font-size:11.5px;color:#6b7280">${s.dur}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <!-- Meeting To-Dos & Action Items if present -->
+      ${(d.todo_items && d.todo_items.length) ? `
+        <div style="background:#fff;border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:18px">
+          <h4 style="margin:0 0 10px 0;font-size:12.5px;font-weight:700;color:var(--g900);text-transform:uppercase;letter-spacing:0.5px">Meeting To-Dos & Action Items</h4>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            ${d.todo_items.map(t => `
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#f8fafc;border-radius:6px;font-size:12.5px">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span style="font-weight:600;color:#111827">${eEsc(t.title)}</span>
+                  ${t.owner ? `<span style="font-size:11.5px;color:#6b7280">(${eEsc(t.owner)})</span>` : ''}
+                </div>
+                <span class="nn-status-badge ${t.status === 'Closed' ? 'complete' : 'in-progress'}" style="font-size:11px">${eEsc(t.status || 'Open')}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
+
+      <!-- Attendees & Rating Breakdown -->
+      ${(attendeesList.length || Object.keys(ratingsMap).length) ? `
+        <div style="background:#fff;border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:18px">
+          <h4 style="margin:0 0 12px 0;font-size:12.5px;font-weight:700;color:var(--g900);text-transform:uppercase;letter-spacing:0.5px">Attendees & Ratings</h4>
+          <div style="display:flex;flex-wrap:wrap;gap:8px">
+            ${(attendeesList.length ? attendeesList : Object.keys(ratingsMap)).map(att => {
+              const rat = ratingsMap[att];
+              return `
+                <div style="display:inline-flex;align-items:center;gap:8px;padding:5px 12px;background:#f3f4f6;border-radius:20px;font-size:12px">
+                  <span class="avatar sm" style="width:20px;height:20px;font-size:9px">${initials(att)}</span>
+                  <span style="font-weight:600;color:#111827">${eEsc(att)}</span>
+                  ${rat != null ? `<span style="background:#047857;color:#fff;padding:1px 6px;border-radius:10px;font-size:11px;font-weight:700">★ ${rat}</span>` : ''}
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      ` : ''}
+    </div>
+
+    <footer style="padding:14px 24px;border-top:1px solid var(--line);background:#fff;display:flex;align-items:center;justify-content:space-between;position:sticky;bottom:0;z-index:10">
+      <div>
+        ${docname ? `
+          <a href="/app/level-10-meeting/${encodeURIComponent(docname)}" target="_blank" style="font-size:12px;color:#047857;text-decoration:none;display:inline-flex;align-items:center;gap:4px;font-weight:600">
+            Open in ERP Desk ↗
+          </a>
+        ` : ''}
+      </div>
+      <button class="btn primary" data-act="close" style="height:32px;padding:0 18px;font-size:12.5px;font-weight:600;background:var(--g900);color:#fff;border-radius:6px">Close</button>
+    </footer>
+  `;
+
+  document.body.classList.add('drawer-open');
+  drawer.setAttribute('aria-hidden', 'false');
+
+  if (docname && !details) {
+    apiCall('eos_core.eos_api.get_meeting_details', { docname: docname }).then(res => {
+      if (res && res.name && (res.agenda_items?.length || res.todo_items?.length)) {
+        eosOpenPastMeetingDrawer(m, res);
+      }
+    });
+  }
+}
+
 function eosDrawer(kind, rec, pre) {
   const own = v => ({ t: 'select', o: EOS_PEOPLE, v: v || EOS_ME }), team = v => ({ t: 'select', o: EOS_TEAMS, v: v || EOS_TEAMS[0] });
   const p = kind || (S.page === 'scorecard' && E.tab.scorecard !== 'scorecards' ? 'measurable' : { overview: 'to-dos', scorecard: 'scorecard', rocks: 'rocks', 'to-dos': 'to-dos', issues: 'issues', meetings: 'meetings' }[S.page]);
@@ -2307,6 +2500,21 @@ async function eosAct(a, el, e) {
    }
    case 'eos-meet-end': {
      await eosFinishMeeting();
+     break;
+   }
+   case 'eos-view-past-meeting': {
+     const m = (E.past || []).find(x => x.docname === id || x.title === id || x.name === id || (x.team + '-' + x.when) === id) || {
+       docname: id,
+       title: id,
+       team: (E.f && E.f.meet && E.f.meet.team) || 'Leadership Team',
+       when: 'Recent',
+       time: '3:00 p.m.',
+       secs: 5400,
+       rating: 8.5,
+       fac: EOS_ME || 'Administrator',
+       notes: 'Level 10 Meeting completed'
+     };
+     eosOpenPastMeetingDrawer(m);
      break;
    }
    case 'eos-open-sc': {

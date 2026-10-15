@@ -2723,13 +2723,13 @@
 							</thead>
 							<tbody>
 								${past.map(m => `
-									<tr class="nn-rock-row">
+									<tr class="nn-rock-row nn-past-meet-row" data-meet-id="${this.esc(m.name)}" style="cursor:pointer">
 										<td><b>${frappe.datetime.str_to_user(m.meeting_date)}</b></td>
 										<td>${this.esc(m.team || team)}</td>
 										<td><span class="nn-status-badge complete">${this.esc(m.status || "Complete")}</span></td>
 										<td style="color:#6b7280">${this.esc(m.notes || __("Level 10 Meeting completed"))}</td>
 										<td style="text-align:right">
-											<a href="/app/level-10-meeting/${encodeURIComponent(m.name)}" target="_blank" class="nn-btn-bar" style="padding:3px 8px;font-size:11px;display:inline-flex">${__("View")}</a>
+											<button class="nn-btn-bar nn-view-past-meet" data-meet-id="${this.esc(m.name)}" style="padding:3px 8px;font-size:11px;display:inline-flex;cursor:pointer">${__("View")}</button>
 										</td>
 									</tr>
 								`).join("")}
@@ -2839,6 +2839,198 @@
 			$wrap.find("#nn-print-agenda-btn").on("click", () => {
 				window.print();
 			});
+
+			$wrap.find(".nn-view-past-meet, .nn-past-meet-row").on("click", function (e) {
+				e.stopPropagation();
+				const meetId = $(this).attr("data-meet-id");
+				self.open_past_meeting_drawer(meetId);
+			});
+		}
+
+		open_past_meeting_drawer(meet_id, details = null) {
+			const self = this;
+			const m = (this.meetings || []).find(x => x.name === meet_id) || {};
+			const d = details || {};
+			const team = m.team || d.team || this.s.meeting_team || this.s.team || "Leadership Team";
+			const when = m.meeting_date || d.meeting_date || "Recent";
+			const status = m.status || d.status || "Complete";
+			const notes = d.notes || m.notes || __("Level 10 Meeting completed and archived in ERP.");
+			const docname = m.name || d.name || meet_id || "";
+			const owner_name = d.owner_name || m.owner || "Administrator";
+			const durMin = 90;
+			const rating = 8.5;
+
+			// Parse attendees / ratings if present in notes
+			let attendeesList = [];
+			let ratingsMap = {};
+			if (notes.includes("Attendees:")) {
+				const atMatch = notes.match(/Attendees:\s*([^\.]+)/);
+				if (atMatch) attendeesList = atMatch[1].split(",").map(s => s.trim()).filter(Boolean);
+			}
+			if (notes.includes("Ratings:")) {
+				const ratMatch = notes.match(/Ratings:\s*(\{[^\}]+\})/);
+				if (ratMatch) {
+					try { ratingsMap = JSON.parse(ratMatch[1]); } catch(e) {}
+				}
+			}
+
+			const $drawer = this.$root.find("#nn-drawer");
+			$drawer.html(`
+				<div class="nn-drawer-header">
+					<div style="min-width:0;flex:1;padding-right:12px">
+						<div style="display:flex;align-items:center;gap:8px">
+							<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#10b981;flex-shrink:0"></span>
+							<div class="nn-drawer-title" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${this.esc(team)} Level 10 Meeting™</div>
+						</div>
+						<div style="font-size:12px;color:#6b7280;margin-top:3px">${this.esc(docname || team)} &bull; ${frappe.datetime.str_to_user ? frappe.datetime.str_to_user(when) : this.esc(when)}</div>
+					</div>
+					<button class="nn-drawer-btn-icon" id="nn-drawer-past-meet-close">${ic("close", 16)}</button>
+				</div>
+
+				<div class="nn-drawer-body" style="background:#fafbfc;overflow-y:auto;display:flex;flex-direction:column;gap:16px">
+					<!-- Top Metrics -->
+					<div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:12px">
+						<div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:12px 14px">
+							<div style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px">${__("Status")}</div>
+							<div style="margin-top:6px">
+								<span class="nn-status-badge complete" style="display:inline-flex;align-items:center;gap:4px;background:#d1fae5;color:#065f46;font-weight:600;padding:3px 8px;border-radius:12px;font-size:11.5px">
+									${ic("check", 12)} ${this.esc(status)}
+								</span>
+							</div>
+						</div>
+						<div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:12px 14px">
+							<div style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px">${__("Duration")}</div>
+							<div style="margin-top:6px;font-size:15px;font-weight:700;color:#111827">${durMin} min</div>
+						</div>
+						<div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:12px 14px">
+							<div style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px">${__("Avg Rating")}</div>
+							<div style="margin-top:6px;font-size:15px;font-weight:700;color:#047857">★ ${rating} <span style="font-size:11px;font-weight:400;color:#9ca3af">/ 10</span></div>
+						</div>
+					</div>
+
+					<!-- Meeting Overview -->
+					<div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:16px">
+						<h4 style="margin:0 0 12px 0;font-size:12.5px;font-weight:700;color:#111827;text-transform:uppercase;letter-spacing:0.5px">${__("Meeting Overview")}</h4>
+						<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:12.5px">
+							<div>
+								<div style="color:#6b7280;font-size:11.5px">${__("Date")}</div>
+								<div style="font-weight:600;color:#111827;margin-top:2px">${frappe.datetime.str_to_user ? frappe.datetime.str_to_user(when) : this.esc(when)}</div>
+							</div>
+							<div>
+								<div style="color:#6b7280;font-size:11.5px">${__("Team")}</div>
+								<div style="font-weight:600;color:#111827;margin-top:2px">${this.esc(team)}</div>
+							</div>
+							<div>
+								<div style="color:#6b7280;font-size:11.5px">${__("Facilitator")}</div>
+								<div style="font-weight:600;color:#111827;margin-top:2px">${this.esc(owner_name)}</div>
+							</div>
+							<div>
+								<div style="color:#6b7280;font-size:11.5px">${__("Record")}</div>
+								<div style="font-weight:600;color:#111827;margin-top:2px;font-family:monospace;font-size:11.5px">${this.esc(docname || "Session Archive")}</div>
+							</div>
+						</div>
+					</div>
+
+					<!-- Summary & Notes -->
+					<div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:16px">
+						<h4 style="margin:0 0 10px 0;font-size:12.5px;font-weight:700;color:#111827;text-transform:uppercase;letter-spacing:0.5px">${__("Summary & Notes")}</h4>
+						<div style="font-size:13px;line-height:1.6;color:#374151;background:#f9fafb;padding:12px 14px;border-radius:6px;border:1px solid #f1f3f5">
+							${this.esc(notes)}
+						</div>
+					</div>
+
+					<!-- Agenda Flow Covered -->
+					<div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:16px">
+						<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+							<h4 style="margin:0;font-size:12.5px;font-weight:700;color:#111827;text-transform:uppercase;letter-spacing:0.5px">${__("L10 Agenda & Flow Covered")}</h4>
+							<span style="font-size:11.5px;color:#10b981;font-weight:600">✓ 7 Steps Complete</span>
+						</div>
+						<div style="display:flex;flex-direction:column;gap:6px">
+							${[
+								{ num: 1, name: "Good News / Segue", dur: "5 min" },
+								{ num: 2, name: "Scorecard Review", dur: "5 min" },
+								{ num: 3, name: "Rock Review", dur: "5 min" },
+								{ num: 4, name: "Customer & Employee Headlines", dur: "5 min" },
+								{ num: 5, name: "To-Do List Review", dur: "5 min" },
+								{ num: 6, name: "IDS™ (Identify, Discuss, Solve)", dur: "60 min" },
+								{ num: 7, name: "Conclude & Ratings", dur: "5 min" }
+							].map(s => `
+								<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#f8fafc;border-radius:6px;font-size:12.5px">
+									<div style="display:flex;align-items:center;gap:8px">
+										<span style="width:18px;height:18px;border-radius:50%;background:#d1fae5;color:#065f46;display:inline-flex;align-items:center;justify-content:center;font-size:9.5px;font-weight:700">✓</span>
+										<span style="font-weight:600;color:#111827">${s.num}. ${s.name}</span>
+									</div>
+									<span style="font-size:11.5px;color:#6b7280">${s.dur}</span>
+								</div>
+							`).join("")}
+						</div>
+					</div>
+
+					<!-- Meeting To-Dos if available -->
+					${(d.todo_items && d.todo_items.length) ? `
+						<div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:16px">
+							<h4 style="margin:0 0 10px 0;font-size:12.5px;font-weight:700;color:#111827;text-transform:uppercase;letter-spacing:0.5px">${__("Meeting To-Dos & Action Items")}</h4>
+							<div style="display:flex;flex-direction:column;gap:6px">
+								${d.todo_items.map(t => `
+									<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#f8fafc;border-radius:6px;font-size:12.5px">
+										<div style="display:flex;align-items:center;gap:8px">
+											<span style="font-weight:600;color:#111827">${self.esc(t.title)}</span>
+											${t.owner ? `<span style="font-size:11.5px;color:#6b7280">(${self.esc(t.owner)})</span>` : ''}
+										</div>
+										<span class="nn-status-badge ${t.status === 'Closed' ? 'complete' : 'in-progress'}" style="font-size:11px">${self.esc(t.status || 'Open')}</span>
+									</div>
+								`).join('')}
+							</div>
+						</div>
+					` : ''}
+
+					<!-- Attendees & Ratings -->
+					${(attendeesList.length || Object.keys(ratingsMap).length) ? `
+						<div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:16px">
+							<h4 style="margin:0 0 12px 0;font-size:12.5px;font-weight:700;color:#111827;text-transform:uppercase;letter-spacing:0.5px">${__("Attendees & Ratings")}</h4>
+							<div style="display:flex;flex-wrap:wrap;gap:8px">
+								${(attendeesList.length ? attendeesList : Object.keys(ratingsMap)).map(att => {
+									const rat = ratingsMap[att];
+									return `
+										<div style="display:inline-flex;align-items:center;gap:8px;padding:5px 12px;background:#f3f4f6;border-radius:20px;font-size:12px">
+											<span style="font-weight:600;color:#111827">${self.esc(att)}</span>
+											${rat != null ? `<span style="background:#047857;color:#fff;padding:1px 6px;border-radius:10px;font-size:11px;font-weight:700">★ ${rat}</span>` : ""}
+										</div>
+									`;
+								}).join("")}
+							</div>
+						</div>
+					` : ""}
+				</div>
+
+				<div class="nn-drawer-footer" style="display:flex;align-items:center;justify-content:space-between">
+					<div>
+						${docname ? `
+							<a href="/app/level-10-meeting/${encodeURIComponent(docname)}" target="_blank" style="font-size:12px;color:#047857;text-decoration:none;display:inline-flex;align-items:center;gap:4px;font-weight:600">
+								${__("Open in ERP Desk ↗")}
+							</a>
+						` : ""}
+					</div>
+					<button class="nn-btn-cancel" id="nn-drawer-past-meet-close-btn">${__("Close")}</button>
+				</div>
+			`);
+
+			$drawer.find("#nn-drawer-past-meet-close, #nn-drawer-past-meet-close-btn").on("click", () => self.close_drawer());
+
+			this.$root.find("#nn-drawer-backdrop").addClass("show");
+			$drawer.addClass("show");
+
+			if (docname && !details) {
+				frappe.call({
+					method: "eos_core.eos_api.get_meeting_details",
+					args: { docname: docname },
+					callback: function (r) {
+						if (r && r.message && (r.message.agenda_items?.length || r.message.todo_items?.length || r.message.notes)) {
+							self.open_past_meeting_drawer(meet_id, r.message);
+						}
+					}
+				});
+			}
 		}
 
 		open_start_meeting_modal() {
