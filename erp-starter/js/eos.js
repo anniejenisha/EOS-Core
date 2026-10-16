@@ -7,8 +7,20 @@ let EOS_ME = (typeof USER !== 'undefined' && USER.name && USER.name !== 'User') 
 let EOS_USER_ID = (typeof USER !== 'undefined' && USER.email) ? USER.email : (getLoggedInUserEmail() || window.frappe_user || '');
 let EOS_IS_ADMIN = (window.__EOS_BOOT__ && window.__EOS_BOOT__.user && !!window.__EOS_BOOT__.user.is_admin) || false;
 let EOS_TEAMS = [];
+let EOS_LEADER_TEAMS = (window.__EOS_BOOT__ && (window.__EOS_BOOT__.leader_teams || (window.__EOS_BOOT__.user && window.__EOS_BOOT__.user.leader_teams))) || [];
 let EOS_TEAM_MEMBERS = {};
 let EOS_PEOPLE = [];
+
+function isLeaderOfTeam(teamName) {
+  const userEmail = String(getLoggedInUserEmail() || '').toLowerCase().trim();
+  if (userEmail === 'administrator' || EOS_USER_ID.toLowerCase() === 'administrator') {
+    return true;
+  }
+  if (!teamName || teamName === 'All Teams') {
+    return false;
+  }
+  return Array.isArray(EOS_LEADER_TEAMS) && EOS_LEADER_TEAMS.includes(teamName);
+}
 
 function isMyOwnerName(ownerStr) {
   if (!ownerStr) return false;
@@ -50,7 +62,26 @@ function isMyOwnerName(ownerStr) {
     }
   }
 
-  // 4. Also check against USER.email / EOS_USER_ID if different
+  // 4. First name + initial check (e.g. "Annie P" vs "Annie Jenisha" or "anniejenisha.p@...")
+  const ownerWords = cleanOwner.split(/\s+/).filter(Boolean);
+  const nameWords = cleanName.split(/\s+/).filter(Boolean);
+  if (ownerWords.length > 0) {
+    if (nameWords.length > 0 && ownerWords[0].length >= 3 && nameWords[0].length >= 3 && ownerWords[0] === nameWords[0]) {
+      if (ownerWords.length === 1 || (ownerWords.length === 2 && ownerWords[1].length === 1)) {
+        return true;
+      }
+    }
+    if (myEmailLower.includes('@')) {
+      const emailUser = myEmailLower.split('@')[0];
+      if (ownerWords[0].length >= 3 && emailUser.includes(ownerWords[0])) {
+        if (ownerWords.length === 1 || (ownerWords.length === 2 && ownerWords[1].length === 1)) {
+          return true;
+        }
+      }
+    }
+  }
+
+  // 5. Also check against USER.email / EOS_USER_ID if different
   if (typeof EOS_USER_ID !== 'undefined' && EOS_USER_ID) {
     const eosUserLower = String(EOS_USER_ID).toLowerCase().trim();
     if (eosUserLower && eosUserLower !== myEmailLower && eosUserLower.includes('@')) {
@@ -278,11 +309,16 @@ function applyBootstrapData(data) {
   if (resolvedName && (!EOS_ME || EOS_ME === 'Guest')) {
     EOS_ME = resolvedName;
   }
+  if (data.leader_teams) EOS_LEADER_TEAMS = data.leader_teams;
+  else if (data.user && data.user.leader_teams) EOS_LEADER_TEAMS = data.user.leader_teams;
+
   if (data.teams && data.teams.length) {
     EOS_TEAMS = data.teams;
+    const isSuperAdmin = (EOS_USER_ID.toLowerCase() === 'administrator');
+    const primaryTeam = (EOS_LEADER_TEAMS && EOS_LEADER_TEAMS[0]) || EOS_TEAMS[0];
     ['my', 'rocks', 'todos', 'issues', 'meet', 'scorecard'].forEach(k => {
-      if (E.f[k] && (!E.f[k].team || (!EOS_TEAMS.includes(E.f[k].team) && E.f[k].team !== 'All Teams'))) {
-        E.f[k].team = EOS_TEAMS[0];
+      if (E.f[k] && (!E.f[k].team || !EOS_TEAMS.includes(E.f[k].team) || (!isSuperAdmin && E.f[k].team === 'All Teams'))) {
+        E.f[k].team = primaryTeam;
       }
     });
   }
@@ -378,9 +414,7 @@ function eosMy90() {
   const priv = eTodos.filter(t => t.priv && (isAdmin || isMyItem(t)) && !t.archived && (F.priv === 'All' || !t.done) && tf(t)).sort(eByDue);
 
   const per = ePeriods('weekly', 6);
-  const mine = isAdmin
-    ? eMeas.filter(m => (m.freq || 'weekly').toLowerCase() === 'weekly' && tf(m))
-    : eMeas.filter(m => (m.freq || 'weekly').toLowerCase() === 'weekly' && isMyItem(m) && tf(m));
+  const mine = eMeas.filter(m => (m.freq || 'weekly').toLowerCase() === 'weekly' && isMyItem(m) && tf(m));
 
   const hasDone = team.some(t => t.done);
 
@@ -544,8 +578,9 @@ function renderMeasurablesGrid(curTab) {
   const allOwners = getScorecardOwners(curTab, F.team);
   const myOwners = allOwners.filter(o => isMyOwnerName(o));
 
-  const userEmail = getLoggedInUserEmail();
-  const isSystemAdmin = EOS_IS_ADMIN || userEmail === 'administrator' || EOS_USER_ID.toLowerCase() === 'administrator';
+  const userEmail = String(getLoggedInUserEmail() || '').toLowerCase().trim();
+  const isSuperAdmin = (userEmail === 'administrator' || EOS_USER_ID.toLowerCase() === 'administrator');
+  const isTeamLeader = isSuperAdmin || (F.team && F.team !== 'All Teams' && isLeaderOfTeam(F.team));
 
   let effectiveSelectedOwners = null;
   if (F.owners_customized) {
@@ -556,12 +591,12 @@ function renderMeasurablesGrid(curTab) {
       }
     }
     effectiveSelectedOwners = F.owners;
-  } else if (!isSystemAdmin) {
-    // Default: regular logged-in users only see their own scorecard measurables
-    effectiveSelectedOwners = myOwners;
-  } else {
-    // Administrator: sees all
+  } else if (isTeamLeader) {
+    // Leader of this team: Show their team members' scorecards only
     effectiveSelectedOwners = null;
+  } else {
+    // Player (or viewing All Teams): Show ONLY their own scorecard
+    effectiveSelectedOwners = myOwners;
   }
 
   const isOwnerFiltered = Array.isArray(effectiveSelectedOwners) && effectiveSelectedOwners.length < allOwners.length;

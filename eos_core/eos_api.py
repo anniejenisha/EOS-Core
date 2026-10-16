@@ -16,10 +16,13 @@ def get_eos_bootstrap(user_email=None):
 	user_id = user_info.get("id")
 	is_admin = bool(user_info.get("is_admin", False))
 	allocated_teams = get_user_allocated_teams(user_id) if not is_admin else None
+	leader_teams = get_user_leader_teams(user_id)
+	user_info["leader_teams"] = leader_teams
 
 	return {
 		"user": user_info,
 		"teams": get_teams_list(is_admin=is_admin, user_id=user_id, allocated_teams=allocated_teams),
+		"leader_teams": leader_teams,
 		"team_members": get_team_members_map(),
 		"people": get_people_list(),
 		"scorecards": get_scorecards_list(is_admin=is_admin, allocated_teams=allocated_teams),
@@ -57,8 +60,7 @@ def get_current_user_info(user_email=None):
 							break
 
 		if matched_user and frappe.db.exists("User", matched_user):
-			roles = frappe.get_roles(matched_user)
-			is_admin = (matched_user == "Administrator" or "System Manager" in roles or "Admin" in roles)
+			is_admin = (matched_user == "Administrator")
 			fullname = frappe.utils.get_fullname(matched_user) or matched_user
 			return {
 				"id": matched_user,
@@ -84,6 +86,43 @@ def get_current_user_info(user_email=None):
 		"email": "",
 		"is_admin": False
 	}
+
+
+def get_user_leader_teams(user_id):
+	if not user_id or user_id == "Guest":
+		return []
+	try:
+		if user_id == "Administrator":
+			teams = frappe.get_all("Team", filters={"archived": 0}, fields=["team_name", "name"])
+			return [t.team_name or t.name for t in teams if t.team_name or t.name]
+
+		fullname = frappe.utils.get_fullname(user_id) or user_id
+		prefix = user_id.split("@")[0].lower() if "@" in user_id else user_id.lower()
+		clean_prefix = re.sub(r'[^a-z0-9]', '', prefix)
+
+		teams = frappe.get_all("Team", filters={"archived": 0}, fields=["name", "team_name", "leader", "owner"])
+		lead_teams = set()
+		for t in teams:
+			t_name = t.team_name or t.name
+			leader = str(t.leader or "").strip()
+			if not leader:
+				continue
+			if user_id.lower() == leader.lower() or fullname.lower() == leader.lower():
+				lead_teams.add(t_name)
+				continue
+			clean_leader = re.sub(r'\s*\([^)]*\)\s*', ' ', leader).strip().lower()
+			if fullname.lower() == clean_leader or (clean_prefix and clean_prefix in re.sub(r'[^a-z0-9]', '', clean_leader)):
+				lead_teams.add(t_name)
+				continue
+			player_user = frappe.db.get_value("Player", {"player_name": leader}, "user")
+			if player_user and (player_user.lower() == user_id.lower() or (clean_prefix and clean_prefix in player_user.lower())):
+				lead_teams.add(t_name)
+				continue
+
+		return sorted(list(lead_teams))
+	except Exception as e:
+		frappe.log_error("get_user_leader_teams error", str(e))
+		return []
 
 
 def get_user_allocated_teams(user_id):
