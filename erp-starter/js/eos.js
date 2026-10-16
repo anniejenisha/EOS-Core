@@ -413,14 +413,23 @@ function getMeasurableVal(m, curTab, i) {
 }
 
 function getScorecardOwners(curTab, team) {
-  const tf = (curTab || E.tab.scorecard || 'weekly').toLowerCase();
   const tm = (team !== undefined ? team : E.f.scorecard.team);
-  const metrics = (eMeas || []).filter(m => {
-    if ((m.freq || 'weekly').toLowerCase() !== tf) return false;
-    if (tm && tm !== 'All Teams' && m.team && m.team !== tm) return false;
-    return true;
-  });
-  return Array.from(new Set(metrics.map(m => m.owner).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+  if (!tm || tm === 'All Teams') {
+    // If all team show all the employee
+    const all = new Set([...(EOS_PEOPLE || [])]);
+    (eMeas || []).forEach(m => {
+      if (m.owner) all.add(m.owner);
+    });
+    return Array.from(all).filter(Boolean).sort((a, b) => a.localeCompare(b));
+  } else {
+    // If anyone select team, show team members only
+    const members = getMembersForTeam(tm) || [];
+    const set = new Set([...members]);
+    (eMeas || []).forEach(m => {
+      if (m.team === tm && m.owner) set.add(m.owner);
+    });
+    return Array.from(set).filter(Boolean).sort((a, b) => a.localeCompare(b));
+  }
 }
 
 function renderOwnerFilterPopover(allOwners, selectedOwners, search) {
@@ -517,7 +526,7 @@ function renderMeasurablesGrid(curTab) {
   `;
 
   const body = `
-    <div class="nn-card-wrap">
+    <div class="nn-card-wrap" style="min-height:420px">
       <div class="nn-card-header">
         <div style="display:flex;align-items:center;gap:8px">
           <span style="font-size:16px;font-weight:700;color:#111827">
@@ -527,7 +536,7 @@ function renderMeasurablesGrid(curTab) {
         </div>
       </div>
 
-      <div class="nn-table-scroll">
+      <div class="nn-table-scroll" style="min-height:380px">
         <table class="nn-sc-tbl">
           <thead>
             <tr>
