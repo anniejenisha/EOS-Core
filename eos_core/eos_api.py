@@ -1,4 +1,5 @@
 import json
+import re
 import frappe
 from frappe import _
 from frappe.utils import add_days, getdate, nowdate, now, flt, cint
@@ -33,17 +34,49 @@ def get_eos_bootstrap(user_email=None):
 
 def get_current_user_info(user_email=None):
 	user = user_email or frappe.form_dict.get("user") or frappe.form_dict.get("user_email") or frappe.session.user
-	if user and user != "Guest" and frappe.db.exists("User", user):
-		roles = frappe.get_roles(user)
-		is_admin = (user == "Administrator" or "System Manager" in roles or "Admin" in roles)
-		fullname = frappe.utils.get_fullname(user) or user
-		return {
-			"id": user,
-			"name": fullname,
-			"initial": (fullname[0] if fullname else "U").upper(),
-			"email": user,
-			"is_admin": is_admin
-		}
+	if user and user != "Guest":
+		matched_user = None
+		if frappe.db.exists("User", user):
+			matched_user = user
+		else:
+			matched_user = frappe.db.get_value("User", {"email": user}, "name")
+			if not matched_user:
+				# Try prefix match against User records (e.g. "annie.jenisha" vs "anniejenisha.p@gmail.com")
+				user_prefix = user.split("@")[0].lower()
+				clean_prefix = re.sub(r'[^a-z0-9]', '', user_prefix)
+				if clean_prefix and len(clean_prefix) >= 3:
+					all_users = frappe.db.sql("""
+						SELECT name, email, full_name FROM `tabUser`
+						WHERE enabled = 1 AND name != 'Guest'
+					""", as_dict=True)
+					for u in all_users:
+						u_prefix = (u.email or u.name).split("@")[0].lower()
+						u_clean = re.sub(r'[^a-z0-9]', '', u_prefix)
+						if u_clean and (u_clean == clean_prefix or u_clean in clean_prefix or clean_prefix in u_clean):
+							matched_user = u.name
+							break
+
+		if matched_user and frappe.db.exists("User", matched_user):
+			roles = frappe.get_roles(matched_user)
+			is_admin = (matched_user == "Administrator" or "System Manager" in roles or "Admin" in roles)
+			fullname = frappe.utils.get_fullname(matched_user) or matched_user
+			return {
+				"id": matched_user,
+				"name": fullname,
+				"initial": (fullname[0] if fullname else "U").upper(),
+				"email": user,
+				"is_admin": is_admin
+			}
+		elif "@" in user:
+			parts = user.split("@")[0].replace(".", " ").replace("_", " ").split()
+			fullname = " ".join([p.capitalize() for p in parts]) or user
+			return {
+				"id": user,
+				"name": fullname,
+				"initial": (fullname[0] if fullname else "U").upper(),
+				"email": user,
+				"is_admin": False
+			}
 	return {
 		"id": "Guest",
 		"name": "Guest",
@@ -57,11 +90,14 @@ def get_user_allocated_teams(user_id):
 	if not user_id or user_id == "Guest":
 		return []
 	try:
-		# Teams where user has a Player seat
+		all_alloc = set()
 		player_teams = frappe.db.sql("""
 			SELECT DISTINCT team FROM `tabPlayer`
-			WHERE user = %s AND archived = 0 AND team IS NOT NULL AND team != ''
-		""", (user_id,), as_dict=True)
+			WHERE (user = %s OR player_name = %s) AND archived = 0 AND team IS NOT NULL AND team != ''
+		""", (user_id, user_id), as_dict=True)
+		for r in player_teams:
+			if r.get("team"):
+				all_alloc.add(r["team"])
 
 		fullname = frappe.utils.get_fullname(user_id)
 		if fullname and fullname != user_id:
@@ -69,21 +105,34 @@ def get_user_allocated_teams(user_id):
 				SELECT DISTINCT team FROM `tabPlayer`
 				WHERE (user = %s OR player_name = %s) AND archived = 0 AND team IS NOT NULL AND team != ''
 			""", (fullname, fullname), as_dict=True)
-			player_teams.extend(name_teams)
+			for r in name_teams:
+				if r.get("team"):
+					all_alloc.add(r["team"])
+
+		# Fuzzy match on clean prefix against player_name or user in tabPlayer
+		prefix = user_id.split("@")[0].lower() if "@" in user_id else user_id.lower()
+		clean_prefix = re.sub(r'[^a-z0-9]', '', prefix)
+		if clean_prefix and len(clean_prefix) >= 3:
+			all_players = frappe.db.sql("""
+				SELECT team, user, player_name FROM `tabPlayer`
+				WHERE archived = 0 AND team IS NOT NULL AND team != ''
+			""", as_dict=True)
+			for p in all_players:
+				p_name_clean = re.sub(r'[^a-z0-9]', '', (p.player_name or '').lower())
+				p_user_clean = re.sub(r'[^a-z0-9]', '', (p.user or '').split('@')[0].lower())
+				if (clean_prefix in p_name_clean) or (clean_prefix in p_user_clean) or (p_user_clean and p_user_clean in clean_prefix):
+					if p.get("team"):
+						all_alloc.add(p["team"])
 
 		# Teams where user is Leader or Owner
 		leader_teams = frappe.db.sql("""
 			SELECT DISTINCT COALESCE(NULLIF(team_name, ''), name) as team FROM `tabTeam`
 			WHERE (leader = %s OR owner = %s) AND archived = 0
 		""", (user_id, user_id), as_dict=True)
-
-		all_alloc = set()
-		for r in player_teams:
-			if r.get("team"):
-				all_alloc.add(r["team"])
 		for r in leader_teams:
 			if r.get("team"):
 				all_alloc.add(r["team"])
+
 		return sorted(list(all_alloc))
 	except Exception as e:
 		frappe.log_error("get_user_allocated_teams error", str(e))
@@ -904,7 +953,11 @@ def resolve_user_email(display_name):
 	player_user = frappe.db.get_value("Player", {"player_name": display_name}, "user")
 	if player_user and frappe.db.exists("User", player_user):
 		return player_user
-	parts = display_name.strip().split(" ", 1)
+	clean_name = re.sub(r'\s*\([^)]*\)\s*', ' ', display_name).strip()
+	clean_player_user = frappe.db.get_value("Player", {"player_name": clean_name}, "user")
+	if clean_player_user and frappe.db.exists("User", clean_player_user):
+		return clean_player_user
+	parts = clean_name.split(" ", 1)
 	first = parts[0]
 	last = parts[1] if len(parts) > 1 else ""
 	matched = frappe.db.get_value("User", {"first_name": first, "last_name": last}, "name")

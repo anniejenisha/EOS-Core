@@ -10,22 +10,87 @@ let EOS_TEAMS = [];
 let EOS_TEAM_MEMBERS = {};
 let EOS_PEOPLE = [];
 
+function isMyOwnerName(ownerStr) {
+  if (!ownerStr) return false;
+  const myEmail = getLoggedInUserEmail();
+  const myName = getLoggedInUserName();
+  const o = String(ownerStr).toLowerCase().trim();
+  const myEmailLower = String(myEmail || '').toLowerCase().trim();
+  const myNameLower = String(myName || '').toLowerCase().trim();
+
+  // 1. Direct equality
+  if (myEmailLower && (o === myEmailLower)) return true;
+  if (myNameLower && (o === myNameLower)) return true;
+
+  // 2. Clean parenthetical team/suffix from owner and name (e.g. "Annie Jenisha (IT & BPO)" -> "annie jenisha")
+  const cleanOwner = o.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
+  const cleanName = myNameLower.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
+  if (cleanName && cleanOwner === cleanName) return true;
+
+  // 3. Email username matching
+  if (myEmailLower && myEmailLower.includes('@')) {
+    const emailPrefix = myEmailLower.split('@')[0];
+    const emailAlpha = emailPrefix.replace(/[^a-z0-9]/g, '');
+    const ownerAlpha = cleanOwner.replace(/[^a-z0-9]/g, '');
+
+    if (emailAlpha && ownerAlpha) {
+      if (emailAlpha === ownerAlpha) return true;
+      if (emailAlpha.length >= 4 && ownerAlpha.length >= 4) {
+        if (emailAlpha.startsWith(ownerAlpha) || ownerAlpha.startsWith(emailAlpha)) return true;
+      }
+    }
+
+    // Word tokens in email prefix: e.g. ['annie', 'jenisha']
+    const emailTokens = emailPrefix.split(/[\._\-+]/).filter(t => t.length >= 2);
+    if (emailTokens.length >= 2) {
+      const allTokensInOwner = emailTokens.every(tok => cleanOwner.includes(tok));
+      if (allTokensInOwner) return true;
+    } else if (emailTokens.length === 1 && emailTokens[0].length >= 3) {
+      if (cleanOwner.includes(emailTokens[0]) || emailTokens[0].includes(cleanOwner)) return true;
+    }
+  }
+
+  // 4. Also check against USER.email / EOS_USER_ID if different
+  if (typeof EOS_USER_ID !== 'undefined' && EOS_USER_ID) {
+    const eosUserLower = String(EOS_USER_ID).toLowerCase().trim();
+    if (eosUserLower && eosUserLower !== myEmailLower && eosUserLower.includes('@')) {
+      const prefix = eosUserLower.split('@')[0];
+      const alpha = prefix.replace(/[^a-z0-9]/g, '');
+      const ownerAlpha = cleanOwner.replace(/[^a-z0-9]/g, '');
+      if (alpha && ownerAlpha && (alpha === ownerAlpha || (alpha.length >= 4 && ownerAlpha.length >= 4 && (alpha.startsWith(ownerAlpha) || ownerAlpha.startsWith(alpha))))) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 function isMyItem(x) {
   if (!x) return false;
-  const myEmail = getLoggedInUserEmail();
-  const myName = getLoggedInUserName().toLowerCase();
+  const myEmail = String(getLoggedInUserEmail() || '').toLowerCase().trim();
+  const itemOwnerUser = String(x.owner_user || '').toLowerCase().trim();
 
-  const itemOwnerUser = String(x.owner_user || '').trim().toLowerCase();
-  if (myEmail && itemOwnerUser && itemOwnerUser === myEmail) {
+  // 1. Check itemOwnerUser
+  if (myEmail && itemOwnerUser) {
+    if (itemOwnerUser === myEmail) return true;
+    const myPrefixAlpha = myEmail.split('@')[0].replace(/[^a-z0-9]/g, '');
+    const itemPrefixAlpha = itemOwnerUser.split('@')[0].replace(/[^a-z0-9]/g, '');
+    if (myPrefixAlpha && itemPrefixAlpha) {
+      if (myPrefixAlpha === itemPrefixAlpha) return true;
+      if (myPrefixAlpha.length >= 4 && itemPrefixAlpha.length >= 4) {
+        if (myPrefixAlpha.startsWith(itemPrefixAlpha) || itemPrefixAlpha.startsWith(myPrefixAlpha)) return true;
+      }
+    }
+  }
+
+  // 2. Check item owner display name
+  const itemOwner = String(x.owner || '').trim();
+  if (itemOwner && isMyOwnerName(itemOwner)) {
     return true;
   }
 
-  const itemOwner = String(x.owner || '').trim().toLowerCase();
-  if (myName && itemOwner && itemOwner === myName) {
-    return true;
-  }
-
-  if (myEmail && itemOwner && itemOwner === myEmail) {
+  if (myEmail && itemOwner && itemOwner.toLowerCase() === myEmail) {
     return true;
   }
 
@@ -477,17 +542,31 @@ function renderMeasurablesGrid(curTab) {
   }
 
   const allOwners = getScorecardOwners(curTab, F.team);
+  const myOwners = allOwners.filter(o => isMyOwnerName(o));
 
-  if (Array.isArray(F.owners)) {
-    F.owners = F.owners.filter(o => allOwners.includes(o));
-    if (F.owners.length === allOwners.length) {
-      F.owners = null;
+  const userEmail = getLoggedInUserEmail();
+  const isSystemAdmin = EOS_IS_ADMIN || userEmail === 'administrator' || EOS_USER_ID.toLowerCase() === 'administrator';
+
+  let effectiveSelectedOwners = null;
+  if (F.owners_customized) {
+    if (Array.isArray(F.owners)) {
+      F.owners = F.owners.filter(o => allOwners.includes(o));
+      if (F.owners.length === allOwners.length) {
+        F.owners = null;
+      }
     }
+    effectiveSelectedOwners = F.owners;
+  } else if (!isSystemAdmin) {
+    // Default: regular logged-in users only see their own scorecard measurables
+    effectiveSelectedOwners = myOwners;
+  } else {
+    // Administrator: sees all
+    effectiveSelectedOwners = null;
   }
 
-  const isOwnerFiltered = Array.isArray(F.owners) && F.owners.length < allOwners.length;
-  if (Array.isArray(F.owners)) {
-    metrics = metrics.filter(m => F.owners.includes(m.owner));
+  const isOwnerFiltered = Array.isArray(effectiveSelectedOwners) && effectiveSelectedOwners.length < allOwners.length;
+  if (Array.isArray(effectiveSelectedOwners)) {
+    metrics = metrics.filter(m => (effectiveSelectedOwners.length ? effectiveSelectedOwners.includes(m.owner) : false) || isMyItem(m));
   }
 
   let rangeOptions = [];
@@ -548,7 +627,7 @@ function renderMeasurablesGrid(curTab) {
                     ${icon('filter')}
                   </button>
                 </div>
-                ${E.owner_filter_open ? renderOwnerFilterPopover(allOwners, F.owners, E.owner_filter_search || '') : ''}
+                ${E.owner_filter_open ? renderOwnerFilterPopover(allOwners, effectiveSelectedOwners, E.owner_filter_search || '') : ''}
               </th>
               <th class="nn-col-goal" style="width:130px;min-width:130px;max-width:130px;text-align:center">Goal</th>
               ${periods.map(p => `<th style="min-width:80px;text-align:center">${eEsc(p)}</th>`).join('')}
@@ -2348,6 +2427,7 @@ async function eosAct(a, el, e) {
       if (k === 'scorecard') {
         E.f.scorecard.range = null;
         E.f.scorecard.owners = null;
+        E.f.scorecard.owners_customized = false;
         E.owner_filter_open = false;
       }
       S.q = '';
@@ -2697,6 +2777,8 @@ async function eosAct(a, el, e) {
         const tf = (sc.timeframe || 'weekly').toLowerCase();
         E.tab.scorecard = (tf === 'week' || tf === 'weekly') ? 'weekly' : (tf === 'month' || tf === 'monthly') ? 'monthly' : (tf === 'quarter' || tf === 'quarterly') ? 'quarterly' : (tf === 'annual') ? 'annual' : 'weekly';
         E.f.scorecard.range = null;
+        E.f.scorecard.owners = null;
+        E.f.scorecard.owners_customized = false;
         renderMain();
       }
       break;
@@ -2811,6 +2893,8 @@ async function eosAct(a, el, e) {
       E.f.scorecard.q_id = '';
       E.f.scorecard.team = 'All Teams';
       E.f.scorecard.timeframe = 'All';
+      E.f.scorecard.owners = null;
+      E.f.scorecard.owners_customized = false;
       S.q = '';
       renderMain();
       break;
@@ -2894,6 +2978,7 @@ document.addEventListener('input', e => {
   E.f[p][key] = e.target.value;
   if (p === 'scorecard' && key === 'team') {
     E.f.scorecard.owners = null;
+    E.f.scorecard.owners_customized = false;
     E.owner_filter_open = false;
   }
   if (key !== 'page' && E.f[p].page) E.f[p].page = 1;
@@ -2904,6 +2989,7 @@ document.addEventListener('input', e => {
 });
 document.addEventListener('change', async e => {
   if (e.target.classList.contains('nn-owner-filter-all')) {
+    E.f.scorecard.owners_customized = true;
     if (e.target.checked) {
       E.f.scorecard.owners = null;
     } else {
@@ -2919,6 +3005,7 @@ document.addEventListener('change', async e => {
     const checked = items.filter(cb => cb.checked).map(cb => cb.value);
     const curTab = E.tab.scorecard === 'scorecards' ? 'weekly' : (E.tab.scorecard || 'weekly');
     const allOwners = getScorecardOwners(curTab, E.f.scorecard.team);
+    E.f.scorecard.owners_customized = true;
     if (checked.length === allOwners.length) {
       E.f.scorecard.owners = null;
     } else {
@@ -2947,7 +3034,18 @@ document.addEventListener('change', async e => {
     return;
   }
   const d = e.target.dataset; if (!d) return;
-  if (d.eosF) { const [p, key] = d.eosF.split('.'); E.f[p][key] = e.target.value; if (key !== 'page' && E.f[p].page) E.f[p].page = 1; renderMain(); return; }
+  if (d.eosF) {
+    const [p, key] = d.eosF.split('.');
+    E.f[p][key] = e.target.value;
+    if (p === 'scorecard' && key === 'team') {
+      E.f.scorecard.owners = null;
+      E.f.scorecard.owners_customized = false;
+      E.owner_filter_open = false;
+    }
+    if (key !== 'page' && E.f[p].page) E.f[p].page = 1;
+    renderMain();
+    return;
+  }
   if (d.eosPri) {
     const item = eIssues.find(x => x.id === +d.eosPri);
     item.pri = e.target.value; renderMain();
