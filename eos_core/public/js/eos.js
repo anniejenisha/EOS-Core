@@ -330,8 +330,16 @@ function applyBootstrapData(data) {
     const isSuperAdmin = isEosAdmin();
     const primaryTeam = isSuperAdmin ? 'All Teams' : ((EOS_LEADER_TEAMS && EOS_LEADER_TEAMS[0]) || EOS_TEAMS[0]);
     ['my', 'rocks', 'todos', 'issues', 'meet', 'scorecard'].forEach(k => {
-      if (E.f[k] && (!E.f[k].team || !EOS_TEAMS.includes(E.f[k].team) || (!isSuperAdmin && E.f[k].team === 'All Teams'))) {
-        E.f[k].team = primaryTeam;
+      if (E.f[k]) {
+        if (isSuperAdmin) {
+          if (!E.f[k].team || (E.f[k].team !== 'All Teams' && !EOS_TEAMS.includes(E.f[k].team))) {
+            E.f[k].team = 'All Teams';
+          }
+        } else {
+          if (!E.f[k].team || E.f[k].team === 'All Teams' || !EOS_TEAMS.includes(E.f[k].team)) {
+            E.f[k].team = primaryTeam;
+          }
+        }
       }
     });
   }
@@ -418,8 +426,12 @@ function eosMy90() {
   const userEmail = getLoggedInUserEmail();
   const isAdmin = isEosAdmin();
   const F = E.f.my;
-  if (!F.team || (F.team === 'All Teams' && !isAdmin && EOS_TEAMS.length >= 1)) {
-    F.team = (EOS_LEADER_TEAMS && EOS_LEADER_TEAMS[0]) || EOS_TEAMS[0] || 'All Teams';
+  if (isAdmin) {
+    if (!F.team) F.team = 'All Teams';
+  } else {
+    if (!F.team || (F.team === 'All Teams' && EOS_TEAMS.length >= 1)) {
+      F.team = (EOS_LEADER_TEAMS && EOS_LEADER_TEAMS[0]) || EOS_TEAMS[0] || 'All Teams';
+    }
   }
   const tf = x => F.team === 'All Teams' || x.team === F.team;
 
@@ -453,13 +465,13 @@ function eosMy90() {
       <div class="foot"><button class="addlink" data-act="eos-add-todo" data-id="private">${icon('plus')}Add To-Do</button></div>
     </section>
    </div>
-   <section class="panel sc mym" style="margin-top:16px"><div class="pnl-h"><h2>My Measurables<span class="pcount">${mine.length}</span></h2></div>
-    ${mine.length ? `<div class="scroll"><table><thead><tr><th class="mn" style="left:0;box-shadow:none">Title</th><th>Goal</th><th>Average</th><th>Total</th>${per.map((p, i) => `<th class="${i ? '' : 'cur'}">${i ? '' : 'Current Week<small>'}${p}${i ? '' : '</small>'}</th>`).join('')}</tr></thead><tbody>
+   <section class="panel sc mym" style="margin-top:16px"><div class="pnl-h"><h2>${isAdmin ? 'All Measurables' : 'My Measurables'}<span class="pcount">${mine.length}</span></h2></div>
+    ${mine.length ? `<div class="scroll"><table><thead><tr><th class="mn" style="left:0;box-shadow:none">Title</th>${isAdmin ? '<th>Owner</th>' : ''}<th>Goal</th><th>Average</th><th>Total</th>${per.map((p, i) => `<th class="${i ? '' : 'cur'}">${i ? '' : 'Current Week<small>'}${p}${i ? '' : '</small>'}</th>`).join('')}</tr></thead><tbody>
     ${mine.map(m => {
       const v = (m.vals || []).slice(0, 6).filter(x => x != null), avg = v.length ? v.reduce((a, b) => a + b, 0) / v.length : null, tot = v.length && !m.noTotal ? v.reduce((a, b) => a + b, 0) : null;
-      return `<tr><td class="mn" style="left:0;box-shadow:none">${eEsc(m.name)}</td><td class="g">${m.op} ${eU(m, m.target)}</td><td class="g">${avg == null ? '–' : eU(m, avg)}</td><td class="g">${tot == null ? '–' : eU(m, tot)}</td>${per.map((_, i) => { const x = (m.vals || [])[i]; return x == null ? '<td class="cell na">–</td>' : `<td class="cell ${ePass(m, x) ? 'ok' : 'bad'}" style="cursor:default">${m.unit === 'pct' ? eN(x) + '%' : eN(x)}</td>`; }).join('')}</tr>`;
+      return `<tr><td class="mn" style="left:0;box-shadow:none">${eEsc(m.name)}</td>${isAdmin ? `<td style="color:var(--ink-2);font-size:12px">${eEsc(m.owner || '')}</td>` : ''}<td class="g">${m.op} ${eU(m, m.target)}</td><td class="g">${avg == null ? '–' : eU(m, avg)}</td><td class="g">${tot == null ? '–' : eU(m, tot)}</td>${per.map((_, i) => { const x = (m.vals || [])[i]; return x == null ? '<td class="cell na">–</td>' : `<td class="cell ${ePass(m, x) ? 'ok' : 'bad'}" style="cursor:default">${m.unit === 'pct' ? eN(x) + '%' : eN(x)}</td>`; }).join('')}</tr>`;
     }).join('')}</tbody></table></div>`
-      : '<div class="none">No measurables assigned to you in ERP.</div>'}</section>`;
+      : `<div class="none">${isAdmin ? 'No measurables found in ERP.' : 'No measurables assigned to you in ERP.'}</div>`}</section>`;
 }
 
 /* ---------- Scorecard (Measurables Grid & Directory Matching Ninety.io) ---------- */
@@ -593,8 +605,7 @@ function renderMeasurablesGrid(curTab) {
   const allOwners = getScorecardOwners(curTab, F.team);
   const myOwners = allOwners.filter(o => isMyOwnerName(o));
 
-  const userEmail = String(getLoggedInUserEmail() || '').toLowerCase().trim();
-  const isSuperAdmin = (userEmail === 'administrator' || EOS_USER_ID.toLowerCase() === 'administrator');
+  const isSuperAdmin = isEosAdmin();
   const isTeamLeader = isSuperAdmin || (F.team && F.team !== 'All Teams' && isLeaderOfTeam(F.team));
 
   let effectiveSelectedOwners = null;
@@ -634,7 +645,7 @@ function renderMeasurablesGrid(curTab) {
     <div class="fbar sc-fbar" style="display:flex;align-items:center;gap:10px;padding:8px 0;margin-bottom:14px;flex-wrap:wrap">
       <div class="sc-input-box">
         <select class="field sc-team-sel" style="height:32px;padding:0 10px;font-size:12.5px;border-radius:6px;background:var(--g50);min-width:140px" data-eos-f="scorecard.team">
-          <option value="All Teams">Team: All Teams</option>
+          <option value="All Teams" ${(!F.team || F.team === 'All Teams') ? 'selected' : ''}>Team: All Teams</option>
           ${EOS_TEAMS.map(t => `<option value="${eEsc(t)}" ${F.team === t ? 'selected' : ''}>${eEsc(t)}</option>`).join('')}
         </select>
       </div>
@@ -782,7 +793,7 @@ function renderScorecardsDirectory() {
     </div>
     <div class="sc-input-box">
       <select class="field sc-team-sel" style="height:32px;padding:0 10px;font-size:12.5px;border-radius:6px;background:var(--g50);min-width:140px" data-eos-f="scorecard.team">
-        <option value="All Teams">Team</option>
+        <option value="All Teams" ${(!F.team || F.team === 'All Teams') ? 'selected' : ''}>Team</option>
         ${EOS_TEAMS.map(t => `<option value="${eEsc(t)}" ${F.team === t ? 'selected' : ''}>${eEsc(t)}</option>`).join('')}
       </select>
     </div>
