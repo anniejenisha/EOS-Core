@@ -38,7 +38,7 @@
 <script id="eos-boot-data" type="application/json">{{ eos_boot | safe }}</script>
 <script>
   window.csrf_token = "{{ frappe.session.csrf_token if frappe and frappe.session else '' }}";
-  window.frappe_user = "{{ frappe.session.user if frappe and frappe.session else '' }}";
+  window.frappe_user = "{{ user_email or (frappe.session.user if frappe and frappe.session and frappe.session.user != 'Guest' else '') }}";
   window.frappe_user_name = "{{ user_fullname or '' }}";
   try {
     const rawBoot = document.getElementById('eos-boot-data');

@@ -3,12 +3,34 @@
    100% Dynamic: Backed exclusively by live Frappe ERP DocTypes.
    Hooks into app.js through: renderEos, eosDrawer, eosSave, eosAct.
    ===================================================================== */
-let EOS_ME = (typeof USER !== 'undefined' && USER.name) ? USER.name : (window.frappe_user_name || '');
-let EOS_USER_ID = window.frappe_user || '';
-let EOS_IS_ADMIN = false;
+let EOS_ME = (typeof USER !== 'undefined' && USER.name && USER.name !== 'User') ? USER.name : (getLoggedInUserName() || window.frappe_user_name || '');
+let EOS_USER_ID = (typeof USER !== 'undefined' && USER.email) ? USER.email : (getLoggedInUserEmail() || window.frappe_user || '');
+let EOS_IS_ADMIN = (window.__EOS_BOOT__ && window.__EOS_BOOT__.user && !!window.__EOS_BOOT__.user.is_admin) || false;
 let EOS_TEAMS = [];
 let EOS_TEAM_MEMBERS = {};
 let EOS_PEOPLE = [];
+
+function isMyItem(x) {
+  if (!x) return false;
+  const myEmail = getLoggedInUserEmail();
+  const myName = getLoggedInUserName().toLowerCase();
+
+  const itemOwnerUser = String(x.owner_user || '').trim().toLowerCase();
+  if (myEmail && itemOwnerUser && itemOwnerUser === myEmail) {
+    return true;
+  }
+
+  const itemOwner = String(x.owner || '').trim().toLowerCase();
+  if (myName && itemOwner && itemOwner === myName) {
+    return true;
+  }
+
+  if (myEmail && itemOwner && itemOwner === myEmail) {
+    return true;
+  }
+
+  return false;
+}
 
 function getMembersForTeam(teamName) {
   if (teamName && EOS_TEAM_MEMBERS && EOS_TEAM_MEMBERS[teamName] && EOS_TEAM_MEMBERS[teamName].length) {
@@ -173,13 +195,23 @@ async function apiCall(method, args = {}) {
 function applyBootstrapData(data) {
   if (!data) return;
   if (data.user) {
-    if (data.user.name) EOS_ME = data.user.name;
-    EOS_USER_ID = data.user.id || data.user.email || '';
+    if (data.user.name && data.user.name !== 'Guest') EOS_ME = data.user.name;
+    const uid = data.user.id || data.user.email || '';
+    if (uid && uid !== 'Guest') EOS_USER_ID = uid;
     EOS_IS_ADMIN = !!data.user.is_admin;
     if (typeof USER !== 'undefined') {
-      USER.name = data.user.name;
-      USER.initial = data.user.initial || data.user.name[0];
+      USER.name = EOS_ME || data.user.name;
+      USER.email = EOS_USER_ID;
+      USER.initial = data.user.initial || (USER.name ? USER.name[0] : 'U');
     }
+  }
+  const resolvedEmail = getLoggedInUserEmail();
+  if (resolvedEmail && (!EOS_USER_ID || EOS_USER_ID === 'Guest')) {
+    EOS_USER_ID = resolvedEmail;
+  }
+  const resolvedName = getLoggedInUserName();
+  if (resolvedName && (!EOS_ME || EOS_ME === 'Guest')) {
+    EOS_ME = resolvedName;
   }
   if (data.teams && data.teams.length) {
     EOS_TEAMS = data.teams;
@@ -204,22 +236,25 @@ function applyBootstrapData(data) {
   }
 }
 
-async function loadEosFromDocTypes() {
-  if (window.__EOS_BOOT__) {
+async function loadEosFromDocTypes(force = false) {
+  const email = getLoggedInUserEmail();
+  const params = email ? { user_email: email } : {};
+  if (!force && window.__EOS_BOOT__ && (!email || (window.__EOS_BOOT__.user && window.__EOS_BOOT__.user.email && window.__EOS_BOOT__.user.email.toLowerCase() === email.toLowerCase()))) {
     applyBootstrapData(window.__EOS_BOOT__);
     return;
   }
-  const data = await apiCall('eos_core.eos_api.get_eos_bootstrap');
-  if (data) {
+  const data = await apiCall('eos_core.eos_api.get_eos_bootstrap', params);
+  if (data && !data.error) {
     applyBootstrapData(data);
   }
 }
 
 // Initial boot fetch from ERP
-if (window.__EOS_BOOT__) {
+const _clientEmail = getLoggedInUserEmail();
+if (window.__EOS_BOOT__ && (!_clientEmail || (window.__EOS_BOOT__.user && window.__EOS_BOOT__.user.email && window.__EOS_BOOT__.user.email.toLowerCase() === _clientEmail.toLowerCase()))) {
   applyBootstrapData(window.__EOS_BOOT__);
 } else {
-  loadEosFromDocTypes();
+  loadEosFromDocTypes(true);
 }
 
 /* ---------- shared UI elements ---------- */
@@ -266,7 +301,8 @@ function eTodoLi(t) {
 }
 
 function eosMy90() {
-  const isAdmin = EOS_IS_ADMIN || EOS_ME === 'Administrator' || EOS_USER_ID === 'Administrator';
+  const userEmail = getLoggedInUserEmail();
+  const isAdmin = EOS_IS_ADMIN || userEmail === 'administrator' || EOS_USER_ID.toLowerCase() === 'administrator';
   const F = E.f.my;
   if (!F.team || (F.team === 'All Teams' && !isAdmin && EOS_TEAMS.length === 1)) {
     F.team = EOS_TEAMS[0] || 'All Teams';
@@ -274,15 +310,12 @@ function eosMy90() {
   const tf = x => F.team === 'All Teams' || x.team === F.team;
 
   const team = eTodos.filter(t => !t.priv && !t.archived && tf(t)).sort(eByDue);
-  const priv = eTodos.filter(t => t.priv && (isAdmin || t.owner === EOS_ME || t.owner === EOS_USER_ID) && !t.archived && (F.priv === 'All' || !t.done) && tf(t)).sort(eByDue);
+  const priv = eTodos.filter(t => t.priv && (isAdmin || isMyItem(t)) && !t.archived && (F.priv === 'All' || !t.done) && tf(t)).sort(eByDue);
 
   const per = ePeriods('weekly', 6);
   const mine = isAdmin
     ? eMeas.filter(m => (m.freq || 'weekly').toLowerCase() === 'weekly' && tf(m))
-    : eMeas.filter(m => (m.freq || 'weekly').toLowerCase() === 'weekly' &&
-        (m.owner === EOS_ME || m.owner_user === EOS_USER_ID || m.owner_user === EOS_ME || m.owner === EOS_USER_ID) &&
-        tf(m)
-      );
+    : eMeas.filter(m => (m.freq || 'weekly').toLowerCase() === 'weekly' && isMyItem(m) && tf(m));
 
   const hasDone = team.some(t => t.done);
 
@@ -732,7 +765,7 @@ function eosRocks() {
 /* ---------- To-Dos ---------- */
 function eosTodos() {
   const F = E.f.todos, tab = E.tab.todos;
-  const rs = eTodos.filter(t => eMatch(t, F) && t.archived === F.arch && (tab === 'private' ? t.priv && t.owner === EOS_ME : !t.priv) && eQ(t.name)).sort(eByDue);
+  const rs = eTodos.filter(t => eMatch(t, F) && t.archived === F.arch && (tab === 'private' ? t.priv && isMyItem(t) : !t.priv) && eQ(t.name)).sort(eByDue);
   const vis = eSlice('todos', rs);
   return eHead('To-Dos', 'Live tasks fetched and synced directly with Frappe To Do DocType.', eCreate('Create To-Do')) +
     eTabs('todos', [['team', 'Team'], ['private', 'Private']]) +
@@ -2775,7 +2808,7 @@ async function eosAct(a, el, e) {
     }
     case 'eos-refresh': {
       toast('Refreshing live from Frappe DocTypes...');
-      await loadEosFromDocTypes();
+      await loadEosFromDocTypes(true);
       toast('All pages refreshed with ERP data!');
       renderMain();
       break;

@@ -4,12 +4,14 @@ from frappe import _
 from frappe.utils import add_days, getdate, nowdate, now, flt, cint
 
 @frappe.whitelist(allow_guest=True)
-def get_eos_bootstrap():
+def get_eos_bootstrap(user_email=None):
 	"""
 	Unified bootstrap method returning live database data from Frappe DocTypes.
 	No hardcoded data.
 	"""
-	user_info = get_current_user_info()
+	if not user_email:
+		user_email = frappe.form_dict.get("user") or frappe.form_dict.get("user_email")
+	user_info = get_current_user_info(user_email=user_email)
 	user_id = user_info.get("id")
 	is_admin = bool(user_info.get("is_admin", False))
 	allocated_teams = get_user_allocated_teams(user_id) if not is_admin else None
@@ -29,9 +31,9 @@ def get_eos_bootstrap():
 	}
 
 
-def get_current_user_info():
-	user = frappe.session.user
-	if user and user != "Guest":
+def get_current_user_info(user_email=None):
+	user = user_email or frappe.form_dict.get("user") or frappe.form_dict.get("user_email") or frappe.session.user
+	if user and user != "Guest" and frappe.db.exists("User", user):
 		roles = frappe.get_roles(user)
 		is_admin = (user == "Administrator" or "System Manager" in roles or "Admin" in roles)
 		fullname = frappe.utils.get_fullname(user) or user
@@ -42,26 +44,12 @@ def get_current_user_info():
 			"email": user,
 			"is_admin": is_admin
 		}
-	# Default to system administrator or first user if guest
-	first_user = frappe.db.get_value("User", {"enabled": 1, "user_type": "System User"}, ["name", "first_name", "last_name"], as_dict=True)
-	if first_user:
-		name = f"{first_user.first_name or ''} {first_user.last_name or ''}".strip() or first_user.name
-		roles = frappe.get_roles(first_user.name)
-		is_admin = (first_user.name == "Administrator" or "System Manager" in roles or "Admin" in roles)
-		return {
-			"id": first_user.name,
-			"name": name,
-			"initial": (name[0] if name else "U").upper(),
-			"email": first_user.name,
-			"is_admin": is_admin
-		}
-	admin_name = frappe.utils.get_fullname("Administrator") or "Administrator"
 	return {
-		"id": "Administrator",
-		"name": admin_name,
-		"initial": (admin_name[0] if admin_name else "A").upper(),
-		"email": frappe.db.get_value("User", "Administrator", "email") or "admin@example.com",
-		"is_admin": True
+		"id": "Guest",
+		"name": "Guest",
+		"initial": "G",
+		"email": "",
+		"is_admin": False
 	}
 
 
@@ -353,6 +341,7 @@ def get_rocks_list(is_admin=True, allocated_teams=None):
 				"docname": r.name,
 				"name": r.rock_name or r.name,
 				"owner": owner_name,
+				"owner_user": r.owner_user or "",
 				"team": r.team or "Leadership Team",
 				"status": st,
 				"end": str(r.duration_end or nowdate()),
@@ -389,6 +378,7 @@ def get_todos_list(is_admin=True, allocated_teams=None):
 				"docname": t.name,
 				"name": t.todo_name or t.name,
 				"owner": owner_name,
+				"owner_user": t.owner_user or "",
 				"team": t.team or "Leadership Team",
 				"due": str(t.due_date or nowdate()),
 				"done": done,
@@ -429,6 +419,7 @@ def get_issues_list(is_admin=True, allocated_teams=None):
 				"desc": i.description or "",
 				"team": i.team or "Leadership Team",
 				"owner": owner_name,
+				"owner_user": i.owner_user or "",
 				"term": term,
 				"pri": i.priority or "",
 				"archived": is_solved,

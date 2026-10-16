@@ -7,13 +7,63 @@ const BRAND = {
   logo: '/assets/eos_core/img/bel-logo-256.png?v=2.0.6'
 };
 
+function getLoggedInUserEmail() {
+  try {
+    if (window.parent && window.parent !== window && window.parent.frappe && window.parent.frappe.session && window.parent.frappe.session.user && window.parent.frappe.session.user !== 'Guest') {
+      return String(window.parent.frappe.session.user).trim().toLowerCase();
+    }
+  } catch (e) {}
+
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const u = params.get('user') || params.get('user_email');
+    if (u && u !== 'Guest') return String(u).trim().toLowerCase();
+  } catch (e) {}
+
+  if (window.frappe_user && window.frappe_user !== 'Guest') {
+    return String(window.frappe_user).trim().toLowerCase();
+  }
+
+  if (window.__EOS_BOOT__ && window.__EOS_BOOT__.user && window.__EOS_BOOT__.user.email && window.__EOS_BOOT__.user.email !== 'Guest') {
+    return String(window.__EOS_BOOT__.user.email).trim().toLowerCase();
+  }
+
+  if (typeof EOS_USER_ID !== 'undefined' && EOS_USER_ID && EOS_USER_ID !== 'Guest') {
+    return String(EOS_USER_ID).trim().toLowerCase();
+  }
+
+  return '';
+}
+
+function getLoggedInUserName() {
+  try {
+    if (window.parent && window.parent !== window && window.parent.frappe && window.parent.frappe.session && window.parent.frappe.session.user_fullname && window.parent.frappe.session.user_fullname !== 'Guest') {
+      return String(window.parent.frappe.session.user_fullname).trim();
+    }
+  } catch (e) {}
+
+  if (window.frappe_user_name && window.frappe_user_name !== 'Guest') {
+    return String(window.frappe_user_name).trim();
+  }
+
+  if (window.__EOS_BOOT__ && window.__EOS_BOOT__.user && window.__EOS_BOOT__.user.name && window.__EOS_BOOT__.user.name !== 'Guest') {
+    return String(window.__EOS_BOOT__.user.name).trim();
+  }
+
+  if (typeof EOS_ME !== 'undefined' && EOS_ME && EOS_ME !== 'Guest') {
+    return String(EOS_ME).trim();
+  }
+
+  return '';
+}
+
+const _initialEmail = getLoggedInUserEmail();
+const _initialName = getLoggedInUserName() || 'User';
+
 let USER = {
-  name: (window.frappe && frappe.session && frappe.session.user_fullname && frappe.session.user_fullname !== 'Guest') 
-    ? frappe.session.user_fullname 
-    : (window.frappe_user_name || (window.__EOS_BOOT__ && window.__EOS_BOOT__.user && window.__EOS_BOOT__.user.name) || 'User'),
-  initial: ((window.frappe && frappe.session && frappe.session.user_fullname && frappe.session.user_fullname !== 'Guest')
-    ? frappe.session.user_fullname 
-    : (window.frappe_user_name || (window.__EOS_BOOT__ && window.__EOS_BOOT__.user && window.__EOS_BOOT__.user.name) || 'U')).charAt(0).toUpperCase()
+  name: _initialName,
+  email: _initialEmail,
+  initial: (_initialName.charAt(0) || 'U').toUpperCase()
 };
 
 /* =====================================================================
