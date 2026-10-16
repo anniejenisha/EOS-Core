@@ -9,16 +9,22 @@ def get_eos_bootstrap():
 	Unified bootstrap method returning live database data from Frappe DocTypes.
 	No hardcoded data.
 	"""
+	user_info = get_current_user_info()
+	user_id = user_info.get("id")
+	is_admin = bool(user_info.get("is_admin", False))
+	allocated_teams = get_user_allocated_teams(user_id) if not is_admin else None
+
 	return {
-		"user": get_current_user_info(),
-		"teams": get_teams_list(),
+		"user": user_info,
+		"teams": get_teams_list(is_admin=is_admin, user_id=user_id, allocated_teams=allocated_teams),
+		"team_members": get_team_members_map(),
 		"people": get_people_list(),
-		"scorecards": get_scorecards_list(),
-		"measurables": get_measurables_list(),
-		"rocks": get_rocks_list(),
-		"todos": get_todos_list(),
-		"issues": get_issues_list(),
-		"meetings": get_meetings_list(),
+		"scorecards": get_scorecards_list(is_admin=is_admin, allocated_teams=allocated_teams),
+		"measurables": get_measurables_list(is_admin=is_admin, allocated_teams=allocated_teams),
+		"rocks": get_rocks_list(is_admin=is_admin, allocated_teams=allocated_teams),
+		"todos": get_todos_list(is_admin=is_admin, allocated_teams=allocated_teams),
+		"issues": get_issues_list(is_admin=is_admin, allocated_teams=allocated_teams),
+		"meetings": get_meetings_list(is_admin=is_admin, allocated_teams=allocated_teams),
 		"vto": get_vto_info(),
 	}
 
@@ -26,38 +32,86 @@ def get_eos_bootstrap():
 def get_current_user_info():
 	user = frappe.session.user
 	if user and user != "Guest":
+		roles = frappe.get_roles(user)
+		is_admin = (user == "Administrator" or "System Manager" in roles or "Admin" in roles)
 		fullname = frappe.utils.get_fullname(user) or user
 		return {
 			"id": user,
 			"name": fullname,
 			"initial": (fullname[0] if fullname else "U").upper(),
-			"email": user
+			"email": user,
+			"is_admin": is_admin
 		}
 	# Default to system administrator or first user if guest
 	first_user = frappe.db.get_value("User", {"enabled": 1, "user_type": "System User"}, ["name", "first_name", "last_name"], as_dict=True)
 	if first_user:
 		name = f"{first_user.first_name or ''} {first_user.last_name or ''}".strip() or first_user.name
+		roles = frappe.get_roles(first_user.name)
+		is_admin = (first_user.name == "Administrator" or "System Manager" in roles or "Admin" in roles)
 		return {
 			"id": first_user.name,
 			"name": name,
 			"initial": (name[0] if name else "U").upper(),
-			"email": first_user.name
+			"email": first_user.name,
+			"is_admin": is_admin
 		}
 	admin_name = frappe.utils.get_fullname("Administrator") or "Administrator"
 	return {
 		"id": "Administrator",
 		"name": admin_name,
 		"initial": (admin_name[0] if admin_name else "A").upper(),
-		"email": frappe.db.get_value("User", "Administrator", "email") or "admin@example.com"
+		"email": frappe.db.get_value("User", "Administrator", "email") or "admin@example.com",
+		"is_admin": True
 	}
 
 
-def get_teams_list():
+def get_user_allocated_teams(user_id):
+	if not user_id or user_id == "Guest":
+		return []
 	try:
+		# Teams where user has a Player seat
+		player_teams = frappe.db.sql("""
+			SELECT DISTINCT team FROM `tabPlayer`
+			WHERE user = %s AND archived = 0 AND team IS NOT NULL AND team != ''
+		""", (user_id,), as_dict=True)
+
+		fullname = frappe.utils.get_fullname(user_id)
+		if fullname and fullname != user_id:
+			name_teams = frappe.db.sql("""
+				SELECT DISTINCT team FROM `tabPlayer`
+				WHERE (user = %s OR player_name = %s) AND archived = 0 AND team IS NOT NULL AND team != ''
+			""", (fullname, fullname), as_dict=True)
+			player_teams.extend(name_teams)
+
+		# Teams where user is Leader or Owner
+		leader_teams = frappe.db.sql("""
+			SELECT DISTINCT COALESCE(NULLIF(team_name, ''), name) as team FROM `tabTeam`
+			WHERE (leader = %s OR owner = %s) AND archived = 0
+		""", (user_id, user_id), as_dict=True)
+
+		all_alloc = set()
+		for r in player_teams:
+			if r.get("team"):
+				all_alloc.add(r["team"])
+		for r in leader_teams:
+			if r.get("team"):
+				all_alloc.add(r["team"])
+		return sorted(list(all_alloc))
+	except Exception as e:
+		frappe.log_error("get_user_allocated_teams error", str(e))
+		return []
+
+
+def get_teams_list(is_admin=True, user_id=None, allocated_teams=None):
+	try:
+		if not is_admin and allocated_teams is not None:
+			if allocated_teams:
+				return allocated_teams
+			return []
+
 		teams = frappe.get_all("Team", filters={"archived": 0}, fields=["team_name", "name"], order_by="team_name asc")
 		names = [t.team_name or t.name for t in teams if t.team_name or t.name]
 		if not names:
-			# Auto create default leadership team if none exists
 			frappe.get_doc({
 				"doctype": "Team",
 				"team_name": "Leadership Team",
@@ -69,6 +123,49 @@ def get_teams_list():
 		return names
 	except Exception:
 		return ["Leadership Team"]
+
+
+def get_team_members_map():
+	try:
+		players = frappe.db.sql("""
+			SELECT p.team, p.user,
+				COALESCE(NULLIF(TRIM(CONCAT(u.first_name, ' ', COALESCE(u.last_name, ''))), ''), u.name, p.player_name) as fullname
+			FROM `tabPlayer` p
+			LEFT JOIN `tabUser` u ON u.name = p.user
+			WHERE p.archived = 0
+			ORDER BY fullname asc
+		""", as_dict=True)
+		team_map = {}
+		for p in players:
+			if not p.team:
+				continue
+			if p.team not in team_map:
+				team_map[p.team] = []
+			name = p.fullname
+			if name and name not in team_map[p.team]:
+				team_map[p.team].append(name)
+
+		# Also ensure Team leaders are included in their team's member list
+		leaders = frappe.db.sql("""
+			SELECT COALESCE(NULLIF(t.team_name, ''), t.name) as team,
+				COALESCE(NULLIF(TRIM(CONCAT(u.first_name, ' ', COALESCE(u.last_name, ''))), ''), u.name) as fullname
+			FROM `tabTeam` t
+			JOIN `tabUser` u ON u.name = t.leader
+			WHERE t.archived = 0 AND t.leader IS NOT NULL AND t.leader != ''
+		""", as_dict=True)
+		for l in leaders:
+			tm = l.get("team")
+			fn = l.get("fullname")
+			if tm and fn:
+				if tm not in team_map:
+					team_map[tm] = []
+				if fn not in team_map[tm]:
+					team_map[tm].append(fn)
+
+		return team_map
+	except Exception as e:
+		frappe.log_error("get_team_members_map error", str(e))
+		return {}
 
 
 def get_people_list():
@@ -85,10 +182,14 @@ def get_people_list():
 		return ["Administrator"]
 
 
-def get_scorecards_list():
+def get_scorecards_list(is_admin=True, allocated_teams=None):
 	try:
+		filters = {}
+		if not is_admin and allocated_teams is not None:
+			filters["team"] = ["in", allocated_teams] if allocated_teams else ["in", ["__NONE__"]]
 		scorecards = frappe.get_all(
 			"Scorecard",
+			filters=filters,
 			fields=["name", "team", "timeframe", "description", "archived", "modified", "creation"],
 			order_by="creation desc"
 		)
@@ -108,11 +209,15 @@ def get_scorecards_list():
 		return []
 
 
-def get_measurables_list():
+def get_measurables_list(is_admin=True, allocated_teams=None):
 	try:
+		filters = {"archived": 0}
+		if not is_admin and allocated_teams is not None:
+			filters["team"] = ["in", allocated_teams] if allocated_teams else ["in", ["__NONE__"]]
+
 		metrics = frappe.get_all(
 			"EOS Metric",
-			filters={"archived": 0},
+			filters=filters,
 			fields=["name", "metric_name", "frequency", "team", "owner_user", "operator", "target_value", "unit", "unit_type", "rollup"],
 			order_by="creation asc"
 		)
@@ -120,8 +225,32 @@ def get_measurables_list():
 		today = getdate(nowdate())
 		mon_delta = today.weekday()
 		current_mon = add_days(today, -mon_delta)
-		weekly_dates = [str(add_days(current_mon, -7 * i)) for i in range(13)]
-		monthly_dates = [str(getdate(f"{today.year}-{today.month:02d}-01"))] # will match by month/year
+		weekly_dates = [str(add_days(current_mon, -7 * i)) for i in range(52)]
+		
+		# Monthly dates: 1st of each month
+		monthly_dates = []
+		cur_y = today.year
+		cur_m = today.month
+		for _ in range(24):
+			monthly_dates.append(f"{cur_y:04d}-{cur_m:02d}-01")
+			cur_m -= 1
+			if cur_m < 1:
+				cur_m = 12
+				cur_y -= 1
+		
+		# Quarterly dates: 1st of each quarter
+		quarterly_dates = []
+		cur_y = today.year
+		cur_q = (today.month - 1) // 3
+		for _ in range(12):
+			quarterly_dates.append(f"{cur_y:04d}-{(cur_q * 3 + 1):02d}-01")
+			cur_q -= 1
+			if cur_q < 0:
+				cur_q = 3
+				cur_y -= 1
+				
+		# Annual dates: Jan 1 of each year
+		annual_dates = [f"{(today.year - i):04d}-01-01" for i in range(10)]
 
 		out = []
 		for idx, m in enumerate(metrics):
@@ -137,7 +266,19 @@ def get_measurables_list():
 			)
 			val_map = {str(e.week_start_date): e.actual_value for e in entries if e.week_start_date}
 			
-			vals = [val_map.get(d, None) for d in weekly_dates]
+			w_vals = [val_map.get(d, None) for d in weekly_dates[:13]]
+			m_vals = [val_map.get(d, None) for d in monthly_dates[:12]]
+			q_vals = [val_map.get(d, None) for d in quarterly_dates[:8]]
+			a_vals = [val_map.get(d, None) for d in annual_dates[:5]]
+
+			if freq == "monthly":
+				vals = m_vals
+			elif freq == "quarterly":
+				vals = q_vals
+			elif freq == "annual":
+				vals = a_vals
+			else:
+				vals = w_vals
 
 			unit = "num"
 			if m.unit_type == "Currency" or "kes" in (m.unit or "").lower() or "$" in (m.unit or ""):
@@ -152,11 +293,15 @@ def get_measurables_list():
 				"freq": freq,
 				"team": m.team or "Leadership Team",
 				"owner": owner_name,
+				"owner_user": m.owner_user or "",
 				"op": m.operator or ">=",
 				"target": flt(m.target_value),
 				"unit": unit,
 				"noTotal": (unit == "pct" or m.rollup == "Average"),
-				"vals": vals
+				"vals": vals,
+				"monthly_vals": m_vals,
+				"quarterly_vals": q_vals,
+				"annual_vals": a_vals
 			})
 		return out
 	except Exception as e:
@@ -164,10 +309,14 @@ def get_measurables_list():
 		return []
 
 
-def get_rocks_list():
+def get_rocks_list(is_admin=True, allocated_teams=None):
 	try:
+		filters = {}
+		if not is_admin and allocated_teams is not None:
+			filters["team"] = ["in", allocated_teams] if allocated_teams else ["in", ["__NONE__"]]
 		rocks = frappe.get_all(
 			"Rock",
+			filters=filters,
 			fields=["name", "rock_name", "owner_user", "team", "status", "duration_end", "is_company_rock", "archived", "scope"],
 			order_by="creation desc"
 		)
@@ -217,10 +366,14 @@ def get_rocks_list():
 		return []
 
 
-def get_todos_list():
+def get_todos_list(is_admin=True, allocated_teams=None):
 	try:
+		filters = {}
+		if not is_admin and allocated_teams is not None:
+			filters["team"] = ["in", allocated_teams] if allocated_teams else ["in", ["__NONE__"]]
 		todos = frappe.get_all(
 			"To Do",
+			filters=filters,
 			fields=["name", "todo_name", "owner_user", "team", "due_date", "status", "archived", "priority"],
 			order_by="due_date asc, creation desc"
 		)
@@ -248,10 +401,14 @@ def get_todos_list():
 		return []
 
 
-def get_issues_list():
+def get_issues_list(is_admin=True, allocated_teams=None):
 	try:
+		filters = {}
+		if not is_admin and allocated_teams is not None:
+			filters["team"] = ["in", allocated_teams] if allocated_teams else ["in", ["__NONE__"]]
 		issues = frappe.get_all(
 			"Issue",
+			filters=filters,
 			fields=["name", "issue_name", "description", "team", "owner_user", "priority", "status", "archived", "creation", "source"],
 			order_by="creation desc"
 		)
@@ -283,10 +440,14 @@ def get_issues_list():
 		return []
 
 
-def get_meetings_list():
+def get_meetings_list(is_admin=True, allocated_teams=None):
 	try:
+		filters = {}
+		if not is_admin and allocated_teams is not None:
+			filters["team"] = ["in", allocated_teams] if allocated_teams else ["in", ["__NONE__"]]
 		meetings = frappe.get_all(
 			"Level 10 Meeting",
+			filters=filters,
 			fields=["name", "team", "meeting_date", "status", "notes", "creation", "owner"],
 			order_by="meeting_date desc, creation desc"
 		)

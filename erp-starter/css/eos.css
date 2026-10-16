@@ -151,14 +151,19 @@ td .icon-btn svg{width:16px;height:16px}
 /* My 90 */
 .my3{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:16px;align-items:start}
 .my3 .panel{display:flex;flex-direction:column}
+.my-todos-container{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:stretch}
+.todo-panel{display:flex!important;flex-direction:column!important;height:380px!important;max-height:380px!important;min-height:380px!important;overflow:hidden!important;box-sizing:border-box!important}
+.todo-panel .pnl-h{flex-shrink:0!important}
+.todo-panel .foot{flex-shrink:0!important;display:flex;align-items:center;background:#fff;border-top:1px solid var(--line)}
+.todo-scroll-lst{flex:1 1 auto!important;min-height:0!important;max-height:none!important;overflow-y:auto!important;overflow-x:hidden!important}
 .lst{max-height:470px;overflow:auto}
 .e-li{display:flex;align-items:center;gap:12px;padding:12px 20px;border-top:1px solid var(--line)}
 .e-li .t{flex:1;min-width:0;line-height:1.35}
 .e-li .e-st{height:24px;padding:0 7px}
 .e-li .e-st span{display:none}
-.my3 .pnl-h h2{font-size:16px;white-space:nowrap}
-.my3 .pnl-h .btn{height:32px;padding:0 12px}
-.my3 .foot{display:flex;align-items:center}
+.my3 .pnl-h h2, .my-todos-container .pnl-h h2{font-size:16px;white-space:nowrap}
+.my3 .pnl-h .btn, .my-todos-container .pnl-h .btn{height:32px;padding:0 12px}
+.my3 .foot, .my-todos-container .foot{display:flex;align-items:center}
 .mym table{min-width:0}
 .mym td.tl{white-space:normal}
 
@@ -174,7 +179,7 @@ td .icon-btn svg{width:16px;height:16px}
 .mrow b{color:var(--g900)}
 .mrow small{color:var(--ink-3);display:block;margin-top:2px}
 .mrow .sp{flex:1}
-@media (max-width:560px){.my3{grid-template-columns:1fr}}
+@media (max-width:768px){.my3, .my-todos-container{grid-template-columns:1fr}}
 @media print{.rail,.side,.top,.ph .row,.tabs,.fbar{display:none!important}.app{display:block;height:auto}.page{overflow:visible}}
 .f textarea.field{height:96px;padding:10px 12px;resize:vertical;font:inherit}
 .f .help{color:var(--ink-3);font-size:12.5px;margin-top:4px}

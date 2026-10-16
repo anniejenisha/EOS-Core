@@ -4,8 +4,18 @@
    Hooks into app.js through: renderEos, eosDrawer, eosSave, eosAct.
    ===================================================================== */
 let EOS_ME = (typeof USER !== 'undefined' && USER.name) ? USER.name : (window.frappe_user_name || '');
+let EOS_USER_ID = window.frappe_user || '';
+let EOS_IS_ADMIN = false;
 let EOS_TEAMS = [];
+let EOS_TEAM_MEMBERS = {};
 let EOS_PEOPLE = [];
+
+function getMembersForTeam(teamName) {
+  if (teamName && EOS_TEAM_MEMBERS && EOS_TEAM_MEMBERS[teamName] && EOS_TEAM_MEMBERS[teamName].length) {
+    return EOS_TEAM_MEMBERS[teamName];
+  }
+  return EOS_PEOPLE || [];
+}
 
 /* ---------- helpers ---------- */
 const eEsc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -162,8 +172,10 @@ async function apiCall(method, args = {}) {
 
 function applyBootstrapData(data) {
   if (!data) return;
-  if (data.user && data.user.name) {
-    EOS_ME = data.user.name;
+  if (data.user) {
+    if (data.user.name) EOS_ME = data.user.name;
+    EOS_USER_ID = data.user.id || data.user.email || '';
+    EOS_IS_ADMIN = !!data.user.is_admin;
     if (typeof USER !== 'undefined') {
       USER.name = data.user.name;
       USER.initial = data.user.initial || data.user.name[0];
@@ -171,7 +183,13 @@ function applyBootstrapData(data) {
   }
   if (data.teams && data.teams.length) {
     EOS_TEAMS = data.teams;
+    ['my', 'rocks', 'todos', 'issues', 'meet', 'scorecard'].forEach(k => {
+      if (E.f[k] && (!E.f[k].team || (!EOS_TEAMS.includes(E.f[k].team) && E.f[k].team !== 'All Teams'))) {
+        E.f[k].team = EOS_TEAMS[0];
+      }
+    });
   }
+  if (data.team_members) EOS_TEAM_MEMBERS = data.team_members;
   if (data.people && data.people.length) EOS_PEOPLE = data.people;
   if (data.scorecards) eScorecards = data.scorecards;
   if (data.measurables) eMeas = data.measurables;
@@ -211,7 +229,16 @@ const eTabs = (key, tabs) => `<div class="tabs" role="tablist">${tabs.map(([id, 
 const eSel = (pg, k, label, opts, val, cls) => `<label class="fsel ${cls || ''}"><span>${label}:</span><select data-eos-f="${pg}.${k}" aria-label="${label}">${opts.map(o => { const [v, l] = Array.isArray(o) ? o : [o, o]; return `<option value="${eEsc(v)}" ${String(val) === String(v) ? 'selected' : ''}>${eEsc(l)}</option>`; }).join('')}</select></label>`;
 const eTog = (path, label, on) => `<button class="sw-wrap" role="switch" aria-checked="${!!on}" data-act="eos-tog" data-id="${path}"><span class="sw"></span>${label}</button>`;
 const eSearch = ph => `<div class="search eos-search">${icon('search')}<input class="field" id="q" placeholder="${ph}" value="${eEsc(S.q)}" aria-label="${ph}"></div>`;
-const eTeams = () => ['All Teams', ...EOS_TEAMS];
+const eTeams = () => {
+  const isAdmin = EOS_IS_ADMIN || EOS_ME === 'Administrator' || EOS_USER_ID === 'Administrator';
+  if (isAdmin) {
+    return ['All Teams', ...EOS_TEAMS];
+  }
+  if (EOS_TEAMS.length > 1) {
+    return ['All Teams', ...EOS_TEAMS];
+  }
+  return [...EOS_TEAMS];
+};
 const eOwners = () => ['All', ...EOS_PEOPLE];
 const eMatch = (x, F) => (F.team === 'All Teams' || x.team === F.team) && (!F.owner || F.owner === 'All' || x.owner === F.owner);
 const eQ = s => !S.q.trim() || String(s).toLowerCase().includes(S.q.trim().toLowerCase());
@@ -239,28 +266,45 @@ function eTodoLi(t) {
 }
 
 function eosMy90() {
-  const F = E.f.my, tf = x => F.team === 'All Teams' || x.team === F.team;
+  const isAdmin = EOS_IS_ADMIN || EOS_ME === 'Administrator' || EOS_USER_ID === 'Administrator';
+  const F = E.f.my;
+  if (!F.team || (F.team === 'All Teams' && !isAdmin && EOS_TEAMS.length === 1)) {
+    F.team = EOS_TEAMS[0] || 'All Teams';
+  }
+  const tf = x => F.team === 'All Teams' || x.team === F.team;
+
   const team = eTodos.filter(t => !t.priv && !t.archived && tf(t)).sort(eByDue);
-  const priv = eTodos.filter(t => t.priv && (t.owner === EOS_ME || !EOS_ME || EOS_ME === 'Administrator') && !t.archived && (F.priv === 'All' || !t.done) && tf(t)).sort(eByDue);
-  const myRocks = eRocks.filter(r => !r.archived && (r.owner === EOS_ME || !EOS_ME || EOS_ME === 'Administrator') && tf(r) && (F.rocks === 'All' || r.status === F.rocks));
-  const rocks = myRocks.length ? myRocks : eRocks.filter(r => !r.archived && tf(r) && (F.rocks === 'All' || r.status === F.rocks));
-  const myMeas = eMeas.filter(m => m.freq === 'weekly' && (m.owner === EOS_ME || !EOS_ME || EOS_ME === 'Administrator') && tf(m)), per = ePeriods('weekly', 6);
-  const mine = myMeas.length ? myMeas : eMeas.filter(m => m.freq === 'weekly' && tf(m));
+  const priv = eTodos.filter(t => t.priv && (isAdmin || t.owner === EOS_ME || t.owner === EOS_USER_ID) && !t.archived && (F.priv === 'All' || !t.done) && tf(t)).sort(eByDue);
+
+  const per = ePeriods('weekly', 6);
+  const mine = isAdmin
+    ? eMeas.filter(m => (m.freq || 'weekly').toLowerCase() === 'weekly' && tf(m))
+    : eMeas.filter(m => (m.freq || 'weekly').toLowerCase() === 'weekly' &&
+        (m.owner === EOS_ME || m.owner_user === EOS_USER_ID || m.owner_user === EOS_ME || m.owner === EOS_USER_ID) &&
+        tf(m)
+      );
+
   const hasDone = team.some(t => t.done);
-  const rk = r => `<div class="e-li"><span class="e-st ${r.status === 'On-track' ? 'on' : r.status === 'Off-track' ? 'off' : 'done'}" title="${r.status}">${icon(r.status === 'Off-track' ? 'thumbdown' : r.status === 'Done' ? 'check' : 'thumbup')}<span>${r.status}</span></span><span class="t">${eEsc(r.name)}</span>${eDD(r.end, r.status === 'Done')}</div>`;
 
   return eHead('My 90', 'A personalized workspace to view tasks, data, goals, and more directly from ERP.', eCreate('Create To-Do')) +
     `<div class="fbar">${eSel('my', 'team', 'Team', eTeams(), F.team)}</div>
-   <div class="my3">
-    <section class="panel"><div class="pnl-h"><h2>Team To-Dos<span class="pcount">${team.length}</span></h2><button class="btn" data-act="eos-archive-done" ${hasDone ? '' : 'disabled'} style="${hasDone ? '' : 'opacity:.5;cursor:default'}">Archive completed</button></div>
-      <div class="lst">${team.length ? team.map(eTodoLi).join('') : '<div class="none">No team To-Dos found in ERP.</div>'}</div>
-      <div class="foot"><button class="addlink" data-act="eos-add-todo">${icon('plus')}Create To-Do</button></div></section>
-    <section class="panel"><div class="pnl-h"><h2>Private To-Dos<span class="pcount">${priv.length}</span></h2>${eSel('my', 'priv', 'Show', ['Incomplete', 'All'], F.priv, 'sm')}</div>
-      <div class="lst">${priv.length ? priv.map(eTodoLi).join('') : '<div class="none">No private To-Dos.</div>'}</div>
-      <div class="foot"><button class="addlink" data-act="eos-add-todo" data-id="private">${icon('plus')}Add To-Do</button></div></section>
-    <section class="panel"><div class="pnl-h"><h2>Rocks &amp; Milestones<span class="pcount">${rocks.length}</span></h2>${eSel('my', 'rocks', 'Status', ['All', 'On-track', 'Off-track'], F.rocks, 'sm')}</div>
-      <div class="lst">${rocks.length ? rocks.map(rk).join('') : '<div class="none">No Rocks found for your user.</div>'}</div>
-      <div class="foot"><button class="addlink" data-act="eos-add-rock" data-id="${eEsc(EOS_ME)}">${icon('plus')}Create Rock</button></div></section>
+   <div class="my-todos-container">
+    <section class="panel todo-panel">
+      <div class="pnl-h">
+        <h2>Team To-Dos<span class="pcount">${team.length}</span></h2>
+        <button class="btn" data-act="eos-archive-done" ${hasDone ? '' : 'disabled'} style="${hasDone ? '' : 'opacity:.5;cursor:default'}">Archive completed</button>
+      </div>
+      <div class="lst todo-scroll-lst">${team.length ? team.map(eTodoLi).join('') : '<div class="none">No team To-Dos found in ERP.</div>'}</div>
+      <div class="foot"><button class="addlink" data-act="eos-add-todo">${icon('plus')}Create To-Do</button></div>
+    </section>
+    <section class="panel todo-panel">
+      <div class="pnl-h">
+        <h2>Private To-Dos<span class="pcount">${priv.length}</span></h2>
+        ${eSel('my', 'priv', 'Show', ['Incomplete', 'All'], F.priv, 'sm')}
+      </div>
+      <div class="lst todo-scroll-lst">${priv.length ? priv.map(eTodoLi).join('') : '<div class="none">No private To-Dos.</div>'}</div>
+      <div class="foot"><button class="addlink" data-act="eos-add-todo" data-id="private">${icon('plus')}Add To-Do</button></div>
+    </section>
    </div>
    <section class="panel sc mym" style="margin-top:16px"><div class="pnl-h"><h2>My Measurables<span class="pcount">${mine.length}</span></h2></div>
     ${mine.length ? `<div class="scroll"><table><thead><tr><th class="mn" style="left:0;box-shadow:none">Title</th><th>Goal</th><th>Average</th><th>Total</th>${per.map((p, i) => `<th class="${i ? '' : 'cur'}">${i ? '' : 'Current Week<small>'}${p}${i ? '' : '</small>'}</th>`).join('')}</tr></thead><tbody>
@@ -317,42 +361,37 @@ function getMeasurableVal(m, curTab, i) {
   if (curTab === 'weekly') {
     return (m.vals && m.vals[i] != null) ? m.vals[i] : null;
   }
-  if (curTab === 'monthly' && m.monthly_vals && m.monthly_vals[i] != null) {
-    return m.monthly_vals[i];
-  }
-  if (curTab === 'quarterly' && m.quarterly_vals && m.quarterly_vals[i] != null) {
-    return m.quarterly_vals[i];
-  }
-  if (curTab === 'annual' && m.annual_vals && m.annual_vals[i] != null) {
-    return m.annual_vals[i];
-  }
-
-  // Roll up from weekly vals matching scorecard_grid.js
-  if (!m.vals || !m.vals.length) return null;
-  let chunk = [];
   if (curTab === 'monthly') {
-    const start = i * 4;
-    chunk = m.vals.slice(start, start + 4).filter(v => v != null);
-  } else if (curTab === 'quarterly') {
-    const start = i * 13;
-    chunk = m.vals.slice(start, start + 13).filter(v => v != null);
-  } else if (curTab === 'annual') {
-    chunk = m.vals.filter(v => v != null);
+    if (m.monthly_vals && m.monthly_vals[i] != null) return m.monthly_vals[i];
+    if ((m.freq || '').toLowerCase() === 'monthly' && m.vals && m.vals[i] != null) return m.vals[i];
+    return null;
   }
+  if (curTab === 'quarterly') {
+    if (m.quarterly_vals && m.quarterly_vals[i] != null) return m.quarterly_vals[i];
+    if ((m.freq || '').toLowerCase() === 'quarterly' && m.vals && m.vals[i] != null) return m.vals[i];
+    return null;
+  }
+  if (curTab === 'annual') {
+    if (m.annual_vals && m.annual_vals[i] != null) return m.annual_vals[i];
+    if ((m.freq || '').toLowerCase() === 'annual' && m.vals && m.vals[i] != null) return m.vals[i];
+    return null;
+  }
+  return null;
+}
 
-  if (!chunk.length) return null;
-  const isAvg = m.unit === 'pct' || m.noTotal || m.rollup === 'Average';
-  if (isAvg) {
-    const avg = chunk.reduce((a, b) => a + Number(b), 0) / chunk.length;
-    return Math.round(avg * 100) / 100;
-  } else {
-    const sum = chunk.reduce((a, b) => a + Number(b), 0);
-    return Math.round(sum * 100) / 100;
-  }
+function getScorecardOwners(curTab, team) {
+  const tf = (curTab || E.tab.scorecard || 'weekly').toLowerCase();
+  const tm = (team !== undefined ? team : E.f.scorecard.team);
+  const metrics = (eMeas || []).filter(m => {
+    if ((m.freq || 'weekly').toLowerCase() !== tf) return false;
+    if (tm && tm !== 'All Teams' && m.team && m.team !== tm) return false;
+    return true;
+  });
+  return Array.from(new Set(metrics.map(m => m.owner).filter(Boolean))).sort((a, b) => a.localeCompare(b));
 }
 
 function renderOwnerFilterPopover(allOwners, selectedOwners, search) {
-  const isAll = !selectedOwners || selectedOwners.length === allOwners.length;
+  const isAll = !selectedOwners || (allOwners.length > 0 && selectedOwners.length === allOwners.length);
   const q = (search || '').toLowerCase().trim();
   const visibleOwners = allOwners.filter(o => !q || o.toLowerCase().includes(q));
 
@@ -360,10 +399,11 @@ function renderOwnerFilterPopover(allOwners, selectedOwners, search) {
     <div class="nn-owner-filter-popover" onclick="event.stopPropagation()">
       <input type="text" class="nn-owner-filter-search" placeholder="Search..." value="${eEsc(search || '')}">
       <div class="nn-owner-filter-list">
+        ${allOwners.length ? `
         <label style="color:#111827;font-weight:600">
           <input type="checkbox" class="nn-owner-filter-all" ${isAll ? 'checked' : ''}>
           <span>(Select All)</span>
-        </label>
+        </label>` : ''}
         ${visibleOwners.map(o => {
     const checked = isAll || (Array.isArray(selectedOwners) && selectedOwners.includes(o));
     return `
@@ -385,7 +425,7 @@ function renderMeasurablesGrid(curTab) {
   const rangeCount = parseInt(F.range, 10) || defaultRange;
   const periods = ePeriods(curTab === 'weekly' ? 'weekly' : curTab, rangeCount);
 
-  let metrics = eMeas || [];
+  let metrics = (eMeas || []).filter(m => (m.freq || 'weekly').toLowerCase() === curTab.toLowerCase());
   if (F.team && F.team !== 'All Teams') {
     metrics = metrics.filter(m => !m.team || m.team === F.team);
   }
@@ -394,11 +434,14 @@ function renderMeasurablesGrid(curTab) {
     metrics = metrics.filter(m => (m.name || '').toLowerCase().includes(q) || (m.owner || '').toLowerCase().includes(q));
   }
 
-  const teamMetrics = (eMeas || []).filter(m => !F.team || F.team === 'All Teams' || !m.team || m.team === F.team);
-  const allOwners = Array.from(new Set([
-    ...teamMetrics.map(m => m.owner).filter(Boolean),
-    ...((EOS_PEOPLE || []).filter(p => p && p !== 'All'))
-  ])).sort((a, b) => a.localeCompare(b));
+  const allOwners = getScorecardOwners(curTab, F.team);
+
+  if (Array.isArray(F.owners)) {
+    F.owners = F.owners.filter(o => allOwners.includes(o));
+    if (F.owners.length === allOwners.length) {
+      F.owners = null;
+    }
+  }
 
   const isOwnerFiltered = Array.isArray(F.owners) && F.owners.length < allOwners.length;
   if (Array.isArray(F.owners)) {
@@ -780,7 +823,10 @@ async function startL10Meeting(agenda_id = 'l10') {
   E.meeting_notes = '';
 
   let attendee_list = [];
-  if (EOS_PEOPLE && EOS_PEOPLE.length) {
+  const tMembers = getMembersForTeam(team);
+  if (tMembers && tMembers.length) {
+    attendee_list = tMembers.filter(p => p !== 'All' && !p.includes('@'));
+  } else if (EOS_PEOPLE && EOS_PEOPLE.length) {
     attendee_list = EOS_PEOPLE.filter(p => p !== 'All' && !p.includes('@'));
   }
   if (!attendee_list.length) {
@@ -1812,7 +1858,25 @@ function eosForm(title, fields, save) {
    <div class="body">${fields.map((f, i) => `<div class="f"><label for="d${i}">${f.l}${f.req ? ' *' : f.opt ? ' (optional)' : ''}</label>${fh(f, i)}<div class="err">${f.l} is required.</div></div>`).join('')}</div>
    <footer><button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="save">Save to ERP</button></footer>`;
   document.body.classList.add('drawer-open'); $('#drawer').setAttribute('aria-hidden', 'false');
-  setTimeout(() => { const x = $('#drawer .field'); x && x.focus(); }, 230);
+  setTimeout(() => {
+    const x = $('#drawer .field'); x && x.focus();
+    const teamIdx = fields.findIndex(f => f.k === 'team');
+    const ownerIdx = fields.findIndex(f => f.k === 'owner');
+    if (teamIdx !== -1 && ownerIdx !== -1) {
+      const teamEl = document.getElementById('d' + teamIdx);
+      const ownerEl = document.getElementById('d' + ownerIdx);
+      if (teamEl && ownerEl) {
+        teamEl.addEventListener('change', () => {
+          const members = getMembersForTeam(teamEl.value);
+          const currentVal = ownerEl.value;
+          ownerEl.innerHTML = members.map(m => `<option value="${eEsc(m)}" ${m === currentVal ? 'selected' : ''}>${eEsc(m)}</option>`).join('');
+          if (!members.includes(currentVal)) {
+            ownerEl.value = members.includes(EOS_ME) ? EOS_ME : (members[0] || '');
+          }
+        });
+      }
+    }
+  }, 100);
 }
 
 function eosSave() {
@@ -2038,19 +2102,30 @@ function eosOpenPastMeetingDrawer(m, details) {
 }
 
 function eosDrawer(kind, rec, pre) {
-  const own = v => ({ t: 'select', o: EOS_PEOPLE, v: v || EOS_ME }), team = v => ({ t: 'select', o: EOS_TEAMS, v: v || EOS_TEAMS[0] });
   const p = kind || (S.page === 'scorecard' && E.tab.scorecard !== 'scorecards' ? 'measurable' : { overview: 'to-dos', scorecard: 'scorecard', rocks: 'rocks', 'to-dos': 'to-dos', issues: 'issues', meetings: 'meetings' }[S.page]);
   const r = rec || {}, q = pre || {};
+
+  const curTeam = (E.f[S.page]?.team && E.f[S.page]?.team !== 'All Teams') ? E.f[S.page]?.team : null;
+  const myTeam = (E.f.my?.team && E.f.my?.team !== 'All Teams') ? E.f.my?.team : null;
+  const initialTeam = r.team || curTeam || myTeam || EOS_TEAMS[0] || 'Leadership Team';
+
+  const own = (v, tm) => {
+    const opts = getMembersForTeam(tm || initialTeam);
+    const defVal = (v && opts.includes(v)) ? v : (opts.includes(EOS_ME) ? EOS_ME : opts[0]);
+    return { t: 'select', o: opts, v: defVal };
+  };
+  const team = v => ({ t: 'select', o: EOS_TEAMS, v: v || initialTeam });
+
   if (p === 'measurable') {
     return eosForm(rec ? 'Edit Measurable in ERP' : 'Create Measurable in ERP', [
       { k: 'name', l: 'Measurable Title', req: true, v: r.name, ph: 'e.g. Weekly Qualified Leads' },
       { k: 'desc', l: 'Description', opt: true, t: 'textarea', v: r.desc || '' },
-      { k: 'team', l: 'Team', req: true, ...team(r.team || (E.f.scorecard.team === 'All Teams' ? null : E.f.scorecard.team)) },
+      { k: 'team', l: 'Team', req: true, ...team(r.team) },
       { k: 'freq', l: 'Frequency', req: true, t: 'select', o: [['weekly', 'Weekly'], ['monthly', 'Monthly'], ['quarterly', 'Quarterly'], ['annual', 'Annual']], v: r.freq || (E.tab.scorecard !== 'scorecards' ? E.tab.scorecard : 'weekly') },
       { k: 'op', l: 'Goal Operator', req: true, t: 'select', o: eOps, v: r.op || '>=' },
       { k: 'target', l: 'Goal Target', req: true, t: 'number', v: r.target != null ? String(r.target) : '10' },
       { k: 'unit', l: 'Unit Type', req: true, t: 'select', o: [['num', 'Number / Count'], ['kes', 'Currency ($)'], ['pct', 'Percentage (%)']], v: r.unit || 'num' },
-      { k: 'owner', l: 'Owner', req: true, ...own(r.owner) }
+      { k: 'owner', l: 'Owner', req: true, ...own(r.owner, r.team) }
     ], async v => {
       if (rec) {
         const opCode = (v.op === '=' || v.op === '==') ? '==' : v.op;
@@ -2096,7 +2171,7 @@ function eosDrawer(kind, rec, pre) {
   }
   else if (p === 'scorecard') {
     return eosForm('Add Scorecard in ERP', [
-      { k: 'team', l: 'Team', req: true, ...team(E.f.scorecard.team === 'All Teams' ? null : E.f.scorecard.team) },
+      { k: 'team', l: 'Team', req: true, ...team(r.team) },
       { k: 'timeframe', l: 'Timeframe', req: true, t: 'select', o: [['Weekly', 'Weekly'], ['Monthly', 'Monthly'], ['Quarterly', 'Quarterly'], ['Annual', 'Annual']] },
       { k: 'desc', l: 'Description', opt: true, t: 'textarea' }
     ], async v => {
@@ -2113,8 +2188,8 @@ function eosDrawer(kind, rec, pre) {
   else if (p === 'rocks') {
     const o = q.owner;
     eosForm('Create Rock in ERP', [{ k: 'type', l: 'Rock type', t: 'select', o: [['personal', 'Individual Rock'], ['company', 'Company Rock']], v: o === 'company' ? 'company' : 'personal' },
-    { k: 'name', l: 'Title', req: true, ph: 'Add a title for the Rock' }, { k: 'team', l: 'Team', ...team(E.f.rocks.team === 'All Teams' ? null : E.f.rocks.team) },
-    { k: 'owner', l: 'Owner', ...own(o && o !== 'company' ? o : null) }, { k: 'end', l: 'Due date', t: 'date', v: eYD('12-31'), req: true },
+    { k: 'name', l: 'Title', req: true, ph: 'Add a title for the Rock' }, { k: 'team', l: 'Team', ...team(r.team) },
+    { k: 'owner', l: 'Owner', ...own(o && o !== 'company' ? o : null, r.team) }, { k: 'end', l: 'Due date', t: 'date', v: eYD('12-31'), req: true },
     { k: 'status', l: 'Status', t: 'select', o: ['On-track', 'Off-track'] }, { k: 'desc', l: 'Description', opt: true, t: 'textarea' }],
       async v => {
         const newR = { id: ++eSeq, name: v.name, owner: v.owner, team: v.team, status: v.status, end: v.end, desc: v.desc, ms: [], company: v.type === 'company', archived: false };
@@ -2123,8 +2198,8 @@ function eosDrawer(kind, rec, pre) {
         if (res && res.docname) newR.docname = res.docname;
         toast('Rock saved to ERP Document!');
       });
-  } else if (p === 'to-dos') eosForm(rec ? 'Edit To-Do in ERP' : 'Create To-Do in ERP', [{ k: 'name', l: 'Title', req: true, v: r.name }, { k: 'owner', l: 'Owner', ...own(r.owner) }, { k: 'due', l: 'Due date', t: 'date', v: r.due || eRel(7), req: true },
-  { k: 'team', l: 'Team', ...team(r.team || (E.f.todos.team === 'All Teams' ? null : E.f.todos.team)) }, { k: 'vis', l: 'Visibility', t: 'select', o: [['team', 'Team'], ['private', 'Private']], v: rec ? (r.priv ? 'private' : 'team') : (q.vis || E.tab.todos) }],
+  } else if (p === 'to-dos') eosForm(rec ? 'Edit To-Do in ERP' : 'Create To-Do in ERP', [{ k: 'name', l: 'Title', req: true, v: r.name }, { k: 'team', l: 'Team', ...team(r.team) }, { k: 'owner', l: 'Owner', ...own(r.owner, r.team) }, { k: 'due', l: 'Due date', t: 'date', v: r.due || eRel(7), req: true },
+  { k: 'vis', l: 'Visibility', t: 'select', o: [['team', 'Team'], ['private', 'Private']], v: rec ? (r.priv ? 'private' : 'team') : (q.vis || E.tab.todos) }],
     async v => {
       if (rec) {
         Object.assign(rec, { name: v.name, owner: v.owner, due: v.due, team: v.team, priv: v.vis === 'private' }); toast('Updating To Do...');
@@ -2139,8 +2214,8 @@ function eosDrawer(kind, rec, pre) {
       }
     });
   else if (p === 'issues') eosForm(rec ? 'Edit Issue in ERP' : 'Create Issue in ERP', [{ k: 'name', l: 'Title', req: true, v: r.name }, { k: 'desc', l: 'Description', opt: true, t: 'textarea', v: r.desc },
-  { k: 'pri', l: 'Priority', opt: true, t: 'select', o: [['', 'None'], 'High', 'Medium', 'Low', 'Critical'], v: r.pri || '' }, { k: 'team', l: 'Team', ...team(r.team || (E.f.issues.team === 'All Teams' ? null : E.f.issues.team)) },
-  { k: 'owner', l: 'Owner', ...own(r.owner) }, { k: 'term', l: 'Term', t: 'select', o: [['short', 'Short-Term'], ['long', 'Long-Term']], v: r.term || E.tab.issues }],
+  { k: 'pri', l: 'Priority', opt: true, t: 'select', o: [['', 'None'], 'High', 'Medium', 'Low', 'Critical'], v: r.pri || '' }, { k: 'team', l: 'Team', ...team(r.team) },
+  { k: 'owner', l: 'Owner', ...own(r.owner, r.team) }, { k: 'term', l: 'Term', t: 'select', o: [['short', 'Short-Term'], ['long', 'Long-Term']], v: r.term || E.tab.issues }],
     async v => {
       if (rec) {
         Object.assign(rec, { name: v.name, desc: v.desc, pri: v.pri, team: v.team, owner: v.owner, term: v.term }); toast('Updating Issue...');
@@ -2230,6 +2305,8 @@ async function eosAct(a, el, e) {
       E.tab[k] = t;
       if (k === 'scorecard') {
         E.f.scorecard.range = null;
+        E.f.scorecard.owners = null;
+        E.owner_filter_open = false;
       }
       S.q = '';
       renderMain();
@@ -2773,6 +2850,10 @@ document.addEventListener('input', e => {
   const d = e.target.dataset; if (!d || !d.eosF) return;
   const [p, key] = d.eosF.split('.');
   E.f[p][key] = e.target.value;
+  if (p === 'scorecard' && key === 'team') {
+    E.f.scorecard.owners = null;
+    E.owner_filter_open = false;
+  }
   if (key !== 'page' && E.f[p].page) E.f[p].page = 1;
   const pos = e.target.selectionStart;
   renderMain();
@@ -2794,11 +2875,8 @@ document.addEventListener('change', async e => {
     const popover = e.target.closest('.nn-owner-filter-popover');
     const items = Array.from(popover.querySelectorAll('.nn-owner-filter-item'));
     const checked = items.filter(cb => cb.checked).map(cb => cb.value);
-    const teamMetrics = (eMeas || []).filter(m => !E.f.scorecard.team || E.f.scorecard.team === 'All Teams' || !m.team || m.team === E.f.scorecard.team);
-    const allOwners = Array.from(new Set([
-      ...teamMetrics.map(m => m.owner).filter(Boolean),
-      ...((EOS_PEOPLE || []).filter(p => p && p !== 'All'))
-    ]));
+    const curTab = E.tab.scorecard === 'scorecards' ? 'weekly' : (E.tab.scorecard || 'weekly');
+    const allOwners = getScorecardOwners(curTab, E.f.scorecard.team);
     if (checked.length === allOwners.length) {
       E.f.scorecard.owners = null;
     } else {

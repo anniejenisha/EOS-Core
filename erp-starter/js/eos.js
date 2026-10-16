@@ -4,8 +4,18 @@
    Hooks into app.js through: renderEos, eosDrawer, eosSave, eosAct.
    ===================================================================== */
 let EOS_ME = (typeof USER !== 'undefined' && USER.name) ? USER.name : (window.frappe_user_name || '');
+let EOS_USER_ID = window.frappe_user || '';
+let EOS_IS_ADMIN = false;
 let EOS_TEAMS = [];
+let EOS_TEAM_MEMBERS = {};
 let EOS_PEOPLE = [];
+
+function getMembersForTeam(teamName) {
+  if (teamName && EOS_TEAM_MEMBERS && EOS_TEAM_MEMBERS[teamName] && EOS_TEAM_MEMBERS[teamName].length) {
+    return EOS_TEAM_MEMBERS[teamName];
+  }
+  return EOS_PEOPLE || [];
+}
 
 /* ---------- helpers ---------- */
 const eEsc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -85,38 +95,38 @@ function eRelTime(iso) {
 }
 
 const E = {
- tab: { scorecard: 'scorecards', sc_freq: 'weekly', rocks: 'list', todos: 'team', issues: 'short', meet: 'upcoming' },
- f: {
-   scorecard: { team: 'All Teams', q_id: '', q_meas: '', timeframe: 'All', per: '20', range: '13', page: 1, sort: 'Created On', owners: null },
-   rocks: { team: 'All Teams', owner: 'All', status: 'All', people: false },
-   todos: { team: 'All Teams', owner: 'All', arch: false, per: '25', page: 1 },
-   issues: { team: 'All Teams', owner: 'All', arch: false, per: '25', page: 1 },
-   meet: { team: 'All Teams', per: '10', page: 1 },
-   my: { team: 'All Teams', priv: 'Incomplete', rocks: 'All' }
- },
- edit: null, menu: null, vto: false, vtoV: { rev: '', profit: '', meas: '' }, collapsed: new Set(), openRock: new Set(),
- form: null, preOwner: null, focusMs: null, live: null, past: [], upcoming: [], loaded: false,
- owner_filter_open: false, owner_filter_search: '',
+  tab: { scorecard: 'scorecards', sc_freq: 'weekly', rocks: 'list', todos: 'team', issues: 'short', meet: 'upcoming' },
+  f: {
+    scorecard: { team: 'All Teams', q_id: '', q_meas: '', timeframe: 'All', per: '20', range: '13', page: 1, sort: 'Created On', owners: null },
+    rocks: { team: 'All Teams', owner: 'All', status: 'All', people: false },
+    todos: { team: 'All Teams', owner: 'All', arch: false, per: '25', page: 1 },
+    issues: { team: 'All Teams', owner: 'All', arch: false, per: '25', page: 1 },
+    meet: { team: 'All Teams', per: '10', page: 1 },
+    my: { team: 'All Teams', priv: 'Incomplete', rocks: 'All' }
+  },
+  edit: null, menu: null, vto: false, vtoV: { rev: '', profit: '', meas: '' }, collapsed: new Set(), openRock: new Set(),
+  form: null, preOwner: null, focusMs: null, live: null, past: [], upcoming: [], loaded: false,
+  owner_filter_open: false, owner_filter_search: '',
 
- meeting_in_progress: false,
- meeting_agenda_type: 'l10',
- meeting_step: 0,
- meeting_seconds: 0,
- meeting_step_seconds: 0,
- meeting_step_times: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 },
- meeting_sharing_idx: 0,
- meeting_notes: '',
- meeting_ratings: {},
- meeting_attendance: {},
- meeting_attendees: [],
- meeting_good_news: {},
- headlines: [
-   { id: 1, type: 'Customer', title: 'Key client onboarding went live seamlessly with 100% SLA met', author: 'Team Lead', date: 'Today' }
- ],
- cascading_messages: [],
- meeting_tools_open: false,
- meeting_modal: false,
- active_tool_drawer: null
+  meeting_in_progress: false,
+  meeting_agenda_type: 'l10',
+  meeting_step: 0,
+  meeting_seconds: 0,
+  meeting_step_seconds: 0,
+  meeting_step_times: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 },
+  meeting_sharing_idx: 0,
+  meeting_notes: '',
+  meeting_ratings: {},
+  meeting_attendance: {},
+  meeting_attendees: [],
+  meeting_good_news: {},
+  headlines: [
+    { id: 1, type: 'Customer', title: 'Key client onboarding went live seamlessly with 100% SLA met', author: 'Team Lead', date: 'Today' }
+  ],
+  cascading_messages: [],
+  meeting_tools_open: false,
+  meeting_modal: false,
+  active_tool_drawer: null
 };
 
 const AGENDA = [
@@ -162,8 +172,10 @@ async function apiCall(method, args = {}) {
 
 function applyBootstrapData(data) {
   if (!data) return;
-  if (data.user && data.user.name) {
-    EOS_ME = data.user.name;
+  if (data.user) {
+    if (data.user.name) EOS_ME = data.user.name;
+    EOS_USER_ID = data.user.id || data.user.email || '';
+    EOS_IS_ADMIN = !!data.user.is_admin;
     if (typeof USER !== 'undefined') {
       USER.name = data.user.name;
       USER.initial = data.user.initial || data.user.name[0];
@@ -171,7 +183,13 @@ function applyBootstrapData(data) {
   }
   if (data.teams && data.teams.length) {
     EOS_TEAMS = data.teams;
+    ['my', 'rocks', 'todos', 'issues', 'meet', 'scorecard'].forEach(k => {
+      if (E.f[k] && (!E.f[k].team || (!EOS_TEAMS.includes(E.f[k].team) && E.f[k].team !== 'All Teams'))) {
+        E.f[k].team = EOS_TEAMS[0];
+      }
+    });
   }
+  if (data.team_members) EOS_TEAM_MEMBERS = data.team_members;
   if (data.people && data.people.length) EOS_PEOPLE = data.people;
   if (data.scorecards) eScorecards = data.scorecards;
   if (data.measurables) eMeas = data.measurables;
@@ -211,7 +229,16 @@ const eTabs = (key, tabs) => `<div class="tabs" role="tablist">${tabs.map(([id, 
 const eSel = (pg, k, label, opts, val, cls) => `<label class="fsel ${cls || ''}"><span>${label}:</span><select data-eos-f="${pg}.${k}" aria-label="${label}">${opts.map(o => { const [v, l] = Array.isArray(o) ? o : [o, o]; return `<option value="${eEsc(v)}" ${String(val) === String(v) ? 'selected' : ''}>${eEsc(l)}</option>`; }).join('')}</select></label>`;
 const eTog = (path, label, on) => `<button class="sw-wrap" role="switch" aria-checked="${!!on}" data-act="eos-tog" data-id="${path}"><span class="sw"></span>${label}</button>`;
 const eSearch = ph => `<div class="search eos-search">${icon('search')}<input class="field" id="q" placeholder="${ph}" value="${eEsc(S.q)}" aria-label="${ph}"></div>`;
-const eTeams = () => ['All Teams', ...EOS_TEAMS];
+const eTeams = () => {
+  const isAdmin = EOS_IS_ADMIN || EOS_ME === 'Administrator' || EOS_USER_ID === 'Administrator';
+  if (isAdmin) {
+    return ['All Teams', ...EOS_TEAMS];
+  }
+  if (EOS_TEAMS.length > 1) {
+    return ['All Teams', ...EOS_TEAMS];
+  }
+  return [...EOS_TEAMS];
+};
 const eOwners = () => ['All', ...EOS_PEOPLE];
 const eMatch = (x, F) => (F.team === 'All Teams' || x.team === F.team) && (!F.owner || F.owner === 'All' || x.owner === F.owner);
 const eQ = s => !S.q.trim() || String(s).toLowerCase().includes(S.q.trim().toLowerCase());
@@ -239,28 +266,45 @@ function eTodoLi(t) {
 }
 
 function eosMy90() {
-  const F = E.f.my, tf = x => F.team === 'All Teams' || x.team === F.team;
+  const isAdmin = EOS_IS_ADMIN || EOS_ME === 'Administrator' || EOS_USER_ID === 'Administrator';
+  const F = E.f.my;
+  if (!F.team || (F.team === 'All Teams' && !isAdmin && EOS_TEAMS.length === 1)) {
+    F.team = EOS_TEAMS[0] || 'All Teams';
+  }
+  const tf = x => F.team === 'All Teams' || x.team === F.team;
+
   const team = eTodos.filter(t => !t.priv && !t.archived && tf(t)).sort(eByDue);
-  const priv = eTodos.filter(t => t.priv && (t.owner === EOS_ME || !EOS_ME || EOS_ME === 'Administrator') && !t.archived && (F.priv === 'All' || !t.done) && tf(t)).sort(eByDue);
-  const myRocks = eRocks.filter(r => !r.archived && (r.owner === EOS_ME || !EOS_ME || EOS_ME === 'Administrator') && tf(r) && (F.rocks === 'All' || r.status === F.rocks));
-  const rocks = myRocks.length ? myRocks : eRocks.filter(r => !r.archived && tf(r) && (F.rocks === 'All' || r.status === F.rocks));
-  const myMeas = eMeas.filter(m => m.freq === 'weekly' && (m.owner === EOS_ME || !EOS_ME || EOS_ME === 'Administrator') && tf(m)), per = ePeriods('weekly', 6);
-  const mine = myMeas.length ? myMeas : eMeas.filter(m => m.freq === 'weekly' && tf(m));
+  const priv = eTodos.filter(t => t.priv && (isAdmin || t.owner === EOS_ME || t.owner === EOS_USER_ID) && !t.archived && (F.priv === 'All' || !t.done) && tf(t)).sort(eByDue);
+
+  const per = ePeriods('weekly', 6);
+  const mine = isAdmin
+    ? eMeas.filter(m => (m.freq || 'weekly').toLowerCase() === 'weekly' && tf(m))
+    : eMeas.filter(m => (m.freq || 'weekly').toLowerCase() === 'weekly' &&
+        (m.owner === EOS_ME || m.owner_user === EOS_USER_ID || m.owner_user === EOS_ME || m.owner === EOS_USER_ID) &&
+        tf(m)
+      );
+
   const hasDone = team.some(t => t.done);
-  const rk = r => `<div class="e-li"><span class="e-st ${r.status === 'On-track' ? 'on' : r.status === 'Off-track' ? 'off' : 'done'}" title="${r.status}">${icon(r.status === 'Off-track' ? 'thumbdown' : r.status === 'Done' ? 'check' : 'thumbup')}<span>${r.status}</span></span><span class="t">${eEsc(r.name)}</span>${eDD(r.end, r.status === 'Done')}</div>`;
 
   return eHead('My 90', 'A personalized workspace to view tasks, data, goals, and more directly from ERP.', eCreate('Create To-Do')) +
-   `<div class="fbar">${eSel('my', 'team', 'Team', eTeams(), F.team)}</div>
-   <div class="my3">
-    <section class="panel"><div class="pnl-h"><h2>Team To-Dos<span class="pcount">${team.length}</span></h2><button class="btn" data-act="eos-archive-done" ${hasDone ? '' : 'disabled'} style="${hasDone ? '' : 'opacity:.5;cursor:default'}">Archive completed</button></div>
-      <div class="lst">${team.length ? team.map(eTodoLi).join('') : '<div class="none">No team To-Dos found in ERP.</div>'}</div>
-      <div class="foot"><button class="addlink" data-act="eos-add-todo">${icon('plus')}Create To-Do</button></div></section>
-    <section class="panel"><div class="pnl-h"><h2>Private To-Dos<span class="pcount">${priv.length}</span></h2>${eSel('my', 'priv', 'Show', ['Incomplete', 'All'], F.priv, 'sm')}</div>
-      <div class="lst">${priv.length ? priv.map(eTodoLi).join('') : '<div class="none">No private To-Dos.</div>'}</div>
-      <div class="foot"><button class="addlink" data-act="eos-add-todo" data-id="private">${icon('plus')}Add To-Do</button></div></section>
-    <section class="panel"><div class="pnl-h"><h2>Rocks &amp; Milestones<span class="pcount">${rocks.length}</span></h2>${eSel('my', 'rocks', 'Status', ['All', 'On-track', 'Off-track'], F.rocks, 'sm')}</div>
-      <div class="lst">${rocks.length ? rocks.map(rk).join('') : '<div class="none">No Rocks found for your user.</div>'}</div>
-      <div class="foot"><button class="addlink" data-act="eos-add-rock" data-id="${eEsc(EOS_ME)}">${icon('plus')}Create Rock</button></div></section>
+    `<div class="fbar">${eSel('my', 'team', 'Team', eTeams(), F.team)}</div>
+   <div class="my-todos-container">
+    <section class="panel todo-panel">
+      <div class="pnl-h">
+        <h2>Team To-Dos<span class="pcount">${team.length}</span></h2>
+        <button class="btn" data-act="eos-archive-done" ${hasDone ? '' : 'disabled'} style="${hasDone ? '' : 'opacity:.5;cursor:default'}">Archive completed</button>
+      </div>
+      <div class="lst todo-scroll-lst">${team.length ? team.map(eTodoLi).join('') : '<div class="none">No team To-Dos found in ERP.</div>'}</div>
+      <div class="foot"><button class="addlink" data-act="eos-add-todo">${icon('plus')}Create To-Do</button></div>
+    </section>
+    <section class="panel todo-panel">
+      <div class="pnl-h">
+        <h2>Private To-Dos<span class="pcount">${priv.length}</span></h2>
+        ${eSel('my', 'priv', 'Show', ['Incomplete', 'All'], F.priv, 'sm')}
+      </div>
+      <div class="lst todo-scroll-lst">${priv.length ? priv.map(eTodoLi).join('') : '<div class="none">No private To-Dos.</div>'}</div>
+      <div class="foot"><button class="addlink" data-act="eos-add-todo" data-id="private">${icon('plus')}Add To-Do</button></div>
+    </section>
    </div>
    <section class="panel sc mym" style="margin-top:16px"><div class="pnl-h"><h2>My Measurables<span class="pcount">${mine.length}</span></h2></div>
     ${mine.length ? `<div class="scroll"><table><thead><tr><th class="mn" style="left:0;box-shadow:none">Title</th><th>Goal</th><th>Average</th><th>Total</th>${per.map((p, i) => `<th class="${i ? '' : 'cur'}">${i ? '' : 'Current Week<small>'}${p}${i ? '' : '</small>'}</th>`).join('')}</tr></thead><tbody>
@@ -268,7 +312,7 @@ function eosMy90() {
       const v = (m.vals || []).slice(0, 6).filter(x => x != null), avg = v.length ? v.reduce((a, b) => a + b, 0) / v.length : null, tot = v.length && !m.noTotal ? v.reduce((a, b) => a + b, 0) : null;
       return `<tr><td class="mn" style="left:0;box-shadow:none">${eEsc(m.name)}</td><td class="g">${m.op} ${eU(m, m.target)}</td><td class="g">${avg == null ? '–' : eU(m, avg)}</td><td class="g">${tot == null ? '–' : eU(m, tot)}</td>${per.map((_, i) => { const x = (m.vals || [])[i]; return x == null ? '<td class="cell na">–</td>' : `<td class="cell ${ePass(m, x) ? 'ok' : 'bad'}" style="cursor:default">${m.unit === 'pct' ? eN(x) + '%' : eN(x)}</td>`; }).join('')}</tr>`;
     }).join('')}</tbody></table></div>`
-    : '<div class="none">No measurables assigned to you in ERP.</div>'}</section>`;
+      : '<div class="none">No measurables assigned to you in ERP.</div>'}</section>`;
 }
 
 /* ---------- Scorecard (Measurables Grid & Directory Matching Ninety.io) ---------- */
@@ -317,42 +361,37 @@ function getMeasurableVal(m, curTab, i) {
   if (curTab === 'weekly') {
     return (m.vals && m.vals[i] != null) ? m.vals[i] : null;
   }
-  if (curTab === 'monthly' && m.monthly_vals && m.monthly_vals[i] != null) {
-    return m.monthly_vals[i];
-  }
-  if (curTab === 'quarterly' && m.quarterly_vals && m.quarterly_vals[i] != null) {
-    return m.quarterly_vals[i];
-  }
-  if (curTab === 'annual' && m.annual_vals && m.annual_vals[i] != null) {
-    return m.annual_vals[i];
-  }
-
-  // Roll up from weekly vals matching scorecard_grid.js
-  if (!m.vals || !m.vals.length) return null;
-  let chunk = [];
   if (curTab === 'monthly') {
-    const start = i * 4;
-    chunk = m.vals.slice(start, start + 4).filter(v => v != null);
-  } else if (curTab === 'quarterly') {
-    const start = i * 13;
-    chunk = m.vals.slice(start, start + 13).filter(v => v != null);
-  } else if (curTab === 'annual') {
-    chunk = m.vals.filter(v => v != null);
+    if (m.monthly_vals && m.monthly_vals[i] != null) return m.monthly_vals[i];
+    if ((m.freq || '').toLowerCase() === 'monthly' && m.vals && m.vals[i] != null) return m.vals[i];
+    return null;
   }
+  if (curTab === 'quarterly') {
+    if (m.quarterly_vals && m.quarterly_vals[i] != null) return m.quarterly_vals[i];
+    if ((m.freq || '').toLowerCase() === 'quarterly' && m.vals && m.vals[i] != null) return m.vals[i];
+    return null;
+  }
+  if (curTab === 'annual') {
+    if (m.annual_vals && m.annual_vals[i] != null) return m.annual_vals[i];
+    if ((m.freq || '').toLowerCase() === 'annual' && m.vals && m.vals[i] != null) return m.vals[i];
+    return null;
+  }
+  return null;
+}
 
-  if (!chunk.length) return null;
-  const isAvg = m.unit === 'pct' || m.noTotal || m.rollup === 'Average';
-  if (isAvg) {
-    const avg = chunk.reduce((a, b) => a + Number(b), 0) / chunk.length;
-    return Math.round(avg * 100) / 100;
-  } else {
-    const sum = chunk.reduce((a, b) => a + Number(b), 0);
-    return Math.round(sum * 100) / 100;
-  }
+function getScorecardOwners(curTab, team) {
+  const tf = (curTab || E.tab.scorecard || 'weekly').toLowerCase();
+  const tm = (team !== undefined ? team : E.f.scorecard.team);
+  const metrics = (eMeas || []).filter(m => {
+    if ((m.freq || 'weekly').toLowerCase() !== tf) return false;
+    if (tm && tm !== 'All Teams' && m.team && m.team !== tm) return false;
+    return true;
+  });
+  return Array.from(new Set(metrics.map(m => m.owner).filter(Boolean))).sort((a, b) => a.localeCompare(b));
 }
 
 function renderOwnerFilterPopover(allOwners, selectedOwners, search) {
-  const isAll = !selectedOwners || selectedOwners.length === allOwners.length;
+  const isAll = !selectedOwners || (allOwners.length > 0 && selectedOwners.length === allOwners.length);
   const q = (search || '').toLowerCase().trim();
   const visibleOwners = allOwners.filter(o => !q || o.toLowerCase().includes(q));
 
@@ -360,19 +399,20 @@ function renderOwnerFilterPopover(allOwners, selectedOwners, search) {
     <div class="nn-owner-filter-popover" onclick="event.stopPropagation()">
       <input type="text" class="nn-owner-filter-search" placeholder="Search..." value="${eEsc(search || '')}">
       <div class="nn-owner-filter-list">
+        ${allOwners.length ? `
         <label style="color:#111827;font-weight:600">
           <input type="checkbox" class="nn-owner-filter-all" ${isAll ? 'checked' : ''}>
           <span>(Select All)</span>
-        </label>
+        </label>` : ''}
         ${visibleOwners.map(o => {
-          const checked = isAll || (Array.isArray(selectedOwners) && selectedOwners.includes(o));
-          return `
+    const checked = isAll || (Array.isArray(selectedOwners) && selectedOwners.includes(o));
+    return `
             <label class="nn-owner-filter-opt">
               <input type="checkbox" class="nn-owner-filter-item" value="${eEsc(o)}" ${checked ? 'checked' : ''}>
               <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${eEsc(o)}">${eEsc(o)}</span>
             </label>
           `;
-        }).join('')}
+  }).join('')}
         ${visibleOwners.length === 0 ? `<div style="padding:6px;font-size:11.5px;color:#9ca3af;text-align:center;">No owners found</div>` : ''}
       </div>
     </div>
@@ -385,7 +425,7 @@ function renderMeasurablesGrid(curTab) {
   const rangeCount = parseInt(F.range, 10) || defaultRange;
   const periods = ePeriods(curTab === 'weekly' ? 'weekly' : curTab, rangeCount);
 
-  let metrics = eMeas || [];
+  let metrics = (eMeas || []).filter(m => (m.freq || 'weekly').toLowerCase() === curTab.toLowerCase());
   if (F.team && F.team !== 'All Teams') {
     metrics = metrics.filter(m => !m.team || m.team === F.team);
   }
@@ -394,11 +434,14 @@ function renderMeasurablesGrid(curTab) {
     metrics = metrics.filter(m => (m.name || '').toLowerCase().includes(q) || (m.owner || '').toLowerCase().includes(q));
   }
 
-  const teamMetrics = (eMeas || []).filter(m => !F.team || F.team === 'All Teams' || !m.team || m.team === F.team);
-  const allOwners = Array.from(new Set([
-    ...teamMetrics.map(m => m.owner).filter(Boolean),
-    ...((EOS_PEOPLE || []).filter(p => p && p !== 'All'))
-  ])).sort((a, b) => a.localeCompare(b));
+  const allOwners = getScorecardOwners(curTab, F.team);
+
+  if (Array.isArray(F.owners)) {
+    F.owners = F.owners.filter(o => allOwners.includes(o));
+    if (F.owners.length === allOwners.length) {
+      F.owners = null;
+    }
+  }
 
   const isOwnerFiltered = Array.isArray(F.owners) && F.owners.length < allOwners.length;
   if (Array.isArray(F.owners)) {
@@ -471,39 +514,40 @@ function renderMeasurablesGrid(curTab) {
           </thead>
           <tbody>
             ${metrics.length ? metrics.map(m => {
-              const av = initials(m.owner || 'U');
-              let cells = "";
-              for (let i = 0; i < rangeCount; i++) {
-                const isEditing = E.edit && E.edit.id === m.id && E.edit.i === i;
-                const val = getMeasurableVal(m, curTab, i);
-                if (isEditing) {
-                  cells += `
+    const av = initials(m.owner || 'U');
+    let cells = "";
+    for (let i = 0; i < rangeCount; i++) {
+      const isEditing = E.edit && E.edit.id === m.id && E.edit.i === i;
+      const val = getMeasurableVal(m, curTab, i);
+      if (isEditing) {
+        cells += `
                     <td class="nn-sc-cell">
                       <input class="nn-sc-cell-input" data-eos-cell autofocus value="${val != null ? val : ''}">
                     </td>
                   `;
-                } else {
-                  if (val == null) {
-                    cells += `
+      } else {
+        if (val == null) {
+          cells += `
                       <td class="nn-sc-cell" data-act="eos-cell" data-id="${m.id}:${i}">
                         <span class="nn-cell-val empty">–</span>
                       </td>
                     `;
-                  } else {
-                    const pass = ePass(m, val);
-                    const cls = pass ? "pass" : "fail";
-                    cells += `
+        } else {
+          const pass = ePass(m, val);
+          const cls = pass ? "pass" : "fail";
+          cells += `
                       <td class="nn-sc-cell ${cls}" data-act="eos-cell" data-id="${m.id}:${i}">
                         <div class="nn-cell-wrap">
                           <span class="nn-cell-badge ${cls}">${eU(m, val)}</span>
                         </div>
                       </td>
                     `;
-                  }
-                }
-              }
+        }
+      }
+    }
 
-              return `
+    return `
+              
                 <tr>
                   <td class="left nn-col-metric" style="width:240px;min-width:240px;max-width:240px;white-space:normal;word-break:break-word;overflow-wrap:break-word;line-height:1.35">
                     <span class="nn-metric-title" data-act="eos-edit-measurable" data-id="${m.id}" style="cursor:pointer;font-weight:600;color:#111827;white-space:normal;word-break:break-word;overflow-wrap:break-word;display:block">
@@ -519,7 +563,7 @@ function renderMeasurablesGrid(curTab) {
                   ${cells}
                 </tr>
               `;
-            }).join('') : `
+  }).join('') : `
               <tr>
                 <td colspan="${rangeCount + 3}" style="padding:48px;text-align:center;color:#9ca3af">
                   <div style="font-size:14px;font-weight:600;color:#374151;margin-bottom:6px">No measurables found for this view.</div>
@@ -605,8 +649,8 @@ function renderScorecardsDirectory() {
         </thead>
         <tbody>
           ${rows.length ? rows.map(sc => {
-            const isSel = S.sel && S.sel.has(sc.id);
-            return `<tr data-act="eos-open-sc" data-id="${eEsc(sc.name || sc.id)}" style="cursor:pointer;border-bottom:1px solid var(--line)" class="${isSel ? 'sel' : ''}">
+    const isSel = S.sel && S.sel.has(sc.id);
+    return `<tr data-act="eos-open-sc" data-id="${eEsc(sc.name || sc.id)}" style="cursor:pointer;border-bottom:1px solid var(--line)" class="${isSel ? 'sel' : ''}">
               <td class="ck" style="width:44px;padding:10px 14px" onclick="event.stopPropagation()">
                 <input type="checkbox" data-act="eos-sc-sel-row" data-id="${eEsc(sc.id)}" ${isSel ? 'checked' : ''} aria-label="Select ${eEsc(sc.id)}">
               </td>
@@ -619,7 +663,7 @@ function renderScorecardsDirectory() {
                 <span title="Favorite" data-act="eos-sc-fav" data-id="${eEsc(sc.id)}" style="cursor:pointer;display:inline-flex;align-items:center">${icon('heart')}</span>
               </td>
             </tr>`;
-          }).join('') : `<tr><td colspan="5" style="text-align:center;padding:36px;color:var(--ink-3)">No scorecards match the current filters.</td></tr>`}
+  }).join('') : `<tr><td colspan="5" style="text-align:center;padding:36px;color:var(--ink-3)">No scorecards match the current filters.</td></tr>`}
         </tbody>
       </table>
     </div>
@@ -681,8 +725,8 @@ function eosRocks() {
       : `<div class="panel"><div class="empty"><div class="eic">${icon('mountain')}</div><h3>No archived Rocks</h3><p>Archived Rock documents are retrieved from ERP.</p></div></div>`}</div>`;
   }
   return eHead('Rocks', 'Set and track quarterly goals, saved directly to the Rock DocType.', eCreate('Add Rock')) +
-   eTabs('rocks', [['list', 'List'], ['board', 'Planning Board'], ['archive', 'Archive']]) +
-   `<div class="fbar">${eSel('rocks', 'team', 'Team', eTeams(), F.team)}${eSel('rocks', 'owner', 'Owner', eOwners(), F.owner)}${eSel('rocks', 'status', 'Status', ['All', 'On-track', 'Off-track', 'Done'], F.status)}${tab === 'list' ? eTog('rocks.people', 'Show people without Rocks', F.people) : ''}<div class="grow">${eSearch('Search Rocks')}</div></div>` + body;
+    eTabs('rocks', [['list', 'List'], ['board', 'Planning Board'], ['archive', 'Archive']]) +
+    `<div class="fbar">${eSel('rocks', 'team', 'Team', eTeams(), F.team)}${eSel('rocks', 'owner', 'Owner', eOwners(), F.owner)}${eSel('rocks', 'status', 'Status', ['All', 'On-track', 'Off-track', 'Done'], F.status)}${tab === 'list' ? eTog('rocks.people', 'Show people without Rocks', F.people) : ''}<div class="grow">${eSearch('Search Rocks')}</div></div>` + body;
 }
 
 /* ---------- To-Dos ---------- */
@@ -691,12 +735,12 @@ function eosTodos() {
   const rs = eTodos.filter(t => eMatch(t, F) && t.archived === F.arch && (tab === 'private' ? t.priv && t.owner === EOS_ME : !t.priv) && eQ(t.name)).sort(eByDue);
   const vis = eSlice('todos', rs);
   return eHead('To-Dos', 'Live tasks fetched and synced directly with Frappe To Do DocType.', eCreate('Create To-Do')) +
-   eTabs('todos', [['team', 'Team'], ['private', 'Private']]) +
-   `<div class="fbar">${eSel('todos', 'team', 'Team', eTeams(), F.team)}${eSel('todos', 'owner', 'Owner', eOwners(), F.owner)}${eTog('todos.arch', 'Archive', F.arch)}<div class="grow">${eSearch('Search To-Dos')}</div></div>
+    eTabs('todos', [['team', 'Team'], ['private', 'Private']]) +
+    `<div class="fbar">${eSel('todos', 'team', 'Team', eTeams(), F.team)}${eSel('todos', 'owner', 'Owner', eOwners(), F.owner)}${eTog('todos.arch', 'Archive', F.arch)}<div class="grow">${eSearch('Search To-Dos')}</div></div>
    <div class="eos-col"><div class="panel"><div class="pnl-h"><h2>${tab === 'private' ? 'Private To-Dos' : 'Team To-Dos'}<span class="pcount">${rs.length}</span></h2></div>
    ${vis.length ? `<div class="scroll"><table class="eos-t"><thead><tr><th class="ck"></th><th>Title</th><th>Due by</th><th>Owner</th><th class="act"></th></tr></thead><tbody>
    ${vis.map(t => `<tr><td class="ck">${eCheck(t.done, 'eos-todo-done', t.id, (t.done ? 'Mark not done: ' : 'Mark done: ') + t.name)}</td><td class="tdn ${t.done ? 'done' : ''}">${eEsc(t.name)}</td><td>${eDue(t.due, t.done)}</td><td>${eAv(t.owner)}</td><td class="act">${eMenuBtn('todo', t.id)}</td></tr>`).join('')}</tbody></table></div>`
-   : `<div class="empty"><div class="eic">${icon('checksq')}</div><h3>${F.arch ? 'No archived To-Dos' : 'No To-Dos found in ERP'}</h3><p>${F.arch ? 'Archived documents will appear here.' : 'Create a To-Do to save it directly to the To Do DocType.'}</p></div>`}
+      : `<div class="empty"><div class="eic">${icon('checksq')}</div><h3>${F.arch ? 'No archived To-Dos' : 'No To-Dos found in ERP'}</h3><p>${F.arch ? 'Archived documents will appear here.' : 'Create a To-Do to save it directly to the To Do DocType.'}</p></div>`}
    <div class="pager"><button class="addlink" data-act="create">${icon('plus')}Create To-Do</button>${ePager('todos', rs.length)}</div></div></div>`;
 }
 
@@ -710,10 +754,10 @@ function eosIssues() {
    ${vis.map((i, k) => `<tr><td class="ck">${eCheck(i.archived, 'eos-issue-done', i.id, (i.archived ? 'Reopen: ' : 'Solve: ') + i.name)}</td><td class="tdn ${i.archived ? 'done' : ''}"><button class="link" style="padding:0;color:inherit;font-weight:600;text-align:left;background:none;border:none;cursor:pointer" data-act="eos-edit-issue" data-id="${i.id}">${off + k + 1}. ${eEsc(i.name)}</button></td>
    <td><select class="pri" data-eos-pri="${i.id}" aria-label="Priority">${['', 'High', 'Medium', 'Low', 'Critical'].map(p => `<option value="${p}" ${i.pri === p ? 'selected' : ''}>${p || 'None'}</option>`).join('')}</select></td><td class="muted-s">${eShort(i.raised)}</td><td>${eAv(i.owner)}</td><td class="act">${eMenuBtn('issue', i.id)}</td></tr>`).join('')}</tbody></table></div>
    <div class="pager"><button class="addlink" data-act="create">${icon('plus')}Add Issue</button>${ePager('issues', rs.length)}</div></div>`
-   : `<div class="empty"><div class="eic">${icon('alert')}</div><h3>${F.arch ? 'No archived issues' : "No Issues found in ERP."}</h3><p>${F.arch ? 'Solved issues are stored in ERP.' : 'Add an Issue to save it directly to the Issue DocType.'}</p>${F.arch ? '' : `<button class="btn primary" data-act="create">Add Issue</button>`}</div>`;
+    : `<div class="empty"><div class="eic">${icon('alert')}</div><h3>${F.arch ? 'No archived issues' : "No Issues found in ERP."}</h3><p>${F.arch ? 'Solved issues are stored in ERP.' : 'Add an Issue to save it directly to the Issue DocType.'}</p>${F.arch ? '' : `<button class="btn primary" data-act="create">Add Issue</button>`}</div>`;
   return eHead('Issues', 'Identify, prioritize and solve issues directly within Frappe Issue DocType.', eCreate('Add Issue')) +
-   eTabs('issues', [['short', 'Short-Term'], ['long', 'Long-Term']]) +
-   `<div class="fbar">${eSel('issues', 'team', 'Team', eTeams(), F.team)}${eSel('issues', 'owner', 'Owner', eOwners(), F.owner)}${eTog('issues.arch', 'Archive', F.arch)}<div class="grow">${eSearch('Search Issues')}</div></div><div class="eos-col">${body}</div>`;
+    eTabs('issues', [['short', 'Short-Term'], ['long', 'Long-Term']]) +
+    `<div class="fbar">${eSel('issues', 'team', 'Team', eTeams(), F.team)}${eSel('issues', 'owner', 'Owner', eOwners(), F.owner)}${eTog('issues.arch', 'Archive', F.arch)}<div class="grow">${eSearch('Search Issues')}</div></div><div class="eos-col">${body}</div>`;
 }
 
 /* ---------- Meetings ---------- */
@@ -779,7 +823,10 @@ async function startL10Meeting(agenda_id = 'l10') {
   E.meeting_notes = '';
 
   let attendee_list = [];
-  if (EOS_PEOPLE && EOS_PEOPLE.length) {
+  const tMembers = getMembersForTeam(team);
+  if (tMembers && tMembers.length) {
+    attendee_list = tMembers.filter(p => p !== 'All' && !p.includes('@'));
+  } else if (EOS_PEOPLE && EOS_PEOPLE.length) {
     attendee_list = EOS_PEOPLE.filter(p => p !== 'All' && !p.includes('@'));
   }
   if (!attendee_list.length) {
@@ -995,8 +1042,8 @@ function renderMeetingsDashboard() {
             </thead>
             <tbody>
               ${ps.map(m => {
-                const meetId = m.docname || m.title || (m.team + '-' + m.when);
-                return `
+        const meetId = m.docname || m.title || (m.team + '-' + m.when);
+        return `
                 <tr class="nn-rock-row" data-act="eos-view-past-meeting" data-id="${eEsc(meetId)}" style="cursor:pointer">
                   <td><b>${eShort(m.when)}</b><div style="font-size:11px;color:#9ca3af">${eEsc(m.time || '')}</div></td>
                   <td>${eEsc(m.team || team)}</td>
@@ -1006,7 +1053,8 @@ function renderMeetingsDashboard() {
                     <button class="btn sec" data-act="eos-view-past-meeting" data-id="${eEsc(meetId)}" style="height:28px;padding:0 12px;font-size:12px;font-weight:600;border-radius:6px;border:1px solid var(--line-2);cursor:pointer">View</button>
                   </td>
                 </tr>
-              `;}).join('')}
+              `;
+      }).join('')}
             </tbody>
           </table>
         </div>
@@ -1111,8 +1159,8 @@ function renderL10MeetingWorkspace() {
 
         <div class="nn-l10-agenda-list">
           ${steps.map(st => {
-            const elapsed = (E.meeting_step_times && E.meeting_step_times[st.idx]) || 0;
-            return `
+    const elapsed = (E.meeting_step_times && E.meeting_step_times[st.idx]) || 0;
+    return `
               <div class="nn-l10-agenda-item ${st.idx === E.meeting_step ? 'on' : ''}" data-act="eos-step" data-id="${st.idx}">
                 <div class="nn-l10-agenda-left">
                   <span>${st.num}</span>
@@ -1123,7 +1171,7 @@ function renderL10MeetingWorkspace() {
                 </div>
               </div>
             `;
-          }).join('')}
+  }).join('')}
         </div>
 
         <div class="nn-l10-side-foot" style="position:relative">
@@ -1198,16 +1246,16 @@ function renderL10SegueStep(team) {
       </div>
       <div class="nn-attendee-grid">
         ${attendees.map(att => {
-          const is_pres = !!E.meeting_attendance[att];
-          const av = initials(att);
-          return `
+    const is_pres = !!E.meeting_attendance[att];
+    const av = initials(att);
+    return `
             <div class="nn-attendee-chip ${is_pres ? 'present' : 'absent'}" data-act="eos-toggle-attendance" data-id="${eEsc(att)}">
               <span class="nn-owner-circle" style="background:${is_pres ? '#059669' : '#9ca3af'}">${av}</span>
               <span>${eEsc(att)}</span>
               <span style="display:inline-flex;align-items:center">${is_pres ? icon('check') : icon('x')}</span>
             </div>
           `;
-        }).join('')}
+  }).join('')}
       </div>
     </div>
 
@@ -1265,18 +1313,18 @@ function renderL10ScorecardStep(team) {
           </thead>
           <tbody>
             ${metrics.length ? metrics.map(m => {
-              const av = initials(m.owner || 'U');
-              return `
+    const av = initials(m.owner || 'U');
+    return `
                 <tr>
                   <td class="left nn-col-metric" style="white-space:normal;word-break:break-word;overflow-wrap:break-word;line-height:1.35"><b style="white-space:normal;word-break:break-word;display:block">${eEsc(m.name)}</b></td>
                   <td class="nn-col-owner"><span class="nn-owner-circle">${av}</span></td>
                   <td class="nn-col-goal">${m.op || '>='} ${eU(m, m.target)}</td>
                   ${periods.map((_, i) => {
-                    const v = (m.vals && m.vals[i] != null) ? m.vals[i] : null;
-                    const pass = v != null ? ePass(m, v) : null;
-                    const cls = pass === null ? '' : (pass ? 'pass' : 'fail');
-                    return `<td class="nn-sc-cell ${cls}">${v != null ? eU(m, v) : '–'}</td>`;
-                  }).join('')}
+      const v = (m.vals && m.vals[i] != null) ? m.vals[i] : null;
+      const pass = v != null ? ePass(m, v) : null;
+      const cls = pass === null ? '' : (pass ? 'pass' : 'fail');
+      return `<td class="nn-sc-cell ${cls}">${v != null ? eU(m, v) : '–'}</td>`;
+    }).join('')}
                   <td style="text-align:center">
                     <button class="nn-btn-bar" data-act="eos-drop-ids" data-type="Scorecard" data-title="KPI off-track: ${eEsc(m.name)}" style="padding:2px 8px;font-size:11px">
                       ${icon('alert')} <span>Drop to IDS</span>
@@ -1284,7 +1332,7 @@ function renderL10ScorecardStep(team) {
                   </td>
                 </tr>
               `;
-            }).join('') : `<tr><td colspan="9" style="padding:32px;text-align:center;color:#9ca3af">No scorecard measurables found for this team.</td></tr>`}
+  }).join('') : `<tr><td colspan="9" style="padding:32px;text-align:center;color:#9ca3af">No scorecard measurables found for this team.</td></tr>`}
           </tbody>
         </table>
       </div>
@@ -1337,11 +1385,11 @@ function renderL10RockReviewStep(team) {
         </thead>
         <tbody>
           ${rocks.length ? rocks.map(r => {
-            const av = initials(r.owner || 'U');
-            const st = r.status || 'On-track';
-            const is_off = st === 'Off-track' || st === 'Not Started';
-            const st_cls = st === 'Done' ? 'complete' : is_off ? 'off-track' : 'on-track';
-            return `
+    const av = initials(r.owner || 'U');
+    const st = r.status || 'On-track';
+    const is_off = st === 'Off-track' || st === 'Not Started';
+    const st_cls = st === 'Done' ? 'complete' : is_off ? 'off-track' : 'on-track';
+    return `
               <tr class="nn-rock-row">
                 <td><b>${eEsc(r.name)}</b></td>
                 <td><span class="nn-owner-circle">${av}</span></td>
@@ -1361,7 +1409,7 @@ function renderL10RockReviewStep(team) {
                 </td>
               </tr>
             `;
-          }).join('') : `<tr><td colspan="5" style="padding:32px;text-align:center;color:#9ca3af">No Rocks found.</td></tr>`}
+  }).join('') : `<tr><td colspan="5" style="padding:32px;text-align:center;color:#9ca3af">No Rocks found.</td></tr>`}
         </tbody>
       </table>
     </div>
@@ -1478,10 +1526,10 @@ function renderL10TodosStep(team) {
 
       <div class="nn-todo-table-body">
         ${todos.length ? todos.map(t => {
-          const is_done = !!t.done;
-          const av = initials(t.owner || 'U');
-          const due_str = t.due ? eShort(t.due) : '7 Days';
-          return `
+    const is_done = !!t.done;
+    const av = initials(t.owner || 'U');
+    const due_str = t.due ? eShort(t.due) : '7 Days';
+    return `
             <div class="nn-todo-row ${is_done ? 'complete' : ''}">
               <div class="nn-todo-col-check">
                 <div class="nn-todo-checkbox ${is_done ? 'checked' : ''}" data-act="eos-l10-todo-toggle" data-id="${t.id}">
@@ -1507,7 +1555,7 @@ function renderL10TodosStep(team) {
               </div>
             </div>
           `;
-        }).join('') : `<div style="padding:32px;text-align:center;color:#9ca3af;font-size:13px">No To-Dos for this team.</div>`}
+  }).join('') : `<div style="padding:32px;text-align:center;color:#9ca3af;font-size:13px">No To-Dos for this team.</div>`}
       </div>
     </div>
   `;
@@ -1546,8 +1594,8 @@ function renderL10IdsStep(team) {
 
       <div class="nn-todo-table-body">
         ${issues.length ? issues.map((iss, idx) => {
-          const av = initials(iss.owner || 'U');
-          return `
+    const av = initials(iss.owner || 'U');
+    return `
             <div class="nn-todo-row">
               <div style="width:40px;text-align:center;font-size:12px;font-weight:700;color:#064e3b">
                 ${idx + 1}
@@ -1569,7 +1617,7 @@ function renderL10IdsStep(team) {
               </div>
             </div>
           `;
-        }).join('') : `
+  }).join('') : `
           <div style="padding:36px;text-align:center">
             <div style="font-size:15px;font-weight:700;color:#111827;margin-bottom:4px">Your team hasn't added any issues yet.</div>
             <div style="font-size:13px;color:#6b7280">Identify matters that need resolution before moving forward.</div>
@@ -1640,14 +1688,14 @@ function renderL10ConcludeStep(team) {
       </div>
       <div class="nn-rating-list">
         ${attendees.map(att => {
-          const cur_r = E.meeting_ratings[att] || 8;
-          return `
+    const cur_r = E.meeting_ratings[att] || 8;
+    return `
             <div class="nn-rating-item">
               <span style="font-size:13px;font-weight:600;color:#374151">${eEsc(att)}</span>
               <input type="number" min="1" max="10" step="1" class="nn-rating-input" data-id="${eEsc(att)}" value="${cur_r}">
             </div>
           `;
-        }).join('')}
+  }).join('')}
       </div>
     </div>
 
@@ -1805,12 +1853,30 @@ function eosForm(title, fields, save) {
   E.form = { fields, save };
   const fh = (f, i) => f.t === 'select' ? `<select class="field" id="d${i}">${f.o.map(o => Array.isArray(o) ? o : [o, o]).map(([v, l]) => `<option value="${eEsc(v)}" ${String(f.v) === String(v) ? 'selected' : ''}>${eEsc(l)}</option>`).join('')}</select>`
     : f.t === 'textarea' ? `<textarea class="field" id="d${i}" placeholder="${eEsc(f.ph || '')}">${eEsc(f.v || '')}</textarea>`
-    : `<input class="field" id="d${i}" type="${f.t || 'text'}" value="${eEsc(f.v == null ? '' : f.v)}" placeholder="${eEsc(f.ph || '')}">`;
+      : `<input class="field" id="d${i}" type="${f.t || 'text'}" value="${eEsc(f.v == null ? '' : f.v)}" placeholder="${eEsc(f.ph || '')}">`;
   $('#drawer').innerHTML = `<header><h2>${title}</h2><button class="icon-btn" data-act="close" aria-label="Close">${icon('x')}</button></header>
    <div class="body">${fields.map((f, i) => `<div class="f"><label for="d${i}">${f.l}${f.req ? ' *' : f.opt ? ' (optional)' : ''}</label>${fh(f, i)}<div class="err">${f.l} is required.</div></div>`).join('')}</div>
    <footer><button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="save">Save to ERP</button></footer>`;
   document.body.classList.add('drawer-open'); $('#drawer').setAttribute('aria-hidden', 'false');
-  setTimeout(() => { const x = $('#drawer .field'); x && x.focus(); }, 230);
+  setTimeout(() => {
+    const x = $('#drawer .field'); x && x.focus();
+    const teamIdx = fields.findIndex(f => f.k === 'team');
+    const ownerIdx = fields.findIndex(f => f.k === 'owner');
+    if (teamIdx !== -1 && ownerIdx !== -1) {
+      const teamEl = document.getElementById('d' + teamIdx);
+      const ownerEl = document.getElementById('d' + ownerIdx);
+      if (teamEl && ownerEl) {
+        teamEl.addEventListener('change', () => {
+          const members = getMembersForTeam(teamEl.value);
+          const currentVal = ownerEl.value;
+          ownerEl.innerHTML = members.map(m => `<option value="${eEsc(m)}" ${m === currentVal ? 'selected' : ''}>${eEsc(m)}</option>`).join('');
+          if (!members.includes(currentVal)) {
+            ownerEl.value = members.includes(EOS_ME) ? EOS_ME : (members[0] || '');
+          }
+        });
+      }
+    }
+  }, 100);
 }
 
 function eosSave() {
@@ -1866,7 +1932,7 @@ function eosOpenPastMeetingDrawer(m, details) {
   if (!Object.keys(ratingsMap).length && notes.includes('Ratings:')) {
     const ratMatch = notes.match(/Ratings:\s*(\{[^\}]+\})/);
     if (ratMatch) {
-      try { ratingsMap = JSON.parse(ratMatch[1]); } catch(e) {}
+      try { ratingsMap = JSON.parse(ratMatch[1]); } catch (e) { }
     }
   }
 
@@ -1954,14 +2020,14 @@ function eosOpenPastMeetingDrawer(m, details) {
         </div>
         <div style="display:flex;flex-direction:column;gap:6px">
           ${[
-            { num: 1, name: "Good News / Segue", dur: "5 min" },
-            { num: 2, name: "Scorecard Review", dur: "5 min" },
-            { num: 3, name: "Rock Review", dur: "5 min" },
-            { num: 4, name: "Customer & Employee Headlines", dur: "5 min" },
-            { num: 5, name: "To-Do List Review", dur: "5 min" },
-            { num: 6, name: "IDS™ (Identify, Discuss, Solve)", dur: "60 min" },
-            { num: 7, name: "Conclude & Ratings", dur: "5 min" }
-          ].map(s => `
+      { num: 1, name: "Good News / Segue", dur: "5 min" },
+      { num: 2, name: "Scorecard Review", dur: "5 min" },
+      { num: 3, name: "Rock Review", dur: "5 min" },
+      { num: 4, name: "Customer & Employee Headlines", dur: "5 min" },
+      { num: 5, name: "To-Do List Review", dur: "5 min" },
+      { num: 6, name: "IDS™ (Identify, Discuss, Solve)", dur: "60 min" },
+      { num: 7, name: "Conclude & Ratings", dur: "5 min" }
+    ].map(s => `
             <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#f8fafc;border-radius:6px;font-size:12.5px">
               <div style="display:flex;align-items:center;gap:8px">
                 <span style="width:18px;height:18px;border-radius:50%;background:#d1fae5;color:#065f46;display:inline-flex;align-items:center;justify-content:center">${icon('check')}</span>
@@ -1997,15 +2063,15 @@ function eosOpenPastMeetingDrawer(m, details) {
           <h4 style="margin:0 0 12px 0;font-size:12.5px;font-weight:700;color:var(--g900);text-transform:uppercase;letter-spacing:0.5px">Attendees & Ratings</h4>
           <div style="display:flex;flex-wrap:wrap;gap:8px">
             ${(attendeesList.length ? attendeesList : Object.keys(ratingsMap)).map(att => {
-              const rat = ratingsMap[att];
-              return `
+      const rat = ratingsMap[att];
+      return `
                 <div style="display:inline-flex;align-items:center;gap:8px;padding:5px 12px;background:#f3f4f6;border-radius:20px;font-size:12px">
                   <span class="avatar sm" style="width:20px;height:20px;font-size:9px">${initials(att)}</span>
                   <span style="font-weight:600;color:#111827">${eEsc(att)}</span>
                   ${rat != null ? `<span style="background:#047857;color:#fff;padding:1px 6px;border-radius:10px;font-size:11px;font-weight:700;display:inline-flex;align-items:center;gap:3px">${icon('star')} ${rat}</span>` : ''}
                 </div>
               `;
-            }).join('')}
+    }).join('')}
           </div>
         </div>
       ` : ''}
@@ -2036,19 +2102,30 @@ function eosOpenPastMeetingDrawer(m, details) {
 }
 
 function eosDrawer(kind, rec, pre) {
-  const own = v => ({ t: 'select', o: EOS_PEOPLE, v: v || EOS_ME }), team = v => ({ t: 'select', o: EOS_TEAMS, v: v || EOS_TEAMS[0] });
   const p = kind || (S.page === 'scorecard' && E.tab.scorecard !== 'scorecards' ? 'measurable' : { overview: 'to-dos', scorecard: 'scorecard', rocks: 'rocks', 'to-dos': 'to-dos', issues: 'issues', meetings: 'meetings' }[S.page]);
   const r = rec || {}, q = pre || {};
+
+  const curTeam = (E.f[S.page]?.team && E.f[S.page]?.team !== 'All Teams') ? E.f[S.page]?.team : null;
+  const myTeam = (E.f.my?.team && E.f.my?.team !== 'All Teams') ? E.f.my?.team : null;
+  const initialTeam = r.team || curTeam || myTeam || EOS_TEAMS[0] || 'Leadership Team';
+
+  const own = (v, tm) => {
+    const opts = getMembersForTeam(tm || initialTeam);
+    const defVal = (v && opts.includes(v)) ? v : (opts.includes(EOS_ME) ? EOS_ME : opts[0]);
+    return { t: 'select', o: opts, v: defVal };
+  };
+  const team = v => ({ t: 'select', o: EOS_TEAMS, v: v || initialTeam });
+
   if (p === 'measurable') {
     return eosForm(rec ? 'Edit Measurable in ERP' : 'Create Measurable in ERP', [
       { k: 'name', l: 'Measurable Title', req: true, v: r.name, ph: 'e.g. Weekly Qualified Leads' },
       { k: 'desc', l: 'Description', opt: true, t: 'textarea', v: r.desc || '' },
-      { k: 'team', l: 'Team', req: true, ...team(r.team || (E.f.scorecard.team === 'All Teams' ? null : E.f.scorecard.team)) },
+      { k: 'team', l: 'Team', req: true, ...team(r.team) },
       { k: 'freq', l: 'Frequency', req: true, t: 'select', o: [['weekly', 'Weekly'], ['monthly', 'Monthly'], ['quarterly', 'Quarterly'], ['annual', 'Annual']], v: r.freq || (E.tab.scorecard !== 'scorecards' ? E.tab.scorecard : 'weekly') },
       { k: 'op', l: 'Goal Operator', req: true, t: 'select', o: eOps, v: r.op || '>=' },
       { k: 'target', l: 'Goal Target', req: true, t: 'number', v: r.target != null ? String(r.target) : '10' },
       { k: 'unit', l: 'Unit Type', req: true, t: 'select', o: [['num', 'Number / Count'], ['kes', 'Currency ($)'], ['pct', 'Percentage (%)']], v: r.unit || 'num' },
-      { k: 'owner', l: 'Owner', req: true, ...own(r.owner) }
+      { k: 'owner', l: 'Owner', req: true, ...own(r.owner, r.team) }
     ], async v => {
       if (rec) {
         const opCode = (v.op === '=' || v.op === '==') ? '==' : v.op;
@@ -2094,7 +2171,7 @@ function eosDrawer(kind, rec, pre) {
   }
   else if (p === 'scorecard') {
     return eosForm('Add Scorecard in ERP', [
-      { k: 'team', l: 'Team', req: true, ...team(E.f.scorecard.team === 'All Teams' ? null : E.f.scorecard.team) },
+      { k: 'team', l: 'Team', req: true, ...team(r.team) },
       { k: 'timeframe', l: 'Timeframe', req: true, t: 'select', o: [['Weekly', 'Weekly'], ['Monthly', 'Monthly'], ['Quarterly', 'Quarterly'], ['Annual', 'Annual']] },
       { k: 'desc', l: 'Description', opt: true, t: 'textarea' }
     ], async v => {
@@ -2111,9 +2188,9 @@ function eosDrawer(kind, rec, pre) {
   else if (p === 'rocks') {
     const o = q.owner;
     eosForm('Create Rock in ERP', [{ k: 'type', l: 'Rock type', t: 'select', o: [['personal', 'Individual Rock'], ['company', 'Company Rock']], v: o === 'company' ? 'company' : 'personal' },
-      { k: 'name', l: 'Title', req: true, ph: 'Add a title for the Rock' }, { k: 'team', l: 'Team', ...team(E.f.rocks.team === 'All Teams' ? null : E.f.rocks.team) },
-      { k: 'owner', l: 'Owner', ...own(o && o !== 'company' ? o : null) }, { k: 'end', l: 'Due date', t: 'date', v: eYD('12-31'), req: true },
-      { k: 'status', l: 'Status', t: 'select', o: ['On-track', 'Off-track'] }, { k: 'desc', l: 'Description', opt: true, t: 'textarea' }],
+    { k: 'name', l: 'Title', req: true, ph: 'Add a title for the Rock' }, { k: 'team', l: 'Team', ...team(r.team) },
+    { k: 'owner', l: 'Owner', ...own(o && o !== 'company' ? o : null, r.team) }, { k: 'end', l: 'Due date', t: 'date', v: eYD('12-31'), req: true },
+    { k: 'status', l: 'Status', t: 'select', o: ['On-track', 'Off-track'] }, { k: 'desc', l: 'Description', opt: true, t: 'textarea' }],
       async v => {
         const newR = { id: ++eSeq, name: v.name, owner: v.owner, team: v.team, status: v.status, end: v.end, desc: v.desc, ms: [], company: v.type === 'company', archived: false };
         eRocks.push(newR); E.tab.rocks = 'list'; toast('Saving to Rock DocType...');
@@ -2121,45 +2198,45 @@ function eosDrawer(kind, rec, pre) {
         if (res && res.docname) newR.docname = res.docname;
         toast('Rock saved to ERP Document!');
       });
-  } else if (p === 'to-dos') eosForm(rec ? 'Edit To-Do in ERP' : 'Create To-Do in ERP', [{ k: 'name', l: 'Title', req: true, v: r.name }, { k: 'owner', l: 'Owner', ...own(r.owner) }, { k: 'due', l: 'Due date', t: 'date', v: r.due || eRel(7), req: true },
-      { k: 'team', l: 'Team', ...team(r.team || (E.f.todos.team === 'All Teams' ? null : E.f.todos.team)) }, { k: 'vis', l: 'Visibility', t: 'select', o: [['team', 'Team'], ['private', 'Private']], v: rec ? (r.priv ? 'private' : 'team') : (q.vis || E.tab.todos) }],
-      async v => {
-        if (rec) {
-          Object.assign(rec, { name: v.name, owner: v.owner, due: v.due, team: v.team, priv: v.vis === 'private' }); toast('Updating To Do...');
-          await apiCall('eos_core.eos_api.save_todo', { docname: rec.docname, name: v.name, owner: v.owner, due: v.due, team: v.team, priv: v.vis === 'private' });
-          toast('To Do DocType updated!');
-        } else {
-          const newT = { id: ++eSeq, name: v.name, owner: v.owner, team: v.team, due: v.due, done: false, archived: false, priv: v.vis === 'private' };
-          eTodos.push(newT); E.tab.todos = v.vis; toast('Saving To Do...');
-          const res = await apiCall('eos_core.eos_api.save_todo', { name: v.name, owner: v.owner, due: v.due, team: v.team, priv: v.vis === 'private' });
-          if (res && res.docname) newT.docname = res.docname;
-          toast('Saved to To Do DocType!');
-        }
-      });
+  } else if (p === 'to-dos') eosForm(rec ? 'Edit To-Do in ERP' : 'Create To-Do in ERP', [{ k: 'name', l: 'Title', req: true, v: r.name }, { k: 'team', l: 'Team', ...team(r.team) }, { k: 'owner', l: 'Owner', ...own(r.owner, r.team) }, { k: 'due', l: 'Due date', t: 'date', v: r.due || eRel(7), req: true },
+  { k: 'vis', l: 'Visibility', t: 'select', o: [['team', 'Team'], ['private', 'Private']], v: rec ? (r.priv ? 'private' : 'team') : (q.vis || E.tab.todos) }],
+    async v => {
+      if (rec) {
+        Object.assign(rec, { name: v.name, owner: v.owner, due: v.due, team: v.team, priv: v.vis === 'private' }); toast('Updating To Do...');
+        await apiCall('eos_core.eos_api.save_todo', { docname: rec.docname, name: v.name, owner: v.owner, due: v.due, team: v.team, priv: v.vis === 'private' });
+        toast('To Do DocType updated!');
+      } else {
+        const newT = { id: ++eSeq, name: v.name, owner: v.owner, team: v.team, due: v.due, done: false, archived: false, priv: v.vis === 'private' };
+        eTodos.push(newT); E.tab.todos = v.vis; toast('Saving To Do...');
+        const res = await apiCall('eos_core.eos_api.save_todo', { name: v.name, owner: v.owner, due: v.due, team: v.team, priv: v.vis === 'private' });
+        if (res && res.docname) newT.docname = res.docname;
+        toast('Saved to To Do DocType!');
+      }
+    });
   else if (p === 'issues') eosForm(rec ? 'Edit Issue in ERP' : 'Create Issue in ERP', [{ k: 'name', l: 'Title', req: true, v: r.name }, { k: 'desc', l: 'Description', opt: true, t: 'textarea', v: r.desc },
-      { k: 'pri', l: 'Priority', opt: true, t: 'select', o: [['', 'None'], 'High', 'Medium', 'Low', 'Critical'], v: r.pri || '' }, { k: 'team', l: 'Team', ...team(r.team || (E.f.issues.team === 'All Teams' ? null : E.f.issues.team)) },
-      { k: 'owner', l: 'Owner', ...own(r.owner) }, { k: 'term', l: 'Term', t: 'select', o: [['short', 'Short-Term'], ['long', 'Long-Term']], v: r.term || E.tab.issues }],
-      async v => {
-        if (rec) {
-          Object.assign(rec, { name: v.name, desc: v.desc, pri: v.pri, team: v.team, owner: v.owner, term: v.term }); toast('Updating Issue...');
-          await apiCall('eos_core.eos_api.save_issue', { docname: rec.docname, name: v.name, desc: v.desc, pri: v.pri, team: v.team, owner: v.owner, term: v.term });
-          toast('Issue DocType updated!');
-        } else {
-          const newI = { id: ++eSeq, name: v.name, desc: v.desc, pri: v.pri, team: v.team, owner: v.owner, term: v.term, archived: false, raised: eRel(0) };
-          eIssues.push(newI); E.tab.issues = v.term; toast('Saving Issue...');
-          const res = await apiCall('eos_core.eos_api.save_issue', { name: v.name, desc: v.desc, pri: v.pri, team: v.team, owner: v.owner, term: v.term });
-          if (res && res.docname) newI.docname = res.docname;
-          toast('Saved to Issue DocType!');
-        }
-      });
+  { k: 'pri', l: 'Priority', opt: true, t: 'select', o: [['', 'None'], 'High', 'Medium', 'Low', 'Critical'], v: r.pri || '' }, { k: 'team', l: 'Team', ...team(r.team) },
+  { k: 'owner', l: 'Owner', ...own(r.owner, r.team) }, { k: 'term', l: 'Term', t: 'select', o: [['short', 'Short-Term'], ['long', 'Long-Term']], v: r.term || E.tab.issues }],
+    async v => {
+      if (rec) {
+        Object.assign(rec, { name: v.name, desc: v.desc, pri: v.pri, team: v.team, owner: v.owner, term: v.term }); toast('Updating Issue...');
+        await apiCall('eos_core.eos_api.save_issue', { docname: rec.docname, name: v.name, desc: v.desc, pri: v.pri, team: v.team, owner: v.owner, term: v.term });
+        toast('Issue DocType updated!');
+      } else {
+        const newI = { id: ++eSeq, name: v.name, desc: v.desc, pri: v.pri, team: v.team, owner: v.owner, term: v.term, archived: false, raised: eRel(0) };
+        eIssues.push(newI); E.tab.issues = v.term; toast('Saving Issue...');
+        const res = await apiCall('eos_core.eos_api.save_issue', { name: v.name, desc: v.desc, pri: v.pri, team: v.team, owner: v.owner, term: v.term });
+        if (res && res.docname) newI.docname = res.docname;
+        toast('Saved to Issue DocType!');
+      }
+    });
   else if (p === 'meetings') eosForm('Schedule a Meeting in ERP', [{ k: 'title', l: 'Title', req: true, v: 'Weekly Level 10 Meeting™' }, { k: 'team', l: 'Team', ...team() }, { k: 'date', l: 'Date', t: 'date', v: eRel(1), req: true }, { k: 'time', l: 'Time', t: 'time', v: '09:00' }],
-      async v => {
-        const item = { title: v.title, team: v.team, date: v.date, time: v.time };
-        E.upcoming.push(item); E.upcoming.sort((a, b) => a.date.localeCompare(b.date)); E.tab.meet = 'upcoming'; toast('Scheduling in Level 10 Meeting...');
-        const res = await apiCall('eos_core.eos_api.start_meeting', { team: v.team, title: v.title });
-        if (res && res.docname) item.docname = res.docname;
-        toast('Meeting created in Level 10 Meeting DocType!');
-      });
+    async v => {
+      const item = { title: v.title, team: v.team, date: v.date, time: v.time };
+      E.upcoming.push(item); E.upcoming.sort((a, b) => a.date.localeCompare(b.date)); E.tab.meet = 'upcoming'; toast('Scheduling in Level 10 Meeting...');
+      const res = await apiCall('eos_core.eos_api.start_meeting', { team: v.team, title: v.title });
+      if (res && res.docname) item.docname = res.docname;
+      toast('Meeting created in Level 10 Meeting DocType!');
+    });
 }
 
 /* ---------- actions & backend sync ---------- */
@@ -2218,398 +2295,400 @@ async function eosAct(a, el, e) {
   const id = el.dataset.id;
   if (a !== 'eos-menu' && E.menu) E.menu = null;
   switch (a) {
-   case 'eos-menu': {
-     const k = id.indexOf(':'), t = id.slice(0, k), i = id.slice(k + 1);
-     if (E.menu && E.menu.t === t && String(E.menu.id) === i) E.menu = null; else { const b = el.getBoundingClientRect(); E.menu = { t, id: i, x: b.right, y: b.bottom, top: b.top }; }
-     renderMain(); break;
-   }
-   case 'eos-tab': {
-     const [k, t] = id.split(':');
-     E.tab[k] = t;
-     if (k === 'scorecard') {
-       E.f.scorecard.range = null;
-     }
-     S.q = '';
-     renderMain();
-     break;
-   }
-   case 'eos-tog': { const [p, k] = id.split('.'); E.f[p][k] = !E.f[p][k]; if (E.f[p].page) E.f[p].page = 1; renderMain(); break; }
-   case 'eos-cell': { if (e && e.target.tagName === 'INPUT') return; const [m, i] = id.split(':').map(Number); E.edit = { id: m, i }; renderMain(); break; }
-   case 'eos-issue-from': {
-     const [m, i] = id.split(':').map(Number), mm = eMeas.find(x => x.id === m), v = (mm.vals || [])[i], nm = `${mm.name} off goal (${eU(mm, v)} vs ${mm.op} ${eU(mm, mm.target)})`;
-     if (eIssues.some(x => x.name === nm)) return toast('Already in Issues');
-     const newI = { id: ++eSeq, name: nm, desc: 'Raised from the scorecard.', team: mm.team, owner: mm.owner, term: 'short', pri: 'High', archived: false, raised: eRel(0) };
-     eIssues.push(newI); toast('Creating Issue DocType...'); renderMain();
-     const res = await apiCall('eos_core.eos_api.save_issue', { name: nm, desc: 'Raised from scorecard.', pri: 'High', team: mm.team, owner: mm.owner });
-     if (res && res.docname) newI.docname = res.docname;
-     toast('Issue saved to ERP!');
-     break;
-   }
-   case 'eos-vto': E.vto = !E.vto; renderMain(); break;
-   case 'eos-grp': E.collapsed.has(id) ? E.collapsed.delete(id) : E.collapsed.add(id); renderMain(); break;
-   case 'eos-rock-open': { const n = +id; E.openRock.has(n) ? E.openRock.delete(n) : E.openRock.add(n); renderMain(); break; }
-   case 'eos-rock-st': {
-     const [r, s] = id.split(':'), k = eRocks.find(x => x.id === +r);
-     if (s === 'archive') {
-       k.archived = !k.archived; toast(k.archived ? 'Archiving Rock in ERP...' : 'Restoring Rock in ERP...');
-       await apiCall('eos_core.eos_api.update_rock_status', { docname: k.docname || k.name, status: 'archive' });
-     } else {
-       k.status = s; toast('Updating Rock in ERP...');
-       await apiCall('eos_core.eos_api.update_rock_status', { docname: k.docname || k.name, status: s });
-     }
-     toast('Rock updated in ERP!');
-     renderMain(); break;
-   }
-   case 'eos-ms-toggle': {
-     const [r, i] = id.split(':').map(Number), k = eRocks.find(x => x.id === r);
-     k.ms[i].done = !k.ms[i].done; renderMain();
-     toast('Updating Rock Milestone in ERP...');
-     await apiCall('eos_core.eos_api.toggle_rock_milestone', { docname: k.docname || k.name, milestone_idx: i, done: k.ms[i].done ? 1 : 0 });
-     toast('Rock Milestone updated in ERP!');
-     break;
-   }
-   case 'eos-ms-del': {
-     const [r, i] = id.split(':').map(Number), k = eRocks.find(x => x.id === r);
-     k.ms.splice(i, 1); toast('Deleting Rock Milestone in ERP...'); renderMain();
-     await apiCall('eos_core.eos_api.delete_rock_milestone', { docname: k.docname || k.name, milestone_idx: i });
-     toast('Rock Milestone deleted in ERP!');
-     break;
-   }
-   case 'eos-ms-add': { const n = +id; E.openRock.add(n); E.focusMs = n; renderMain(); break; }
-   case 'eos-add-rock': eosDrawer('rocks', null, { owner: id }); break;
-   case 'eos-add-todo': eosDrawer('to-dos', null, { vis: id === 'private' ? 'private' : 'team' }); break;
-   case 'eos-archive-done': {
-     const doneList = eTodos.filter(t => t.done && !t.priv && !t.archived);
-     doneList.forEach(t => t.archived = true);
-     toast('Archiving completed To-Dos in ERP...'); renderMain();
-     await apiCall('eos_core.eos_api.archive_completed_todos', { team: E.f.todos.team });
-     toast('To-Dos archived in ERP database!');
-     break;
-   }
-   case 'eos-todo-done': {
-     const t = eTodos.find(x => x.id === +id);
-     t.done = !t.done; renderMain();
-     toast('Updating To Do status in ERP...');
-     await apiCall('eos_core.eos_api.toggle_todo', { docname: t.docname || t.name, done: t.done ? 1 : 0 });
-     toast('To Do status committed to ERP!');
-     break;
-   }
-   case 'eos-todo-arch': {
-     const t = eTodos.find(x => x.id === +id);
-     t.archived = !t.archived; toast(t.archived ? 'Archiving To Do in ERP...' : 'Restoring To Do in ERP...'); renderMain();
-     await apiCall('eos_core.eos_api.archive_todo', { docname: t.docname || t.name, archived: t.archived ? 1 : 0 });
-     toast('To Do archive state updated in ERP!');
-     break;
-   }
-   case 'eos-edit-todo': eosDrawer('to-dos', eTodos.find(x => x.id === +id)); break;
-   case 'eos-issue-done': {
-     const i = eIssues.find(x => x.id === +id);
-     i.archived = !i.archived; toast(i.archived ? 'Solving Issue in ERP...' : 'Reopening Issue in ERP...'); renderMain();
-     await apiCall('eos_core.eos_api.toggle_issue', { docname: i.docname || i.name, solved: i.archived ? 1 : 0 });
-     toast(i.archived ? 'Issue solved in ERP Document!' : 'Issue reopened in ERP Document!');
-     break;
-   }
-   case 'eos-issue-arch': {
-     const i = eIssues.find(x => x.id === +id);
-     i.archived = !i.archived; toast(i.archived ? 'Archiving Issue in ERP...' : 'Restoring Issue in ERP...'); renderMain();
-     await apiCall('eos_core.eos_api.toggle_issue', { docname: i.docname || i.name, solved: i.archived ? 1 : 0 });
-     toast('Issue archive state updated in ERP!');
-     break;
-   }
-   case 'eos-edit-issue': eosDrawer('issues', eIssues.find(x => x.id === +id)); break;
-   case 'eos-page': { const [p, d] = id.split(':'); E.f[p].page += +d; renderMain(); break; }
-   case 'eos-add-issue': eosDrawer('issues', null); break;
-   case 'eos-meet-tab': {
-     E.tab.meet = id || 'upcoming';
-     renderMain();
-     break;
-   }
-   case 'eos-open-start-modal': {
-     E.meeting_modal = true;
-     renderMain();
-     break;
-   }
-   case 'eos-close-modal': {
-     E.meeting_modal = false;
-     renderMain();
-     break;
-   }
-   case 'eos-start-l10': {
-     const agendaId = (el && el.dataset.agenda) || id || 'l10';
-     E.meeting_modal = false;
-     await startL10Meeting(agendaId);
-     break;
-   }
-   case 'eos-print-agenda': {
-     window.print();
-     break;
-   }
-   case 'eos-schedule-meet': {
-     toast('Scheduled Meetings sync with your team calendar in ERP.');
-     break;
-   }
-   case 'eos-step': {
-     const gn = document.getElementById('eos-good-news-input');
-     const curAtt = (E.meeting_attendees || [])[E.meeting_sharing_idx || 0];
-     if (gn && curAtt && E.meeting_step === 0) {
-       E.meeting_good_news = E.meeting_good_news || {};
-       E.meeting_good_news[curAtt] = gn.value;
-     }
-     E.meeting_step_times = E.meeting_step_times || {};
-     E.meeting_step_times[E.meeting_step] = E.meeting_step_seconds || 0;
-     E.meeting_step = parseInt(id, 10) || 0;
-     E.meeting_step_seconds = E.meeting_step_times[E.meeting_step] || 0;
-     renderMain();
-     break;
-   }
-   case 'eos-step-prev': {
-     const gn = document.getElementById('eos-good-news-input');
-     const curAtt = (E.meeting_attendees || [])[E.meeting_sharing_idx || 0];
-     if (gn && curAtt && E.meeting_step === 0) {
-       E.meeting_good_news = E.meeting_good_news || {};
-       E.meeting_good_news[curAtt] = gn.value;
-     }
-     if (E.meeting_step > 0) {
-       E.meeting_step_times = E.meeting_step_times || {};
-       E.meeting_step_times[E.meeting_step] = E.meeting_step_seconds || 0;
-       E.meeting_step--;
-       E.meeting_step_seconds = E.meeting_step_times[E.meeting_step] || 0;
-       renderMain();
-     }
-     break;
-   }
-   case 'eos-step-next': {
-     const gn = document.getElementById('eos-good-news-input');
-     const curAtt = (E.meeting_attendees || [])[E.meeting_sharing_idx || 0];
-     if (gn && curAtt && E.meeting_step === 0) {
-       E.meeting_good_news = E.meeting_good_news || {};
-       E.meeting_good_news[curAtt] = gn.value;
-     }
-     const steps = getL10AgendaSteps(E.meeting_agenda_type);
-     if (E.meeting_step < steps.length - 1) {
-       E.meeting_step_times = E.meeting_step_times || {};
-       E.meeting_step_times[E.meeting_step] = E.meeting_step_seconds || 0;
-       E.meeting_step++;
-       E.meeting_step_seconds = E.meeting_step_times[E.meeting_step] || 0;
-       renderMain();
-     } else {
-       await eosFinishMeeting();
-     }
-     break;
-   }
-   case 'eos-mark-all-present': {
-     (E.meeting_attendees || []).forEach(att => {
-       E.meeting_attendance = E.meeting_attendance || {};
-       E.meeting_attendance[att] = true;
-     });
-     renderMain();
-     break;
-   }
-   case 'eos-toggle-attendance': {
-     if (id) {
-       E.meeting_attendance = E.meeting_attendance || {};
-       E.meeting_attendance[id] = !E.meeting_attendance[id];
-       renderMain();
-     }
-     break;
-   }
-   case 'eos-sharer-prev': {
-     const gn = document.getElementById('eos-good-news-input');
-     const curAtt = (E.meeting_attendees || [])[E.meeting_sharing_idx || 0];
-     if (gn && curAtt) {
-       E.meeting_good_news = E.meeting_good_news || {};
-       E.meeting_good_news[curAtt] = gn.value;
-     }
-     if (E.meeting_sharing_idx > 0) {
-       E.meeting_sharing_idx--;
-       renderMain();
-     }
-     break;
-   }
-   case 'eos-sharer-next': {
-     const gn = document.getElementById('eos-good-news-input');
-     const curAtt = (E.meeting_attendees || [])[E.meeting_sharing_idx || 0];
-     if (gn && curAtt) {
-       E.meeting_good_news = E.meeting_good_news || {};
-       E.meeting_good_news[curAtt] = gn.value;
-     }
-     const atts = E.meeting_attendees || [];
-     if (E.meeting_sharing_idx < atts.length - 1) {
-       E.meeting_sharing_idx++;
-       renderMain();
-     } else {
-       E.meeting_step_times = E.meeting_step_times || {};
-       E.meeting_step_times[0] = E.meeting_step_seconds || 0;
-       E.meeting_step = 1;
-       E.meeting_step_seconds = E.meeting_step_times[1] || 0;
-       renderMain();
-     }
-     break;
-   }
-   case 'eos-drop-ids': {
-     const title = (el && el.dataset.title) || 'Meeting Issue';
-     const type = (el && el.dataset.type) || 'Meeting';
-     await eosDropToIds(title, type);
-     break;
-   }
-   case 'eos-create-headline': {
-     eosForm('Create Headline', [
-       { k: 'title', l: 'Headline Title', req: true, t: 'text' },
-       { k: 'type', l: 'Category', req: true, t: 'select', o: [['Customer', 'Customer Headline'], ['Employee', 'Employee Headline']] },
-       { k: 'author', l: 'Author / Owner', req: true, t: 'text', v: EOS_ME }
-     ], async vals => {
-       if (!E.headlines) E.headlines = [];
-       E.headlines.push({ title: vals.title, type: vals.type, author: vals.author });
-       toast('Headline added to meeting!');
-       renderMain();
-     });
-     break;
-   }
-   case 'eos-create-cascading': {
-     eosForm('Create Cascading Message', [
-       { k: 'message', l: 'Message to cascade to company / departments', req: true, t: 'textarea' }
-     ], async vals => {
-       if (!E.cascading_messages) E.cascading_messages = [];
-       E.cascading_messages.push({ message: vals.message });
-       toast('Cascading message added!');
-       renderMain();
-     });
-     break;
-   }
-   case 'eos-l10-todo-toggle': {
-     const item = eTodos.find(x => x.id === +id);
-     if (item) {
-       item.done = !item.done;
-       renderMain();
-       await apiCall('eos_core.eos_api.toggle_todo', { docname: item.docname || item.name, done: item.done ? 1 : 0 });
-     }
-     break;
-   }
-   case 'eos-solve-issue': {
-     const item = eIssues.find(x => x.id === +id);
-     if (item) {
-       item.archived = true;
-       toast('Solving issue in ERP...');
-       renderMain();
-       await apiCall('eos_core.eos_api.toggle_issue', { docname: item.docname || item.name, solved: 1 });
-       toast('Issue solved and marked in DocType!');
-     }
-     break;
-   }
-   case 'eos-rock-st-cycle': {
-     const r = eRocks.find(x => x.id === +id);
-     if (r) {
-       const order = ['On-track', 'Off-track', 'Done'];
-       const next = order[(order.indexOf(r.status) + 1) % order.length] || 'On-track';
-       r.status = next;
-       renderMain();
-       await apiCall('eos_core.eos_api.update_rock_status', { docname: r.docname || r.name, status: next });
-       toast(`Rock status updated to ${next}!`);
-     }
-     break;
-   }
-   case 'eos-l10-tools': {
-     E.tools_menu_open = !E.tools_menu_open;
-     renderMain();
-     break;
-   }
-   case 'eos-open-tool-drawer': {
-     E.tools_menu_open = false;
-     E.active_tool_drawer = id;
-     renderMain();
-     break;
-   }
-   case 'eos-close-tool-drawer': {
-     E.active_tool_drawer = null;
-     renderMain();
-     break;
-   }
-   case 'eos-l10-notes': {
-     eosForm('Meeting Notes', [
-       { k: 'notes', l: 'Meeting Notes & Takeaways', opt: true, t: 'textarea', v: E.meeting_notes || '' }
-     ], vals => {
-       E.meeting_notes = vals.notes;
-       toast('Meeting notes saved!');
-       renderMain();
-     });
-     break;
-   }
-   case 'eos-l10-exit': {
-     if (confirm('Are you sure you want to exit this meeting session? Progress will be saved.')) {
-       if (E.meeting_interval) clearInterval(E.meeting_interval);
-       E.meeting_in_progress = false;
-       renderMain();
-     }
-     break;
-   }
-   case 'eos-finish-meeting': {
-     await eosFinishMeeting();
-     break;
-   }
-   case 'eos-meet-start': {
-     await startL10Meeting('l10');
-     break;
-   }
-   case 'eos-meet-end': {
-     await eosFinishMeeting();
-     break;
-   }
-   case 'eos-view-past-meeting': {
-     const m = (E.past || []).find(x => x.docname === id || x.title === id || x.name === id || (x.team + '-' + x.when) === id) || {
-       docname: id,
-       title: id,
-       team: (E.f && E.f.meet && E.f.meet.team) || 'Leadership Team',
-       when: 'Recent',
-       time: '3:00 p.m.',
-       secs: 5400,
-       rating: 8.5,
-       fac: EOS_ME || 'Administrator',
-       notes: 'Level 10 Meeting completed'
-     };
-     eosOpenPastMeetingDrawer(m);
-     break;
-   }
-   case 'eos-open-sc': {
-     const sc = eScorecards.find(x => x.name === id || x.id === id);
-     if (sc) {
-       E.f.scorecard.team = sc.team;
-       const tf = (sc.timeframe || 'weekly').toLowerCase();
-       E.tab.scorecard = (tf === 'week' || tf === 'weekly') ? 'weekly' : (tf === 'month' || tf === 'monthly') ? 'monthly' : (tf === 'quarter' || tf === 'quarterly') ? 'quarterly' : (tf === 'annual') ? 'annual' : 'weekly';
-       E.f.scorecard.range = null;
-       renderMain();
-     }
-     break;
-   }
-   case 'eos-add-measurable': eosDrawer('measurable', null); break;
-   case 'eos-edit-measurable': eosDrawer('measurable', eMeas.find(x => x.id === +id)); break;
-   case 'eos-toggle-owner-filter': {
-     E.owner_filter_open = !E.owner_filter_open;
-     E.owner_filter_search = '';
-     renderMain();
-     if (E.owner_filter_open) {
-       setTimeout(() => {
-         const inp = document.querySelector('.nn-owner-filter-search');
-         if (inp) inp.focus();
-       }, 50);
-     }
-     break;
-   }
-   case 'eos-sc-optimize': {
-     const tf = E.tab.scorecard === 'scorecards' ? 'weekly' : (E.tab.scorecard || 'weekly');
-     let mList = eMeas.filter(m => (!m.freq && tf === 'weekly') || m.freq === tf);
-     if (E.f.scorecard.team && E.f.scorecard.team !== 'All Teams') {
-       mList = mList.filter(m => !m.team || m.team === E.f.scorecard.team);
-     }
-     let onTrack = 0, offTrack = 0;
-     mList.forEach(m => {
-       const v = (m.vals || []).find(x => x != null);
-       if (v != null) {
-         if (ePass(m, v)) onTrack++; else offTrack++;
-       }
-     });
-     const passRate = (onTrack + offTrack) > 0 ? Math.round((onTrack / (onTrack + offTrack)) * 100) : 100;
-     
-     eosModal('Optimize Scorecard', `
+    case 'eos-menu': {
+      const k = id.indexOf(':'), t = id.slice(0, k), i = id.slice(k + 1);
+      if (E.menu && E.menu.t === t && String(E.menu.id) === i) E.menu = null; else { const b = el.getBoundingClientRect(); E.menu = { t, id: i, x: b.right, y: b.bottom, top: b.top }; }
+      renderMain(); break;
+    }
+    case 'eos-tab': {
+      const [k, t] = id.split(':');
+      E.tab[k] = t;
+      if (k === 'scorecard') {
+        E.f.scorecard.range = null;
+        E.f.scorecard.owners = null;
+        E.owner_filter_open = false;
+      }
+      S.q = '';
+      renderMain();
+      break;
+    }
+    case 'eos-tog': { const [p, k] = id.split('.'); E.f[p][k] = !E.f[p][k]; if (E.f[p].page) E.f[p].page = 1; renderMain(); break; }
+    case 'eos-cell': { if (e && e.target.tagName === 'INPUT') return; const [m, i] = id.split(':').map(Number); E.edit = { id: m, i }; renderMain(); break; }
+    case 'eos-issue-from': {
+      const [m, i] = id.split(':').map(Number), mm = eMeas.find(x => x.id === m), v = (mm.vals || [])[i], nm = `${mm.name} off goal (${eU(mm, v)} vs ${mm.op} ${eU(mm, mm.target)})`;
+      if (eIssues.some(x => x.name === nm)) return toast('Already in Issues');
+      const newI = { id: ++eSeq, name: nm, desc: 'Raised from the scorecard.', team: mm.team, owner: mm.owner, term: 'short', pri: 'High', archived: false, raised: eRel(0) };
+      eIssues.push(newI); toast('Creating Issue DocType...'); renderMain();
+      const res = await apiCall('eos_core.eos_api.save_issue', { name: nm, desc: 'Raised from scorecard.', pri: 'High', team: mm.team, owner: mm.owner });
+      if (res && res.docname) newI.docname = res.docname;
+      toast('Issue saved to ERP!');
+      break;
+    }
+    case 'eos-vto': E.vto = !E.vto; renderMain(); break;
+    case 'eos-grp': E.collapsed.has(id) ? E.collapsed.delete(id) : E.collapsed.add(id); renderMain(); break;
+    case 'eos-rock-open': { const n = +id; E.openRock.has(n) ? E.openRock.delete(n) : E.openRock.add(n); renderMain(); break; }
+    case 'eos-rock-st': {
+      const [r, s] = id.split(':'), k = eRocks.find(x => x.id === +r);
+      if (s === 'archive') {
+        k.archived = !k.archived; toast(k.archived ? 'Archiving Rock in ERP...' : 'Restoring Rock in ERP...');
+        await apiCall('eos_core.eos_api.update_rock_status', { docname: k.docname || k.name, status: 'archive' });
+      } else {
+        k.status = s; toast('Updating Rock in ERP...');
+        await apiCall('eos_core.eos_api.update_rock_status', { docname: k.docname || k.name, status: s });
+      }
+      toast('Rock updated in ERP!');
+      renderMain(); break;
+    }
+    case 'eos-ms-toggle': {
+      const [r, i] = id.split(':').map(Number), k = eRocks.find(x => x.id === r);
+      k.ms[i].done = !k.ms[i].done; renderMain();
+      toast('Updating Rock Milestone in ERP...');
+      await apiCall('eos_core.eos_api.toggle_rock_milestone', { docname: k.docname || k.name, milestone_idx: i, done: k.ms[i].done ? 1 : 0 });
+      toast('Rock Milestone updated in ERP!');
+      break;
+    }
+    case 'eos-ms-del': {
+      const [r, i] = id.split(':').map(Number), k = eRocks.find(x => x.id === r);
+      k.ms.splice(i, 1); toast('Deleting Rock Milestone in ERP...'); renderMain();
+      await apiCall('eos_core.eos_api.delete_rock_milestone', { docname: k.docname || k.name, milestone_idx: i });
+      toast('Rock Milestone deleted in ERP!');
+      break;
+    }
+    case 'eos-ms-add': { const n = +id; E.openRock.add(n); E.focusMs = n; renderMain(); break; }
+    case 'eos-add-rock': eosDrawer('rocks', null, { owner: id }); break;
+    case 'eos-add-todo': eosDrawer('to-dos', null, { vis: id === 'private' ? 'private' : 'team' }); break;
+    case 'eos-archive-done': {
+      const doneList = eTodos.filter(t => t.done && !t.priv && !t.archived);
+      doneList.forEach(t => t.archived = true);
+      toast('Archiving completed To-Dos in ERP...'); renderMain();
+      await apiCall('eos_core.eos_api.archive_completed_todos', { team: E.f.todos.team });
+      toast('To-Dos archived in ERP database!');
+      break;
+    }
+    case 'eos-todo-done': {
+      const t = eTodos.find(x => x.id === +id);
+      t.done = !t.done; renderMain();
+      toast('Updating To Do status in ERP...');
+      await apiCall('eos_core.eos_api.toggle_todo', { docname: t.docname || t.name, done: t.done ? 1 : 0 });
+      toast('To Do status committed to ERP!');
+      break;
+    }
+    case 'eos-todo-arch': {
+      const t = eTodos.find(x => x.id === +id);
+      t.archived = !t.archived; toast(t.archived ? 'Archiving To Do in ERP...' : 'Restoring To Do in ERP...'); renderMain();
+      await apiCall('eos_core.eos_api.archive_todo', { docname: t.docname || t.name, archived: t.archived ? 1 : 0 });
+      toast('To Do archive state updated in ERP!');
+      break;
+    }
+    case 'eos-edit-todo': eosDrawer('to-dos', eTodos.find(x => x.id === +id)); break;
+    case 'eos-issue-done': {
+      const i = eIssues.find(x => x.id === +id);
+      i.archived = !i.archived; toast(i.archived ? 'Solving Issue in ERP...' : 'Reopening Issue in ERP...'); renderMain();
+      await apiCall('eos_core.eos_api.toggle_issue', { docname: i.docname || i.name, solved: i.archived ? 1 : 0 });
+      toast(i.archived ? 'Issue solved in ERP Document!' : 'Issue reopened in ERP Document!');
+      break;
+    }
+    case 'eos-issue-arch': {
+      const i = eIssues.find(x => x.id === +id);
+      i.archived = !i.archived; toast(i.archived ? 'Archiving Issue in ERP...' : 'Restoring Issue in ERP...'); renderMain();
+      await apiCall('eos_core.eos_api.toggle_issue', { docname: i.docname || i.name, solved: i.archived ? 1 : 0 });
+      toast('Issue archive state updated in ERP!');
+      break;
+    }
+    case 'eos-edit-issue': eosDrawer('issues', eIssues.find(x => x.id === +id)); break;
+    case 'eos-page': { const [p, d] = id.split(':'); E.f[p].page += +d; renderMain(); break; }
+    case 'eos-add-issue': eosDrawer('issues', null); break;
+    case 'eos-meet-tab': {
+      E.tab.meet = id || 'upcoming';
+      renderMain();
+      break;
+    }
+    case 'eos-open-start-modal': {
+      E.meeting_modal = true;
+      renderMain();
+      break;
+    }
+    case 'eos-close-modal': {
+      E.meeting_modal = false;
+      renderMain();
+      break;
+    }
+    case 'eos-start-l10': {
+      const agendaId = (el && el.dataset.agenda) || id || 'l10';
+      E.meeting_modal = false;
+      await startL10Meeting(agendaId);
+      break;
+    }
+    case 'eos-print-agenda': {
+      window.print();
+      break;
+    }
+    case 'eos-schedule-meet': {
+      toast('Scheduled Meetings sync with your team calendar in ERP.');
+      break;
+    }
+    case 'eos-step': {
+      const gn = document.getElementById('eos-good-news-input');
+      const curAtt = (E.meeting_attendees || [])[E.meeting_sharing_idx || 0];
+      if (gn && curAtt && E.meeting_step === 0) {
+        E.meeting_good_news = E.meeting_good_news || {};
+        E.meeting_good_news[curAtt] = gn.value;
+      }
+      E.meeting_step_times = E.meeting_step_times || {};
+      E.meeting_step_times[E.meeting_step] = E.meeting_step_seconds || 0;
+      E.meeting_step = parseInt(id, 10) || 0;
+      E.meeting_step_seconds = E.meeting_step_times[E.meeting_step] || 0;
+      renderMain();
+      break;
+    }
+    case 'eos-step-prev': {
+      const gn = document.getElementById('eos-good-news-input');
+      const curAtt = (E.meeting_attendees || [])[E.meeting_sharing_idx || 0];
+      if (gn && curAtt && E.meeting_step === 0) {
+        E.meeting_good_news = E.meeting_good_news || {};
+        E.meeting_good_news[curAtt] = gn.value;
+      }
+      if (E.meeting_step > 0) {
+        E.meeting_step_times = E.meeting_step_times || {};
+        E.meeting_step_times[E.meeting_step] = E.meeting_step_seconds || 0;
+        E.meeting_step--;
+        E.meeting_step_seconds = E.meeting_step_times[E.meeting_step] || 0;
+        renderMain();
+      }
+      break;
+    }
+    case 'eos-step-next': {
+      const gn = document.getElementById('eos-good-news-input');
+      const curAtt = (E.meeting_attendees || [])[E.meeting_sharing_idx || 0];
+      if (gn && curAtt && E.meeting_step === 0) {
+        E.meeting_good_news = E.meeting_good_news || {};
+        E.meeting_good_news[curAtt] = gn.value;
+      }
+      const steps = getL10AgendaSteps(E.meeting_agenda_type);
+      if (E.meeting_step < steps.length - 1) {
+        E.meeting_step_times = E.meeting_step_times || {};
+        E.meeting_step_times[E.meeting_step] = E.meeting_step_seconds || 0;
+        E.meeting_step++;
+        E.meeting_step_seconds = E.meeting_step_times[E.meeting_step] || 0;
+        renderMain();
+      } else {
+        await eosFinishMeeting();
+      }
+      break;
+    }
+    case 'eos-mark-all-present': {
+      (E.meeting_attendees || []).forEach(att => {
+        E.meeting_attendance = E.meeting_attendance || {};
+        E.meeting_attendance[att] = true;
+      });
+      renderMain();
+      break;
+    }
+    case 'eos-toggle-attendance': {
+      if (id) {
+        E.meeting_attendance = E.meeting_attendance || {};
+        E.meeting_attendance[id] = !E.meeting_attendance[id];
+        renderMain();
+      }
+      break;
+    }
+    case 'eos-sharer-prev': {
+      const gn = document.getElementById('eos-good-news-input');
+      const curAtt = (E.meeting_attendees || [])[E.meeting_sharing_idx || 0];
+      if (gn && curAtt) {
+        E.meeting_good_news = E.meeting_good_news || {};
+        E.meeting_good_news[curAtt] = gn.value;
+      }
+      if (E.meeting_sharing_idx > 0) {
+        E.meeting_sharing_idx--;
+        renderMain();
+      }
+      break;
+    }
+    case 'eos-sharer-next': {
+      const gn = document.getElementById('eos-good-news-input');
+      const curAtt = (E.meeting_attendees || [])[E.meeting_sharing_idx || 0];
+      if (gn && curAtt) {
+        E.meeting_good_news = E.meeting_good_news || {};
+        E.meeting_good_news[curAtt] = gn.value;
+      }
+      const atts = E.meeting_attendees || [];
+      if (E.meeting_sharing_idx < atts.length - 1) {
+        E.meeting_sharing_idx++;
+        renderMain();
+      } else {
+        E.meeting_step_times = E.meeting_step_times || {};
+        E.meeting_step_times[0] = E.meeting_step_seconds || 0;
+        E.meeting_step = 1;
+        E.meeting_step_seconds = E.meeting_step_times[1] || 0;
+        renderMain();
+      }
+      break;
+    }
+    case 'eos-drop-ids': {
+      const title = (el && el.dataset.title) || 'Meeting Issue';
+      const type = (el && el.dataset.type) || 'Meeting';
+      await eosDropToIds(title, type);
+      break;
+    }
+    case 'eos-create-headline': {
+      eosForm('Create Headline', [
+        { k: 'title', l: 'Headline Title', req: true, t: 'text' },
+        { k: 'type', l: 'Category', req: true, t: 'select', o: [['Customer', 'Customer Headline'], ['Employee', 'Employee Headline']] },
+        { k: 'author', l: 'Author / Owner', req: true, t: 'text', v: EOS_ME }
+      ], async vals => {
+        if (!E.headlines) E.headlines = [];
+        E.headlines.push({ title: vals.title, type: vals.type, author: vals.author });
+        toast('Headline added to meeting!');
+        renderMain();
+      });
+      break;
+    }
+    case 'eos-create-cascading': {
+      eosForm('Create Cascading Message', [
+        { k: 'message', l: 'Message to cascade to company / departments', req: true, t: 'textarea' }
+      ], async vals => {
+        if (!E.cascading_messages) E.cascading_messages = [];
+        E.cascading_messages.push({ message: vals.message });
+        toast('Cascading message added!');
+        renderMain();
+      });
+      break;
+    }
+    case 'eos-l10-todo-toggle': {
+      const item = eTodos.find(x => x.id === +id);
+      if (item) {
+        item.done = !item.done;
+        renderMain();
+        await apiCall('eos_core.eos_api.toggle_todo', { docname: item.docname || item.name, done: item.done ? 1 : 0 });
+      }
+      break;
+    }
+    case 'eos-solve-issue': {
+      const item = eIssues.find(x => x.id === +id);
+      if (item) {
+        item.archived = true;
+        toast('Solving issue in ERP...');
+        renderMain();
+        await apiCall('eos_core.eos_api.toggle_issue', { docname: item.docname || item.name, solved: 1 });
+        toast('Issue solved and marked in DocType!');
+      }
+      break;
+    }
+    case 'eos-rock-st-cycle': {
+      const r = eRocks.find(x => x.id === +id);
+      if (r) {
+        const order = ['On-track', 'Off-track', 'Done'];
+        const next = order[(order.indexOf(r.status) + 1) % order.length] || 'On-track';
+        r.status = next;
+        renderMain();
+        await apiCall('eos_core.eos_api.update_rock_status', { docname: r.docname || r.name, status: next });
+        toast(`Rock status updated to ${next}!`);
+      }
+      break;
+    }
+    case 'eos-l10-tools': {
+      E.tools_menu_open = !E.tools_menu_open;
+      renderMain();
+      break;
+    }
+    case 'eos-open-tool-drawer': {
+      E.tools_menu_open = false;
+      E.active_tool_drawer = id;
+      renderMain();
+      break;
+    }
+    case 'eos-close-tool-drawer': {
+      E.active_tool_drawer = null;
+      renderMain();
+      break;
+    }
+    case 'eos-l10-notes': {
+      eosForm('Meeting Notes', [
+        { k: 'notes', l: 'Meeting Notes & Takeaways', opt: true, t: 'textarea', v: E.meeting_notes || '' }
+      ], vals => {
+        E.meeting_notes = vals.notes;
+        toast('Meeting notes saved!');
+        renderMain();
+      });
+      break;
+    }
+    case 'eos-l10-exit': {
+      if (confirm('Are you sure you want to exit this meeting session? Progress will be saved.')) {
+        if (E.meeting_interval) clearInterval(E.meeting_interval);
+        E.meeting_in_progress = false;
+        renderMain();
+      }
+      break;
+    }
+    case 'eos-finish-meeting': {
+      await eosFinishMeeting();
+      break;
+    }
+    case 'eos-meet-start': {
+      await startL10Meeting('l10');
+      break;
+    }
+    case 'eos-meet-end': {
+      await eosFinishMeeting();
+      break;
+    }
+    case 'eos-view-past-meeting': {
+      const m = (E.past || []).find(x => x.docname === id || x.title === id || x.name === id || (x.team + '-' + x.when) === id) || {
+        docname: id,
+        title: id,
+        team: (E.f && E.f.meet && E.f.meet.team) || 'Leadership Team',
+        when: 'Recent',
+        time: '3:00 p.m.',
+        secs: 5400,
+        rating: 8.5,
+        fac: EOS_ME || 'Administrator',
+        notes: 'Level 10 Meeting completed'
+      };
+      eosOpenPastMeetingDrawer(m);
+      break;
+    }
+    case 'eos-open-sc': {
+      const sc = eScorecards.find(x => x.name === id || x.id === id);
+      if (sc) {
+        E.f.scorecard.team = sc.team;
+        const tf = (sc.timeframe || 'weekly').toLowerCase();
+        E.tab.scorecard = (tf === 'week' || tf === 'weekly') ? 'weekly' : (tf === 'month' || tf === 'monthly') ? 'monthly' : (tf === 'quarter' || tf === 'quarterly') ? 'quarterly' : (tf === 'annual') ? 'annual' : 'weekly';
+        E.f.scorecard.range = null;
+        renderMain();
+      }
+      break;
+    }
+    case 'eos-add-measurable': eosDrawer('measurable', null); break;
+    case 'eos-edit-measurable': eosDrawer('measurable', eMeas.find(x => x.id === +id)); break;
+    case 'eos-toggle-owner-filter': {
+      E.owner_filter_open = !E.owner_filter_open;
+      E.owner_filter_search = '';
+      renderMain();
+      if (E.owner_filter_open) {
+        setTimeout(() => {
+          const inp = document.querySelector('.nn-owner-filter-search');
+          if (inp) inp.focus();
+        }, 50);
+      }
+      break;
+    }
+    case 'eos-sc-optimize': {
+      const tf = E.tab.scorecard === 'scorecards' ? 'weekly' : (E.tab.scorecard || 'weekly');
+      let mList = eMeas.filter(m => (!m.freq && tf === 'weekly') || m.freq === tf);
+      if (E.f.scorecard.team && E.f.scorecard.team !== 'All Teams') {
+        mList = mList.filter(m => !m.team || m.team === E.f.scorecard.team);
+      }
+      let onTrack = 0, offTrack = 0;
+      mList.forEach(m => {
+        const v = (m.vals || []).find(x => x != null);
+        if (v != null) {
+          if (ePass(m, v)) onTrack++; else offTrack++;
+        }
+      });
+      const passRate = (onTrack + offTrack) > 0 ? Math.round((onTrack / (onTrack + offTrack)) * 100) : 100;
+
+      eosModal('Optimize Scorecard', `
        <div style="padding:16px">
          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;text-align:center">
            <div style="background:#f8fafc;padding:12px;border-radius:8px;border:1px solid #e2e8f0">
@@ -2639,77 +2718,77 @@ async function eosAct(a, el, e) {
          </div>
        </div>
      `);
-     break;
-   }
-   case 'eos-sc-test-data': {
-     toast('Generating sample scorecard test data with red and green boxes...');
-     const team = E.f.scorecard.team && E.f.scorecard.team !== 'All Teams' ? E.f.scorecard.team : null;
-     try {
-       await apiCall('eos_core.eos_core.doctype.scorecard.scorecard.generate_test_scorecard_data', {
-         team: team,
-         force: 1
-       });
-       await loadEosFromDocTypes();
-       toast('Test data generated with red and green boxes!');
-       renderMain();
-     } catch (err) {
-       eMeas.forEach(m => {
-         m.vals = m.vals || [];
-         for (let i = 0; i < 13; i++) {
-           const target = m.target || 10;
-           const pass = (i % 3 !== 0);
-           const factor = pass ? (1 + (i % 4) * 0.1) : 0.8;
-           m.vals[i] = Math.round(target * factor * 10) / 10;
-         }
-       });
-       toast('Sample test data generated across measurables!');
-       renderMain();
-     }
-     break;
-   }
-   case 'eos-sc-sel-all': {
-     if (!S.sel) S.sel = new Set();
-     if (S.sel.size >= eScorecards.length) S.sel.clear();
-     else eScorecards.forEach(r => S.sel.add(r.id));
-     renderMain();
-     break;
-   }
-   case 'eos-sc-sel-row': {
-     if (!S.sel) S.sel = new Set();
-     if (S.sel.has(id)) S.sel.delete(id);
-     else S.sel.add(id);
-     renderMain();
-     break;
-   }
-   case 'eos-sc-size': {
-     E.f.scorecard.per = id;
-     renderMain();
-     break;
-   }
-   case 'eos-sc-clear-f': {
-     E.f.scorecard.q_id = '';
-     E.f.scorecard.team = 'All Teams';
-     E.f.scorecard.timeframe = 'All';
-     S.q = '';
-     renderMain();
-     break;
-   }
-   case 'eos-refresh': {
-     toast('Refreshing live from Frappe DocTypes...');
-     await loadEosFromDocTypes();
-     toast('All pages refreshed with ERP data!');
-     renderMain();
-     break;
-   }
-   case 'eos-sc-fav': {
-     toast('Scorecard favorited');
-     break;
-   }
-   case 'eos-sc-fav-all': {
-     toast('Filter by favorites');
-     break;
-   }
-   case 'eos-print': window.print(); break;
+      break;
+    }
+    case 'eos-sc-test-data': {
+      toast('Generating sample scorecard test data with red and green boxes...');
+      const team = E.f.scorecard.team && E.f.scorecard.team !== 'All Teams' ? E.f.scorecard.team : null;
+      try {
+        await apiCall('eos_core.eos_core.doctype.scorecard.scorecard.generate_test_scorecard_data', {
+          team: team,
+          force: 1
+        });
+        await loadEosFromDocTypes();
+        toast('Test data generated with red and green boxes!');
+        renderMain();
+      } catch (err) {
+        eMeas.forEach(m => {
+          m.vals = m.vals || [];
+          for (let i = 0; i < 13; i++) {
+            const target = m.target || 10;
+            const pass = (i % 3 !== 0);
+            const factor = pass ? (1 + (i % 4) * 0.1) : 0.8;
+            m.vals[i] = Math.round(target * factor * 10) / 10;
+          }
+        });
+        toast('Sample test data generated across measurables!');
+        renderMain();
+      }
+      break;
+    }
+    case 'eos-sc-sel-all': {
+      if (!S.sel) S.sel = new Set();
+      if (S.sel.size >= eScorecards.length) S.sel.clear();
+      else eScorecards.forEach(r => S.sel.add(r.id));
+      renderMain();
+      break;
+    }
+    case 'eos-sc-sel-row': {
+      if (!S.sel) S.sel = new Set();
+      if (S.sel.has(id)) S.sel.delete(id);
+      else S.sel.add(id);
+      renderMain();
+      break;
+    }
+    case 'eos-sc-size': {
+      E.f.scorecard.per = id;
+      renderMain();
+      break;
+    }
+    case 'eos-sc-clear-f': {
+      E.f.scorecard.q_id = '';
+      E.f.scorecard.team = 'All Teams';
+      E.f.scorecard.timeframe = 'All';
+      S.q = '';
+      renderMain();
+      break;
+    }
+    case 'eos-refresh': {
+      toast('Refreshing live from Frappe DocTypes...');
+      await loadEosFromDocTypes();
+      toast('All pages refreshed with ERP data!');
+      renderMain();
+      break;
+    }
+    case 'eos-sc-fav': {
+      toast('Scorecard favorited');
+      break;
+    }
+    case 'eos-sc-fav-all': {
+      toast('Filter by favorites');
+      break;
+    }
+    case 'eos-print': window.print(); break;
   }
 }
 
@@ -2771,11 +2850,15 @@ document.addEventListener('input', e => {
   const d = e.target.dataset; if (!d || !d.eosF) return;
   const [p, key] = d.eosF.split('.');
   E.f[p][key] = e.target.value;
+  if (p === 'scorecard' && key === 'team') {
+    E.f.scorecard.owners = null;
+    E.owner_filter_open = false;
+  }
   if (key !== 'page' && E.f[p].page) E.f[p].page = 1;
   const pos = e.target.selectionStart;
   renderMain();
   const el = document.querySelector(`[data-eos-f="${p}.${key}"]`);
-  if (el && pos != null) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (_) {} }
+  if (el && pos != null) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (_) { } }
 });
 document.addEventListener('change', async e => {
   if (e.target.classList.contains('nn-owner-filter-all')) {
@@ -2792,11 +2875,8 @@ document.addEventListener('change', async e => {
     const popover = e.target.closest('.nn-owner-filter-popover');
     const items = Array.from(popover.querySelectorAll('.nn-owner-filter-item'));
     const checked = items.filter(cb => cb.checked).map(cb => cb.value);
-    const teamMetrics = (eMeas || []).filter(m => !E.f.scorecard.team || E.f.scorecard.team === 'All Teams' || !m.team || m.team === E.f.scorecard.team);
-    const allOwners = Array.from(new Set([
-      ...teamMetrics.map(m => m.owner).filter(Boolean),
-      ...((EOS_PEOPLE || []).filter(p => p && p !== 'All'))
-    ]));
+    const curTab = E.tab.scorecard === 'scorecards' ? 'weekly' : (E.tab.scorecard || 'weekly');
+    const allOwners = getScorecardOwners(curTab, E.f.scorecard.team);
     if (checked.length === allOwners.length) {
       E.f.scorecard.owners = null;
     } else {
