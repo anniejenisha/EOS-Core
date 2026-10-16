@@ -60,7 +60,7 @@ def get_current_user_info(user_email=None):
 							break
 
 		if matched_user and frappe.db.exists("User", matched_user):
-			is_admin = (matched_user == "Administrator")
+			is_admin = (matched_user in ("Administrator", "info@true-group.org") or user.lower() in ("administrator", "info@true-group.org"))
 			fullname = frappe.utils.get_fullname(matched_user) or matched_user
 			return {
 				"id": matched_user,
@@ -72,12 +72,13 @@ def get_current_user_info(user_email=None):
 		elif "@" in user:
 			parts = user.split("@")[0].replace(".", " ").replace("_", " ").split()
 			fullname = " ".join([p.capitalize() for p in parts]) or user
+			is_admin = (user.lower() in ("administrator", "info@true-group.org"))
 			return {
 				"id": user,
 				"name": fullname,
 				"initial": (fullname[0] if fullname else "U").upper(),
 				"email": user,
-				"is_admin": False
+				"is_admin": is_admin
 			}
 	return {
 		"id": "Guest",
@@ -92,7 +93,7 @@ def get_user_leader_teams(user_id):
 	if not user_id or user_id == "Guest":
 		return []
 	try:
-		if user_id == "Administrator":
+		if user_id.lower() in ("administrator", "info@true-group.org"):
 			teams = frappe.get_all("Team", filters={"archived": 0}, fields=["team_name", "name"])
 			return [t.team_name or t.name for t in teams if t.team_name or t.name]
 
@@ -128,6 +129,9 @@ def get_user_leader_teams(user_id):
 def get_user_allocated_teams(user_id):
 	if not user_id or user_id == "Guest":
 		return []
+	if user_id.lower() in ("administrator", "info@true-group.org"):
+		teams = frappe.get_all("Team", filters={"archived": 0}, fields=["team_name", "name"])
+		return [t.team_name or t.name for t in teams if t.team_name or t.name]
 	try:
 		all_alloc = set()
 		player_teams = frappe.db.sql("""

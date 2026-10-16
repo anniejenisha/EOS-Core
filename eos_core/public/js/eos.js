@@ -11,9 +11,22 @@ let EOS_LEADER_TEAMS = (window.__EOS_BOOT__ && (window.__EOS_BOOT__.leader_teams
 let EOS_TEAM_MEMBERS = {};
 let EOS_PEOPLE = [];
 
-function isLeaderOfTeam(teamName) {
+function isEosAdmin() {
   const userEmail = String(getLoggedInUserEmail() || '').toLowerCase().trim();
-  if (userEmail === 'administrator' || EOS_USER_ID.toLowerCase() === 'administrator') {
+  const userId = String(typeof EOS_USER_ID !== 'undefined' ? EOS_USER_ID : '').toLowerCase().trim();
+  const userName = String(typeof EOS_ME !== 'undefined' ? EOS_ME : '').toLowerCase().trim();
+  return (
+    userEmail === 'administrator' ||
+    userId === 'administrator' ||
+    userName === 'administrator' ||
+    userEmail === 'info@true-group.org' ||
+    userId === 'info@true-group.org' ||
+    (typeof EOS_IS_ADMIN !== 'undefined' && !!EOS_IS_ADMIN)
+  );
+}
+
+function isLeaderOfTeam(teamName) {
+  if (isEosAdmin()) {
     return true;
   }
   if (!teamName || teamName === 'All Teams') {
@@ -314,8 +327,8 @@ function applyBootstrapData(data) {
 
   if (data.teams && data.teams.length) {
     EOS_TEAMS = data.teams;
-    const isSuperAdmin = (EOS_USER_ID.toLowerCase() === 'administrator');
-    const primaryTeam = (EOS_LEADER_TEAMS && EOS_LEADER_TEAMS[0]) || EOS_TEAMS[0];
+    const isSuperAdmin = isEosAdmin();
+    const primaryTeam = isSuperAdmin ? 'All Teams' : ((EOS_LEADER_TEAMS && EOS_LEADER_TEAMS[0]) || EOS_TEAMS[0]);
     ['my', 'rocks', 'todos', 'issues', 'meet', 'scorecard'].forEach(k => {
       if (E.f[k] && (!E.f[k].team || !EOS_TEAMS.includes(E.f[k].team) || (!isSuperAdmin && E.f[k].team === 'All Teams'))) {
         E.f[k].team = primaryTeam;
@@ -366,7 +379,7 @@ const eSel = (pg, k, label, opts, val, cls) => `<label class="fsel ${cls || ''}"
 const eTog = (path, label, on) => `<button class="sw-wrap" role="switch" aria-checked="${!!on}" data-act="eos-tog" data-id="${path}"><span class="sw"></span>${label}</button>`;
 const eSearch = ph => `<div class="search eos-search">${icon('search')}<input class="field" id="q" placeholder="${ph}" value="${eEsc(S.q)}" aria-label="${ph}"></div>`;
 const eTeams = () => {
-  const isAdmin = EOS_IS_ADMIN || EOS_ME === 'Administrator' || EOS_USER_ID === 'Administrator';
+  const isAdmin = isEosAdmin();
   if (isAdmin) {
     return ['All Teams', ...EOS_TEAMS];
   }
@@ -403,10 +416,10 @@ function eTodoLi(t) {
 
 function eosMy90() {
   const userEmail = getLoggedInUserEmail();
-  const isAdmin = EOS_IS_ADMIN || userEmail === 'administrator' || EOS_USER_ID.toLowerCase() === 'administrator';
+  const isAdmin = isEosAdmin();
   const F = E.f.my;
-  if (!F.team || (F.team === 'All Teams' && !isAdmin && EOS_TEAMS.length === 1)) {
-    F.team = EOS_TEAMS[0] || 'All Teams';
+  if (!F.team || (F.team === 'All Teams' && !isAdmin && EOS_TEAMS.length >= 1)) {
+    F.team = (EOS_LEADER_TEAMS && EOS_LEADER_TEAMS[0]) || EOS_TEAMS[0] || 'All Teams';
   }
   const tf = x => F.team === 'All Teams' || x.team === F.team;
 
@@ -414,7 +427,9 @@ function eosMy90() {
   const priv = eTodos.filter(t => t.priv && (isAdmin || isMyItem(t)) && !t.archived && (F.priv === 'All' || !t.done) && tf(t)).sort(eByDue);
 
   const per = ePeriods('weekly', 6);
-  const mine = eMeas.filter(m => (m.freq || 'weekly').toLowerCase() === 'weekly' && isMyItem(m) && tf(m));
+  const mine = isAdmin
+    ? eMeas.filter(m => (m.freq || 'weekly').toLowerCase() === 'weekly' && tf(m))
+    : eMeas.filter(m => (m.freq || 'weekly').toLowerCase() === 'weekly' && isMyItem(m) && tf(m));
 
   const hasDone = team.some(t => t.done);
 
