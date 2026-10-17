@@ -10,6 +10,15 @@ VALID_TODO_TRANSITIONS = {
 
 
 class ToDo(Document):
+	def autoname(self):
+		base = f"TD-{self.todo_name}"
+		name = base
+		count = 1
+		while frappe.db.exists("To Do", name):
+			name = f"{base}-{count}"
+			count += 1
+		self.name = name
+
 	def validate(self):
 		if not self.is_new():
 			previous = frappe.db.get_value("To Do", self.name, "status")

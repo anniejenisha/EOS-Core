@@ -145,7 +145,7 @@ function getMembersForTeam(teamName) {
   if (teamName && EOS_TEAM_MEMBERS && EOS_TEAM_MEMBERS[teamName] && EOS_TEAM_MEMBERS[teamName].length) {
     return EOS_TEAM_MEMBERS[teamName];
   }
-  return EOS_PEOPLE || [];
+  return [];
 }
 
 /* ---------- helpers ---------- */
@@ -396,7 +396,19 @@ const eTeams = () => {
   }
   return [...EOS_TEAMS];
 };
-const eOwners = () => ['All', ...EOS_PEOPLE];
+const eOwners = team => {
+  if (!team || team === 'All Teams' || team === 'All') {
+    return ['All', ...EOS_PEOPLE];
+  }
+  const members = getMembersForTeam(team) || [];
+  const set = new Set(members);
+  (eRocks || []).forEach(r => { if (r.team === team && r.owner) set.add(r.owner); });
+  (eTodos || []).forEach(t => { if (t.team === team && t.owner) set.add(t.owner); });
+  (eIssues || []).forEach(i => { if (i.team === team && i.owner) set.add(i.owner); });
+  (eMeas || []).forEach(m => { if (m.team === team && m.owner) set.add(m.owner); });
+  const list = Array.from(set).filter(Boolean).sort((a, b) => a.localeCompare(b));
+  return ['All', ...list];
+};
 const eMatch = (x, F) => (F.team === 'All Teams' || x.team === F.team) && (!F.owner || F.owner === 'All' || x.owner === F.owner);
 const eQ = s => !S.q.trim() || String(s).toLowerCase().includes(S.q.trim().toLowerCase());
 const eMenuBtn = (t, id) => { const o = E.menu && E.menu.t === t && String(E.menu.id) === String(id); return `<button class="icon-btn" data-act="eos-menu" data-id="${t}:${id}" aria-haspopup="menu" aria-expanded="${o}" aria-label="More actions">${icon('more')}</button>`; };
@@ -889,6 +901,8 @@ function eRockGroup(key, title, lead, rocks, o) {
 
 function eosRocks() {
   const F = E.f.rocks, tab = E.tab.rocks;
+  const ownerOpts = eOwners(F.team);
+  if (F.owner !== 'All' && !ownerOpts.includes(F.owner)) F.owner = 'All';
   const rs = eRocks.filter(r => eMatch(r, F) && (F.status === 'All' || r.status === F.status) && eQ(r.name + ' ' + r.owner) && r.archived === (tab === 'archive'));
   let body = '';
   if (tab === 'list') {
@@ -908,17 +922,19 @@ function eosRocks() {
   }
   return eHead('Rocks', 'Set and track quarterly goals, saved directly to the Rock DocType.', eCreate('Add Rock')) +
     eTabs('rocks', [['list', 'List'], ['board', 'Planning Board'], ['archive', 'Archive']]) +
-    `<div class="fbar">${eSel('rocks', 'team', 'Team', eTeams(), F.team)}${eSel('rocks', 'owner', 'Owner', eOwners(), F.owner)}${eSel('rocks', 'status', 'Status', ['All', 'On-track', 'Off-track', 'Done'], F.status)}${tab === 'list' ? eTog('rocks.people', 'Show people without Rocks', F.people) : ''}<div class="grow">${eSearch('Search Rocks')}</div></div>` + body;
+    `<div class="fbar">${eSel('rocks', 'team', 'Team', eTeams(), F.team)}${eSel('rocks', 'owner', 'Owner', ownerOpts, F.owner)}${eSel('rocks', 'status', 'Status', ['All', 'On-track', 'Off-track', 'Done'], F.status)}${tab === 'list' ? eTog('rocks.people', 'Show people without Rocks', F.people) : ''}<div class="grow">${eSearch('Search Rocks')}</div></div>` + body;
 }
 
 /* ---------- To-Dos ---------- */
 function eosTodos() {
   const F = E.f.todos, tab = E.tab.todos;
+  const ownerOpts = eOwners(F.team);
+  if (F.owner !== 'All' && !ownerOpts.includes(F.owner)) F.owner = 'All';
   const rs = eTodos.filter(t => eMatch(t, F) && t.archived === F.arch && (tab === 'private' ? t.priv && isMyItem(t) : !t.priv) && eQ(t.name)).sort(eByDue);
   const vis = eSlice('todos', rs);
   return eHead('To-Dos', 'Live tasks fetched and synced directly with Frappe To Do DocType.', eCreate('Create To-Do')) +
     eTabs('todos', [['team', 'Team'], ['private', 'Private']]) +
-    `<div class="fbar">${eSel('todos', 'team', 'Team', eTeams(), F.team)}${eSel('todos', 'owner', 'Owner', eOwners(), F.owner)}${eTog('todos.arch', 'Archive', F.arch)}<div class="grow">${eSearch('Search To-Dos')}</div></div>
+    `<div class="fbar">${eSel('todos', 'team', 'Team', eTeams(), F.team)}${eSel('todos', 'owner', 'Owner', ownerOpts, F.owner)}${eTog('todos.arch', 'Archive', F.arch)}<div class="grow">${eSearch('Search To-Dos')}</div></div>
    <div class="eos-col"><div class="panel"><div class="pnl-h"><h2>${tab === 'private' ? 'Private To-Dos' : 'Team To-Dos'}<span class="pcount">${rs.length}</span></h2></div>
    ${vis.length ? `<div class="scroll"><table class="eos-t"><thead><tr><th class="ck"></th><th>Title</th><th>Due by</th><th>Owner</th><th class="act"></th></tr></thead><tbody>
    ${vis.map(t => `<tr><td class="ck">${eCheck(t.done, 'eos-todo-done', t.id, (t.done ? 'Mark not done: ' : 'Mark done: ') + t.name)}</td><td class="tdn ${t.done ? 'done' : ''}">${eEsc(t.name)}</td><td>${eDue(t.due, t.done)}</td><td>${eAv(t.owner)}</td><td class="act">${eMenuBtn('todo', t.id)}</td></tr>`).join('')}</tbody></table></div>`
@@ -927,19 +943,21 @@ function eosTodos() {
 }
 
 /* ---------- Issues ---------- */
-const ePriRank = { Critical: 0, High: 1, Medium: 2, Low: 3, '': 4 };
+const ePriRank = { '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, Critical: 6, High: 7, Medium: 8, Low: 9, '': 99 };
 function eosIssues() {
   const F = E.f.issues, tab = E.tab.issues;
-  const rs = eIssues.filter(i => eMatch(i, F) && i.term === tab && i.archived === F.arch && eQ(i.name)).sort((a, b) => ePriRank[a.pri] - ePriRank[b.pri] || String(a.raised || '').localeCompare(String(b.raised || '')) || a.id - b.id);
+  const ownerOpts = eOwners(F.team);
+  if (F.owner !== 'All' && !ownerOpts.includes(F.owner)) F.owner = 'All';
+  const rs = eIssues.filter(i => eMatch(i, F) && i.term === tab && i.archived === F.arch && eQ(i.name)).sort((a, b) => (ePriRank[a.pri] ?? 99) - (ePriRank[b.pri] ?? 99) || String(a.raised || '').localeCompare(String(b.raised || '')) || a.id - b.id);
   const vis = eSlice('issues', rs), off = (F.page - 1) * (+F.per);
   const body = rs.length ? `<div class="panel"><div class="pnl-h"><h2>${tab === 'short' ? 'Short-Term' : 'Long-Term'}<span class="pcount">${rs.length}</span></h2></div><div class="scroll"><table class="eos-t"><thead><tr><th class="ck"></th><th>Title</th><th>Priority</th><th>Created</th><th>Owner</th><th class="act"></th></tr></thead><tbody>
    ${vis.map((i, k) => `<tr><td class="ck">${eCheck(i.archived, 'eos-issue-done', i.id, (i.archived ? 'Reopen: ' : 'Solve: ') + i.name)}</td><td class="tdn ${i.archived ? 'done' : ''}"><button class="link" style="padding:0;color:inherit;font-weight:600;text-align:left;background:none;border:none;cursor:pointer" data-act="eos-edit-issue" data-id="${i.id}">${off + k + 1}. ${eEsc(i.name)}</button></td>
-   <td><select class="pri" data-eos-pri="${i.id}" aria-label="Priority">${['', 'High', 'Medium', 'Low', 'Critical'].map(p => `<option value="${p}" ${i.pri === p ? 'selected' : ''}>${p || 'None'}</option>`).join('')}</select></td><td class="muted-s">${eShort(i.raised)}</td><td>${eAv(i.owner)}</td><td class="act">${eMenuBtn('issue', i.id)}</td></tr>`).join('')}</tbody></table></div>
+   <td><select class="pri" data-eos-pri="${i.id}" aria-label="Priority">${['', '1', '2', '3', '4', '5'].map(p => `<option value="${p}" ${String(i.pri || '') === String(p) ? 'selected' : ''}>${p || 'None'}</option>`).join('')}</select></td><td class="muted-s">${eShort(i.raised)}</td><td>${eAv(i.owner)}</td><td class="act">${eMenuBtn('issue', i.id)}</td></tr>`).join('')}</tbody></table></div>
    <div class="pager"><button class="addlink" data-act="create">${icon('plus')}Add Issue</button>${ePager('issues', rs.length)}</div></div>`
     : `<div class="empty"><div class="eic">${icon('alert')}</div><h3>${F.arch ? 'No archived issues' : "No Issues found in ERP."}</h3><p>${F.arch ? 'Solved issues are stored in ERP.' : 'Add an Issue to save it directly to the Issue DocType.'}</p>${F.arch ? '' : `<button class="btn primary" data-act="create">Add Issue</button>`}</div>`;
   return eHead('Issues', 'Identify, prioritize and solve issues directly within Frappe Issue DocType.', eCreate('Add Issue')) +
     eTabs('issues', [['short', 'Short-Term'], ['long', 'Long-Term']]) +
-    `<div class="fbar">${eSel('issues', 'team', 'Team', eTeams(), F.team)}${eSel('issues', 'owner', 'Owner', eOwners(), F.owner)}${eTog('issues.arch', 'Archive', F.arch)}<div class="grow">${eSearch('Search Issues')}</div></div><div class="eos-col">${body}</div>`;
+    `<div class="fbar">${eSel('issues', 'team', 'Team', eTeams(), F.team)}${eSel('issues', 'owner', 'Owner', ownerOpts, F.owner)}${eTog('issues.arch', 'Archive', F.arch)}<div class="grow">${eSearch('Search Issues')}</div></div><div class="eos-col">${body}</div>`;
 }
 
 /* ---------- Meetings ---------- */
@@ -1049,7 +1067,7 @@ async function eosDropToIds(title, type) {
     team: team,
     owner: EOS_ME,
     term: 'short',
-    pri: 'High',
+    pri: '1',
     archived: false,
     raised: eRel(0)
   };
@@ -1059,7 +1077,7 @@ async function eosDropToIds(title, type) {
   const res = await apiCall('eos_core.eos_api.save_issue', {
     name: newI.name,
     desc: newI.desc,
-    pri: 'High',
+    pri: '1',
     team: newI.team,
     owner: newI.owner,
     term: 'short'
@@ -1787,7 +1805,7 @@ function renderL10IdsStep(team) {
                 ${iss.desc ? `<div style="font-size:11.5px;color:#6b7280;margin-top:2px">${eEsc(iss.desc)}</div>` : ''}
               </div>
               <div style="width:90px">
-                <span class="nn-status-badge off-track">${eEsc(iss.pri || 'Medium')}</span>
+                <span class="nn-status-badge off-track">${eEsc(iss.pri || 'None')}</span>
               </div>
               <div class="nn-todo-col-owner">
                 <span class="nn-owner-circle">${av}</span>
@@ -1983,7 +2001,7 @@ function renderL10ToolDrawer(team) {
           ${issues.map(iss => `
             <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid #e5e7eb;border-radius:6px;background:#fff">
               <div style="font-size:13px;font-weight:600;color:#111827">${eEsc(iss.name)}</div>
-              <span class="nn-status-badge off-track">${eEsc(iss.pri || 'Medium')}</span>
+              <span class="nn-status-badge off-track">${eEsc(iss.pri || 'None')}</span>
             </div>
           `).join('')}
         </div>
@@ -2396,7 +2414,7 @@ function eosDrawer(kind, rec, pre) {
       }
     });
   else if (p === 'issues') eosForm(rec ? 'Edit Issue in ERP' : 'Create Issue in ERP', [{ k: 'name', l: 'Title', req: true, v: r.name }, { k: 'desc', l: 'Description', opt: true, t: 'textarea', v: r.desc },
-  { k: 'pri', l: 'Priority', opt: true, t: 'select', o: [['', 'None'], 'High', 'Medium', 'Low', 'Critical'], v: r.pri || '' }, { k: 'team', l: 'Team', ...team(r.team) },
+  { k: 'pri', l: 'Priority', opt: true, t: 'select', o: [['', 'None'], '1', '2', '3', '4', '5'], v: r.pri || '' }, { k: 'team', l: 'Team', ...team(r.team) },
   { k: 'owner', l: 'Owner', ...own(r.owner, r.team) }, { k: 'term', l: 'Term', t: 'select', o: [['short', 'Short-Term'], ['long', 'Long-Term']], v: r.term || E.tab.issues }],
     async v => {
       if (rec) {
@@ -2500,9 +2518,9 @@ async function eosAct(a, el, e) {
     case 'eos-issue-from': {
       const [m, i] = id.split(':').map(Number), mm = eMeas.find(x => x.id === m), v = (mm.vals || [])[i], nm = `${mm.name} off goal (${eU(mm, v)} vs ${mm.op} ${eU(mm, mm.target)})`;
       if (eIssues.some(x => x.name === nm)) return toast('Already in Issues');
-      const newI = { id: ++eSeq, name: nm, desc: 'Raised from the scorecard.', team: mm.team, owner: mm.owner, term: 'short', pri: 'High', archived: false, raised: eRel(0) };
+      const newI = { id: ++eSeq, name: nm, desc: 'Raised from the scorecard.', team: mm.team, owner: mm.owner, term: 'short', pri: '1', archived: false, raised: eRel(0) };
       eIssues.push(newI); toast('Creating Issue DocType...'); renderMain();
-      const res = await apiCall('eos_core.eos_api.save_issue', { name: nm, desc: 'Raised from scorecard.', pri: 'High', team: mm.team, owner: mm.owner });
+      const res = await apiCall('eos_core.eos_api.save_issue', { name: nm, desc: 'Raised from scorecard.', pri: '1', team: mm.team, owner: mm.owner });
       if (res && res.docname) newI.docname = res.docname;
       toast('Issue saved to ERP!');
       break;
@@ -3098,10 +3116,13 @@ document.addEventListener('change', async e => {
   if (d.eosF) {
     const [p, key] = d.eosF.split('.');
     E.f[p][key] = e.target.value;
-    if (p === 'scorecard' && key === 'team') {
-      E.f.scorecard.owners = null;
-      E.f.scorecard.owners_customized = false;
-      E.owner_filter_open = false;
+    if (key === 'team') {
+      E.f[p].owner = 'All';
+      if (p === 'scorecard') {
+        E.f.scorecard.owners = null;
+        E.f.scorecard.owners_customized = false;
+        E.owner_filter_open = false;
+      }
     }
     if (key !== 'page' && E.f[p].page) E.f[p].page = 1;
     renderMain();

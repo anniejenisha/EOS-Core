@@ -1,6 +1,6 @@
 {
  "actions": [],
- "autoname": "format:R-{rock_name}",
+ "autoname": "autoname",
  "creation": "2026-09-15 10:00:00",
  "doctype": "DocType",
  "engine": "InnoDB",

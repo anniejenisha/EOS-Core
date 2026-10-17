@@ -9,6 +9,15 @@ ROCK_STATUSES = ("Not Started", "In Progress", "Complete", "Dropped")
 
 
 class Rock(Document):
+	def autoname(self):
+		base = f"R-{self.rock_name}"
+		name = base
+		count = 1
+		while frappe.db.exists("Rock", name):
+			name = f"{base}-{count}"
+			count += 1
+		self.name = name
+
 	def validate(self):
 		if self.status not in ROCK_STATUSES:
 			frappe.throw(f"Invalid rock status {frappe.bold(self.status)}.")
@@ -21,9 +30,6 @@ class Rock(Document):
 						f"Rock {frappe.bold(self.rock_name)} cannot be marked Complete while milestone "
 						f"{frappe.bold(milestone.milestone_name)} is still open."
 					)
-		existing = frappe.db.get_value("Rock", {"rock_name": self.rock_name}, "name")
-		if existing and (self.is_new() or existing != self.name):
-			frappe.throw(f"A rock named {frappe.bold(self.rock_name)} already exists.")
 		validate_content_owner(self, "owner_user", "Rock")
 
 	@property

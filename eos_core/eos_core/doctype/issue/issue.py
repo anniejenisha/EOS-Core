@@ -10,6 +10,15 @@ VALID_STATUS_TRANSITIONS = {
 
 
 class Issue(Document):
+	def autoname(self):
+		base = self.issue_name or "Issue"
+		name = base
+		count = 1
+		while frappe.db.exists("Issue", name):
+			name = f"{base}-{count}"
+			count += 1
+		self.name = name
+
 	def before_validate(self):
 		if self.team and not frappe.db.exists("Team", self.team):
 			frappe.get_doc({
@@ -66,8 +75,8 @@ def update_issue_priority(issue_name, priority):
 			"default_timeframe": "Weekly",
 			"archived": 0
 		}).insert(ignore_permissions=True)
-	frappe.db.set_value("Issue", issue_name, "priority", priority)
-	return {"status": "ok", "priority": priority}
+	frappe.db.set_value("Issue", issue_name, "priority", priority or "")
+	return {"status": "ok", "priority": priority or ""}
 
 
 @frappe.whitelist()
@@ -151,7 +160,7 @@ def create_issue_from_metric(metric_name, week_start_date=None, owner_user=None)
 			"doctype": "Issue",
 			"issue_name": f"{metric_name} — {entry.week_start_date}",
 			"status": "Identified",
-			"priority": "Medium",
+			"priority": "1",
 			"owner_user": owner,
 			"team": metric.team,
 			"source": "Scorecard",

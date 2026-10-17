@@ -1759,7 +1759,9 @@
 				e.stopPropagation();
 				self.pick_menu(this, self.all_teams, self.s.todo_team, val => {
 					self.s.todo_team = val;
+					self.s.todo_owner = "All";
 					self.$root.find("#nn-t-team b").text(val);
+					self.$root.find("#nn-t-owner b").text("All");
 					self.render_todos_table();
 				});
 			});
@@ -2174,7 +2176,7 @@
 				const owner_name = this.get_user_display_name(iss.owner_user);
 				const initials = this.get_initials(owner_name || iss.owner_user || "");
 				const created_str = this.format_issue_created(iss.creation);
-				const priority_val = iss.priority || "Medium";
+				const priority_val = iss.priority || "";
 
 				return `
 								<div class="nn-todo-row" data-id="${this.esc(iss.name)}">
@@ -2188,10 +2190,8 @@
 									</div>
 									<div style="width:95px;flex-shrink:0;">
 										<select class="nn-issue-priority-select" data-id="${this.esc(iss.name)}">
-											<option value="Low" ${priority_val === "Low" ? "selected" : ""}>Low</option>
-											<option value="Medium" ${priority_val === "Medium" ? "selected" : ""}>Medium</option>
-											<option value="High" ${priority_val === "High" ? "selected" : ""}>High</option>
-											<option value="Critical" ${priority_val === "Critical" ? "selected" : ""}>Critical</option>
+											<option value="" ${!priority_val ? "selected" : ""}>${__("None")}</option>
+											${['1', '2', '3', '4', '5'].map(p => `<option value="${p}" ${String(priority_val) === p ? "selected" : ""}>${p}</option>`).join("")}
 										</select>
 									</div>
 									<div style="width:85px;flex-shrink:0;font-size:12.5px;color:#6b7280;">
@@ -2262,7 +2262,9 @@
 				e.stopPropagation();
 				self.pick_menu(this, self.all_teams, self.s.issue_team, val => {
 					self.s.issue_team = val;
+					self.s.issue_owner = "All";
 					self.$root.find("#nn-i-team b").text(val);
+					self.$root.find("#nn-i-owner b").text("All");
 					self.render_issues_table();
 				});
 			});
@@ -2425,7 +2427,7 @@
 			const current_title = iss ? iss.issue_name : (initial_data && initial_data.title ? initial_data.title : "");
 			const current_owner = iss ? iss.owner_user : (initial_data && initial_data.owner ? initial_data.owner : ((frappe.session && frappe.session.user) || ""));
 			const current_team = iss ? (iss.team || "") : (initial_data && initial_data.team ? initial_data.team : (this.s.issue_team !== "All Teams" ? this.s.issue_team : (this.all_teams.find(t => t !== "All Teams") || "")));
-			const current_priority = iss ? (iss.priority || "Medium") : "Medium";
+			const current_priority = iss ? (iss.priority || "") : "";
 			const current_status = iss ? (iss.status || "Identified") : "Identified";
 			const current_desc = iss ? (iss.description || "") : (initial_data && initial_data.description ? initial_data.description : "");
 			const current_solution = iss ? (iss.solution || "") : "";
@@ -2484,10 +2486,8 @@
 						<div class="nn-field-group">
 							<div class="nn-field-label">${__("Priority")}</div>
 							<select class="nn-select" id="nn-iss-priority">
-								<option value="Low" ${current_priority === "Low" ? "selected" : ""}>Low</option>
-								<option value="Medium" ${current_priority === "Medium" ? "selected" : ""}>Medium</option>
-								<option value="High" ${current_priority === "High" ? "selected" : ""}>High</option>
-								<option value="Critical" ${current_priority === "Critical" ? "selected" : ""}>Critical</option>
+								<option value="" ${!current_priority ? "selected" : ""}>${__("None")}</option>
+								${['1', '2', '3', '4', '5'].map(p => `<option value="${p}" ${String(current_priority) === p ? "selected" : ""}>${p}</option>`).join("")}
 							</select>
 						</div>
 					</div>
@@ -3424,7 +3424,7 @@
 							${issues.map(iss => `
 								<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid #e5e7eb;border-radius:6px;background:#fff">
 									<div style="font-size:13px;font-weight:600;color:#111827">${this.esc(iss.issue_name)}</div>
-									<span class="nn-status-badge off-track">${this.esc(iss.priority || "Medium")}</span>
+									<span class="nn-status-badge off-track">${this.esc(iss.priority || "None")}</span>
 								</div>
 							`).join("")}
 						</div>
@@ -3863,7 +3863,7 @@
 										${iss.description ? `<div style="font-size:11.5px;color:#6b7280;margin-top:2px">${this.esc(iss.description)}</div>` : ""}
 									</div>
 									<div style="width:90px">
-										<span class="nn-status-badge off-track">${this.esc(iss.priority || "Medium")}</span>
+										<span class="nn-status-badge off-track">${this.esc(iss.priority || "None")}</span>
 									</div>
 									<div class="nn-todo-col-owner">
 										<span class="nn-owner-circle">${av}</span>

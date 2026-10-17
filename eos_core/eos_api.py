@@ -740,7 +740,7 @@ def save_issue(docname=None, name=None, desc="", pri="", team=None, owner=None, 
 		doc = frappe.get_doc("Issue", docname)
 		if name: doc.issue_name = name
 		if desc is not None: doc.description = desc
-		if pri: doc.priority = pri
+		if pri is not None: doc.priority = str(pri) if pri else ""
 		if team: doc.team = team
 		if owner_user: doc.owner_user = owner_user
 		doc.save(ignore_permissions=True)
@@ -749,7 +749,7 @@ def save_issue(docname=None, name=None, desc="", pri="", team=None, owner=None, 
 			"doctype": "Issue",
 			"issue_name": name,
 			"description": desc,
-			"priority": pri or "Medium",
+			"priority": str(pri) if pri else "",
 			"team": team or "Leadership Team",
 			"owner_user": owner_user or frappe.session.user or "Administrator",
 			"status": "Identified",
@@ -780,7 +780,7 @@ def toggle_issue(docname, solved):
 @frappe.whitelist(allow_guest=True)
 def update_issue_priority(docname, pri):
 	if frappe.db.exists("Issue", docname):
-		frappe.db.set_value("Issue", docname, "priority", pri or "Medium")
+		frappe.db.set_value("Issue", docname, "priority", str(pri) if pri else "")
 		frappe.db.commit()
 		return {"status": "ok"}
 	return {"status": "not_found"}
@@ -841,11 +841,7 @@ def save_measurable(name, freq="Weekly", team=None, owner=None, unit="num", op="
 
 	unit_type = "Currency" if unit == "kes" else ("Percentage" if unit == "pct" else "Number")
 	
-	existing_name = docname
-	if not existing_name and frappe.db.exists("EOS Metric", name):
-		existing_name = name
-	elif not existing_name and frappe.db.exists("EOS Metric", {"metric_name": name}):
-		existing_name = frappe.db.get_value("EOS Metric", {"metric_name": name}, "name")
+	existing_name = docname if (docname and frappe.db.exists("EOS Metric", docname)) else None
 
 	op_str = str(op or ">=").strip()
 	if op_str in ("=", "=="):

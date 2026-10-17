@@ -1,7 +1,7 @@
 {
  "actions": [],
  "allow_rename": 1,
- "autoname": "field:issue_name",
+ "autoname": "autoname",
  "creation": "2026-09-15 12:00:00.000000",
  "doctype": "DocType",
  "engine": "InnoDB",
@@ -27,8 +27,7 @@
    "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Issue Name",
-   "reqd": 1,
-   "unique": 1
+   "reqd": 1
   },
   {
    "default": "Identified",
@@ -40,13 +39,12 @@
    "reqd": 1
   },
   {
-   "default": "Medium",
    "fieldname": "priority",
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Priority",
-   "options": "Low\nMedium\nHigh\nCritical",
-   "reqd": 1
+   "options": "\n1\n2\n3\n4\n5\nLow\nMedium\nHigh\nCritical",
+   "reqd": 0
   },
   {
    "fieldname": "column_break_1",

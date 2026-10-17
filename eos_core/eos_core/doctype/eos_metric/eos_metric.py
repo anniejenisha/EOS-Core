@@ -19,6 +19,15 @@ RANGE_OPERATORS = ("Inside min/max", "Outside min/max")
 
 
 class EOSMetric(Document):
+	def autoname(self):
+		base = self.metric_name or "Metric"
+		name = base
+		count = 1
+		while frappe.db.exists("EOS Metric", name):
+			name = f"{base}-{count}"
+			count += 1
+		self.name = name
+
 	def before_insert(self):
 		self.owner_user = self.owner_user or frappe.session.user
 
@@ -32,7 +41,7 @@ class EOSMetric(Document):
 		self.validate_formula()
 		self.apply_formula()
 		for entry in self.get("entries", []):
-			entry.metric = entry.metric or self.metric_name
+			entry.metric = entry.metric or self.name or self.metric_name
 			if entry.actual_value is not None and not entry.is_manual:
 				entry.status = compute_status(
 					self.target_value,
