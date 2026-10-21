@@ -1032,7 +1032,7 @@ function decideTalentRecord(id, ok, silent) {
                     if (res && res.message && res.message.success) {
                         r.status = newStatus;
                         renderMain();
-                        fetchBootstrap();
+                        fetchTalentBootstrap();
                         if (!silent) toast(`${dt()} ${r.id} marked ${newStatus}`);
                     }
                 }
