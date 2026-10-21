@@ -72,7 +72,7 @@ function go(m, p, rec = null) {
       fetchTalentList();
     } else if (S.view === 'record' && typeof fetchTalentRecordDetails === 'function') {
       fetchTalentRecordDetails(rec);
-    } else if (S.view === 'workspace' && typeof fetchTalentBootstrap === 'function' && (!TALENT_BOOTSTRAP.dropdowns || !TALENT_BOOTSTRAP.dropdowns.companies || !TALENT_BOOTSTRAP.dropdowns.companies.length)) {
+    } else if (S.view === 'workspace' && typeof fetchTalentBootstrap === 'function') {
       fetchTalentBootstrap();
     }
   }
@@ -145,10 +145,18 @@ function renderSide() {
   const head = `<div class="sb-head-info"><h2>${m.name}</h2>${m.blurb ? `<p>${m.blurb}</p>` : ''}</div><button class="icon-btn" data-act="sbtoggle" aria-label="Hide sidebar" title="Hide sidebar">${icon('panel')}</button>`;
   const nav = m.nav.map(([l, ic, kids]) => {
     const id = slug(l);
-    if (!kids) return `<button class="nv" data-act="nav" data-id="${id}" ${S.page === id ? 'aria-current="page"' : ''}>${icon(ic)}<span class="lbl">${l}</span></button>`;
+    const badgeCount = (m.id === 'talent' && typeof TALENT_BOOTSTRAP !== 'undefined' && TALENT_BOOTSTRAP.counts && TALENT_BOOTSTRAP.counts[l] != null)
+      ? `<span class="badge" style="margin-left:auto;font-size:11px;background:var(--g100);color:var(--g900);padding:1px 6px;border-radius:99px">${TALENT_BOOTSTRAP.counts[l]}</span>`
+      : '';
+    if (!kids) return `<button class="nv" data-act="nav" data-id="${id}" ${S.page === id ? 'aria-current="page"' : ''}>${icon(ic)}<span class="lbl">${l}</span>${badgeCount}</button>`;
     const open = S.open.has(m.id + ':' + id), has = kids.some(k => slug(k) === S.page);
     return `<button class="nv ${has ? 'has' : ''}" data-act="tg" data-id="${id}" aria-expanded="${open}">${icon(ic)}<span class="lbl">${l}</span>${icon('chev', 'chev')}</button>
-     <div class="kids ${open ? 'open' : ''}"><div>${kids.map(k => `<button class="kid" data-act="nav" data-id="${slug(k)}" ${S.page === slug(k) ? 'aria-current="page"' : ''}>${k}</button>`).join('')}</div></div>`;
+     <div class="kids ${open ? 'open' : ''}"><div>${kids.map(k => {
+       const cCount = (m.id === 'talent' && typeof TALENT_BOOTSTRAP !== 'undefined' && TALENT_BOOTSTRAP.counts && TALENT_BOOTSTRAP.counts[k] != null)
+         ? `<span class="badge" style="margin-left:auto;font-size:11px;background:var(--g100);color:var(--g900);padding:1px 6px;border-radius:99px">${TALENT_BOOTSTRAP.counts[k]}</span>`
+         : '';
+       return `<button class="kid" data-act="nav" data-id="${slug(k)}" ${S.page === slug(k) ? 'aria-current="page"' : ''} style="display:flex;align-items:center;justify-content:space-between"><span>${k}</span>${cCount}</button>`;
+     }).join('')}</div></div>`;
   }).join('');
   const side = $('#side');
   if (side) side.innerHTML = `<div class="side-in"><div class="sb-head">${head}</div><nav class="sb-nav">${nav}</nav></div>`;

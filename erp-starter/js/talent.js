@@ -21,28 +21,10 @@ let BOOTSTRAP = TALENT_BOOTSTRAP;
 
 /* Universal Frappe API Caller */
 async function talentCall(method, args = {}) {
-    if (window.parent && window.parent.frappe && window.parent.frappe.call && window.parent !== window) {
-        return new Promise((resolve, reject) => {
-            window.parent.frappe.call({
-                method: method,
-                args: args,
-                callback: function(r) { resolve(r.message || r); },
-                error: function(err) { reject(err); }
-            });
-        });
-    }
-    if (window.frappe && window.frappe.call) {
-        return new Promise((resolve, reject) => {
-            window.frappe.call({
-                method: method,
-                args: args,
-                callback: function(r) { resolve(r.message || r); },
-                error: function(err) { reject(err); }
-            });
-        });
-    }
     if (typeof apiCall === 'function') {
-        return await apiCall(method, args);
+        const res = await apiCall(method, args);
+        if (res && res.error) throw new Error(res.message);
+        return res;
     }
     const url = `/api/method/${method}`;
     const headers = { 'Accept': 'application/json', 'Content-Type': 'application/json' };
@@ -66,7 +48,7 @@ async function talentCall(method, args = {}) {
 
 /* Polyfill window.frappe if running on portal */
 if (!window.frappe) window.frappe = {};
-if (!window.frappe.call) {
+if (typeof window.frappe.call !== 'function' || !window.frappe.desk) {
     window.frappe.call = function (opts) {
         talentCall(opts.method, opts.args || {}).then(res => {
             if (opts.callback) opts.callback({ message: res });
@@ -102,7 +84,7 @@ function fetchTalentBootstrap() {
                 if (tMod) {
                     tMod.cards = [
                         ['Employees', String(k.total_employees || 0), 'active in organization'],
-                        ['Checked in today', String(k.checked_in_today || 0), `of ${k.total_employees || 0} expected`],
+                        ['Checked in today', String(k.checked_in_today || 0), 'recorded check-ins'],
                         ['Pending requests', String(k.pending_requests || 0), 'awaiting approval', k.pending_requests > 0 ? 'warn' : ''],
                         ['Late arrivals', String(k.late_arrivals || 0), 'this week']
                     ];
@@ -192,65 +174,79 @@ function fetchTalentRecordDetails(recordId) {
    ===================================================================== */
 function renderTalentWorkspace() {
     const m = mod();
-    const short = Object.entries(PAGES).filter(([k]) => k.startsWith(m.id + ':'));
+    const short = Object.entries(PAGES).filter(([k]) => k.startsWith(m.id + ':') && SETS[PAGES[k].set]);
     const cards = m.nav.filter(([l, , k]) => k).map(([l, , k]) => `
         <div class="panel" style="padding:16px">
             <h3 style="font-size:14px;font-weight:600;margin-bottom:10px;color:var(--g900)">${l}</h3>
             <div style="display:flex;flex-direction:column;gap:6px">
-                ${k.map(c => `
-                    <button class="btn" style="justify-content:space-between;width:100%" data-act="nav" data-id="${slug(c)}">
-                        <span>${c}</span>${icon('chev')}
-                    </button>
-                `).join('')}
+                ${k.map(c => {
+                    const count = TALENT_BOOTSTRAP.counts && TALENT_BOOTSTRAP.counts[c] != null
+                        ? `<span style="font-size:11px;background:var(--g100);color:var(--g900);padding:2px 8px;border-radius:99px;font-weight:600">${TALENT_BOOTSTRAP.counts[c]}</span>`
+                        : '';
+                    return `<button class="btn" style="justify-content:space-between;width:100%" data-act="nav" data-id="${slug(c)}">
+                        <span>${c}</span><div style="display:flex;align-items:center;gap:6px">${count}${icon('chev')}</div>
+                    </button>`;
+                }).join('')}
             </div>
         </div>
     `).join('');
     const singles = m.nav.filter(([l, , k]) => !k && slug(l) !== 'overview');
     const main = $('#main');
     if (!main) return;
-    main.innerHTML = `<div class="ph"><h1>${m.name}</h1></div>
-        <div class="cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px">
-            ${(typeof m.cards === 'function' ? m.cards() : m.cards).map(c => `
-                <div class="panel ncard ${c[3] || ''}" style="padding:16px">
-                    <small style="display:block;color:var(--ink-3);font-size:12px;margin-bottom:4px">${c[0]}</small>
-                    <strong style="display:block;font-size:24px;font-weight:700;color:var(--g900)">${c[1]}</strong>
-                    <em style="display:block;color:var(--ink-2);font-size:12px;font-style:normal;margin-top:2px">${c[2] || '&nbsp;'}</em>
-                </div>
-            `).join('')}
+    main.innerHTML = `<div class="ph">
+        <div>
+            <h1>${m.name}</h1>
+            <p style="color:var(--ink-2);font-size:13.5px;margin-top:2px">${m.blurb || 'Live HR, shifts, attendance, leaves, payroll and talent operations on Frappe ERP'}</p>
         </div>
-        ${short.length ? `
-            <div class="section" style="margin-bottom:24px">
-                <h2 style="font-size:16px;font-weight:700;margin-bottom:12px;color:var(--g900)">Shortcuts</h2>
-                <div class="shortcuts" style="display:flex;gap:10px;flex-wrap:wrap">
-                    ${short.slice(0, 10).map(([k, p]) => `
-                        <button class="btn" data-act="nav" data-id="${k.split(':')[1]}">
-                            ${p.dt}
-                            <span class="cnt" style="margin-left:6px;background:var(--g100);padding:1px 6px;border-radius:99px;font-size:11px">
-                                ${SETS[p.set] ? (SETS[p.set].rows.length || (TALENT_BOOTSTRAP.counts && TALENT_BOOTSTRAP.counts[SETS[p.set].doctype]) || 0) : 0}
-                            </span>
-                        </button>
-                    `).join('')}
-                </div>
+        <div class="row">
+            <button class="btn primary" data-act="nav" data-id="shift-request">${icon('plus')}New Shift Request</button>
+        </div>
+    </div>
+    <div class="cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px">
+        ${(typeof m.cards === 'function' ? m.cards() : m.cards).map(c => `
+            <div class="panel ncard ${c[3] || ''}" style="padding:18px">
+                <small style="display:block;color:var(--ink-3);font-size:12px;margin-bottom:4px">${c[0]}</small>
+                <strong style="display:block;font-size:26px;font-weight:700;color:var(--g900)">${c[1]}</strong>
+                <em style="display:block;color:var(--ink-2);font-size:12px;font-style:normal;margin-top:4px">${c[2] || '&nbsp;'}</em>
             </div>
-        ` : ''}
-        <div class="section">
-            <h2 style="font-size:16px;font-weight:700;margin-bottom:12px;color:var(--g900)">Documents</h2>
-            <div class="links" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px">
-                ${cards}
-                ${singles.length ? `
-                    <div class="panel" style="padding:16px">
-                        <h3 style="font-size:14px;font-weight:600;margin-bottom:10px;color:var(--g900)">Other</h3>
-                        <div style="display:flex;flex-direction:column;gap:6px">
-                            ${singles.map(([l]) => `
-                                <button class="btn" style="justify-content:space-between;width:100%" data-act="nav" data-id="${slug(l)}">
-                                    <span>${l}</span>${icon('chev')}
-                                </button>
-                            `).join('')}
-                        </div>
+        `).join('')}
+    </div>
+    ${short.length ? `
+        <div class="section" style="margin-bottom:24px">
+            <h2 style="font-size:16px;font-weight:700;margin-bottom:12px;color:var(--g900)">Shortcuts &amp; Live Document Counts</h2>
+            <div class="shortcuts" style="display:flex;gap:10px;flex-wrap:wrap">
+                ${short.map(([k, p]) => {
+                    const count = TALENT_BOOTSTRAP.counts && TALENT_BOOTSTRAP.counts[p.dt] != null
+                        ? TALENT_BOOTSTRAP.counts[p.dt]
+                        : (SETS[p.set] && SETS[p.set].rows ? SETS[p.set].rows.length : 0);
+                    return `<button class="btn" data-act="nav" data-id="${k.split(':')[1]}">
+                        ${p.dt}
+                        <span class="cnt" style="margin-left:8px;background:var(--g100);color:var(--g900);padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600">
+                            ${count}
+                        </span>
+                    </button>`;
+                }).join('')}
+            </div>
+        </div>
+    ` : ''}
+    <div class="section" style="margin-bottom:24px">
+        <h2 style="font-size:16px;font-weight:700;margin-bottom:12px;color:var(--g900)">Documents</h2>
+        <div class="links" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px">
+            ${cards}
+            ${singles.length ? `
+                <div class="panel" style="padding:16px">
+                    <h3 style="font-size:14px;font-weight:600;margin-bottom:10px;color:var(--g900)">Other</h3>
+                    <div style="display:flex;flex-direction:column;gap:6px">
+                        ${singles.map(([l]) => `
+                            <button class="btn" style="justify-content:space-between;width:100%" data-act="nav" data-id="${slug(l)}">
+                                <span>${l}</span>${icon('chev')}
+                            </button>
+                        `).join('')}
                     </div>
-                ` : ''}
-            </div>
-        </div>`;
+                </div>
+            ` : ''}
+        </div>
+    </div>`;
 }
 
 function renderTalentList() {
