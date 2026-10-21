@@ -4,21 +4,16 @@
 const $ = (s, r = document) => r.querySelector(s);
 const slug = s => s.toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
-function getInitialModule() {
-  const params = new URLSearchParams(window.location.search);
-  const qMod = params.get('mod');
-  if (qMod && (qMod === 'eos' || qMod === 'talent') && hasModulePermission(qMod)) {
-    return qMod;
-  }
-  if (hasModulePermission('eos')) return 'eos';
-  if (hasModulePermission('talent')) return 'talent';
-  return 'eos';
-}
+const urlParams = new URLSearchParams(window.location.search);
+const qMod = urlParams.get('mod');
+const hasExplicitMod = qMod && (qMod === 'eos' || qMod === 'talent') && hasModulePermission(qMod);
+const defaultMod = hasExplicitMod ? qMod : (hasModulePermission('eos') ? 'eos' : (hasModulePermission('talent') ? 'talent' : 'eos'));
+const initialPage = hasExplicitMod ? (urlParams.get('page') || 'overview') : 'home';
 
 const S = {
-  view: 'workspace',
-  mod: 'eos',
-  page: 'overview',
+  view: hasExplicitMod ? (initialPage === 'overview' ? 'workspace' : 'list') : 'home',
+  mod: defaultMod,
+  page: initialPage,
   rec: null,
   lay: 'list',
   vw: 'all',
@@ -27,7 +22,7 @@ const S = {
   sel: new Set(),
   act: {},
   palI: 0,
-  hidden: false,
+  hidden: !hasExplicitMod,
   loading: false,
   open: new Set(['eos:overview', 'talent:shift-and-attendance', 'talent:hrpro-applications', 'talent:lifecycle', 'talent:performance', 'talent:expenses-and-travel'])
 };
@@ -58,6 +53,7 @@ function go(m, p, rec = null) {
   S.page = p || 'overview';
   S.rec = rec;
   S.view = rec ? 'record' : S.page === 'overview' ? 'workspace' : (S.mod === 'eos' ? 'workspace' : 'list');
+  S.hidden = false;
   S.lay = 'list';
   S.vw = 'all';
   S.grp = false;
@@ -83,7 +79,16 @@ function go(m, p, rec = null) {
 }
 
 function home() {
-  go(S.mod, 'overview');
+  S.view = 'home';
+  S.page = 'home';
+  S.rec = null;
+  S.sel.clear();
+  S.hidden = true;
+  document.body.classList.remove('nav-open');
+  render();
+  enter();
+  const page = $('.page');
+  if (page) page.scrollTop = 0;
 }
 
 function enter() {
@@ -114,7 +119,7 @@ function renderRail() {
 
   const permitted = MODULES.filter(m => hasModulePermission(m.id));
   const modBtns = permitted.map(m => `
-    <button class="rb" data-act="mod" data-id="${m.id}" title="${m.name}" aria-label="${m.name}" ${S.mod === m.id ? 'aria-current="true"' : ''}>
+    <button class="rb" data-act="mod" data-id="${m.id}" title="${m.name}" aria-label="${m.name}" ${S.view !== 'home' && S.mod === m.id ? 'aria-current="true"' : ''}>
       ${icon(m.icon)}
     </button>
   `).join('');
@@ -125,10 +130,9 @@ function renderRail() {
 }
 
 function renderTop() {
-  const exp = S.hidden;
   const top = $('#top');
   if (!top) return;
-  top.innerHTML = `${exp ? `<button class="icon-btn exp" data-act="sbtoggle" aria-label="Show sidebar" title="Show sidebar">${icon('panel')}</button>` : ''}
+  top.innerHTML = `<button class="icon-btn" data-act="sbtoggle" aria-label="Toggle sidebar" title="Toggle sidebar">${icon('menu')}</button>
    <div class="crumbs" style="display:flex;align-items:center;gap:8px">
      ${crumbs()}
    </div>
@@ -138,7 +142,7 @@ function renderTop() {
 
 function renderSide() {
   const m = mod();
-  const head = `<h2>${m.name}</h2><button class="icon-btn" data-act="sbtoggle" aria-label="Hide sidebar" title="Hide sidebar">${icon('panel')}</button>`;
+  const head = `<div class="sb-head-info"><h2>${m.name}</h2>${m.blurb ? `<p>${m.blurb}</p>` : ''}</div><button class="icon-btn" data-act="sbtoggle" aria-label="Hide sidebar" title="Hide sidebar">${icon('panel')}</button>`;
   const nav = m.nav.map(([l, ic, kids]) => {
     const id = slug(l);
     if (!kids) return `<button class="nv" data-act="nav" data-id="${id}" ${S.page === id ? 'aria-current="page"' : ''}>${icon(ic)}<span class="lbl">${l}</span></button>`;
@@ -152,7 +156,14 @@ function renderSide() {
 
 function crumbs() {
   const sep = '<span class="sep">/</span>';
-  return `<b>${mod().name}</b>${S.page && S.page !== 'overview' ? sep + '<b>' + navLabel() + '</b>' : ''}`;
+  if (S.view === 'home') {
+    return `<b>Home</b>`;
+  }
+  const m = mod();
+  if (S.page === 'overview' && !S.rec) {
+    return `<button data-act="home">Home</button>${sep}<b>${m.name}</b>`;
+  }
+  return `<button data-act="home">Home</button>${sep}<button data-act="mod" data-id="${m.id}">${m.name}</button>${sep}<b>${navLabel()}</b>`;
 }
 
 /* =====================================================================
@@ -164,6 +175,7 @@ function assigned() {
     const set = SETS[p.set];
     if (!set || !set.attention) continue;
     const [m, pg] = k.split(':');
+    if (!hasModulePermission(m)) continue;
     set.rows.forEach(r => {
       if (r.owner === USER.name && set.attention.includes(r.status)) out.push({ m, pg, dt: p.dt, r, set });
     });
@@ -172,7 +184,67 @@ function assigned() {
 }
 
 function renderHome() {
-  renderMain();
+  const permitted = MODULES.filter(m => hasModulePermission(m.id));
+  const cardsHtml = permitted.map(m => `
+    <div class="mod-card" data-act="mod" data-id="${m.id}" role="button" tabindex="0">
+      <div class="mod-icon">
+        ${icon(m.icon)}
+      </div>
+      <div class="mod-info">
+        <h3>${m.name}</h3>
+        <p>${m.blurb || ''}</p>
+      </div>
+    </div>
+  `).join('');
+
+  const tasks = assigned();
+  let bodyHtml = '';
+  if (!tasks.length) {
+    bodyHtml = `<tr><td colspan="4" style="text-align:center;padding:48px 16px;color:var(--ink-3);font-size:13.5px">No pending tasks assigned to you.</td></tr>`;
+  } else {
+    bodyHtml = tasks.map(t => `
+      <tr data-act="work" data-m="${t.m}" data-p="${t.pg}" data-id="${t.r.id}" style="cursor:pointer">
+        <td>${t.dt}</td>
+        <td style="color:var(--ink-3);font-family:var(--font-mono,monospace);font-size:12px">${t.r.id}</td>
+        <td style="font-weight:600;color:var(--g900)">${t.r[t.set.titleKey] || t.r.id}</td>
+        <td><span class="pill ${TONE[t.r.status] || 'neutral'}">${t.r.status}</span></td>
+      </tr>
+    `).join('');
+  }
+
+  const main = $('#main');
+  if (!main) return;
+  main.innerHTML = `
+    <div class="ph" style="margin-bottom:24px">
+      <h1 style="font-size:24px;font-weight:700;color:var(--g900);margin:0">Home</h1>
+    </div>
+    <div class="home-modules">
+      ${cardsHtml}
+    </div>
+    <div class="home-section" style="margin-top:36px">
+      <h2 style="font-size:18px;font-weight:700;color:var(--g900);margin-bottom:16px">Assigned to me</h2>
+      <div class="panel" style="overflow:hidden">
+        <div class="scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Document</th>
+                <th>ID</th>
+                <th>Title</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${bodyHtml}
+            </tbody>
+          </table>
+        </div>
+        <div class="foot" style="padding:12px 16px;color:var(--ink-3);font-size:12.5px;border-top:1px solid var(--line)">
+          ${tasks.length} ${tasks.length === 1 ? 'document' : 'documents'}
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 function renderWorkspace() {
@@ -276,7 +348,9 @@ function renderRecord() {
 }
 
 function renderMain() {
-  if (S.mod === 'eos') {
+  if (S.view === 'home') {
+    renderHome();
+  } else if (S.mod === 'eos') {
     renderEos();
   } else if (S.mod === 'talent') {
     if (typeof renderTalent === 'function') renderTalent();
@@ -291,7 +365,7 @@ function render() {
   renderTop();
   renderMain();
   const app = $('#app');
-  if (app) app.classList.toggle('sb-off', S.hidden || S.view === 'home');
+  if (app) app.classList.toggle('sb-off', S.hidden);
 }
 
 /* =====================================================================
@@ -429,7 +503,12 @@ document.addEventListener('click', e => {
      if (el.nextElementSibling) el.nextElementSibling.classList.toggle('open', o);
      break;
    }
-   case 'sbtoggle': S.hidden = !S.hidden; render(); break;
+   case 'sbtoggle': {
+     S.hidden = !S.hidden;
+     const appEl = $('#app');
+     if (appEl) appEl.classList.toggle('sb-off', S.hidden);
+     break;
+   }
    case 'menu': document.body.classList.toggle('nav-open'); break;
    case 'view': S.vw = id; renderMain(); break;
    case 'grp': S.grp = !S.grp; renderMain(); break;
@@ -511,18 +590,6 @@ document.addEventListener('keydown', e => {
     if (e.key === '/' && $('#q')) { e.preventDefault(); $('#q').focus(); }
   }
 });
-
-// Setup Initial Module
-const initMod = getInitialModule();
-S.mod = initMod;
-if (initMod === 'talent') {
-  const urlParams = new URLSearchParams(window.location.search);
-  const qPage = urlParams.get('page');
-  if (qPage) {
-    S.page = qPage;
-    S.view = 'list';
-  }
-}
 
 // Initial boot
 render();

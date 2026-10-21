@@ -166,20 +166,30 @@ svg.i {
 }
 .sb-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   padding: 14px 16px;
   border-bottom: 1px solid var(--line);
+  gap: 8px;
+}
+.sb-head-info {
+  flex: 1;
+  min-width: 0;
 }
 .sb-head h2 {
   font-size: 15px;
   font-weight: 700;
   color: var(--g900);
   margin: 0;
-  line-height: 1;
+  line-height: 1.2;
 }
 .sb-head p {
-  display: none;
+  display: block;
+  font-size: 11.5px;
+  color: var(--ink-3);
+  margin: 4px 0 0 0;
+  line-height: 1.35;
+  word-break: break-word;
 }
 .sb-nav {
   flex: 1;
@@ -897,4 +907,64 @@ body.pal-open .pal-wrap {
   .page {
     padding: 16px;
   }
+}
+
+/* Home Page Module Cards */
+.home-modules {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 20px;
+  margin-bottom: 32px;
+}
+.mod-card {
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  cursor: pointer;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm);
+  transition: all .18s var(--ease);
+  text-decoration: none;
+  text-align: left;
+}
+.mod-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--olive);
+}
+.mod-card .mod-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  background: var(--g100);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--g800);
+  flex-shrink: 0;
+  transition: background .18s var(--ease);
+}
+.mod-card .mod-icon svg {
+  width: 26px;
+  height: 26px;
+  stroke: currentColor;
+  stroke-width: 1.75;
+}
+.mod-card:hover .mod-icon {
+  background: var(--g200);
+}
+.mod-card .mod-info h3 {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--g900);
+  margin: 0 0 4px 0;
+}
+.mod-card .mod-info p {
+  font-size: 13px;
+  color: var(--ink-2);
+  margin: 0;
+  line-height: 1.4;
 }

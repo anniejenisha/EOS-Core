@@ -139,7 +139,7 @@ const MODULES = [
   {
     id: 'eos',
     name: 'EOS',
-    blurb: 'Entrepreneurial Operating System - Level 10 Meetings, Scorecards, Rocks, To-Dos, Issues & V/TO',
+    blurb: 'Scorecard, Rocks, To-Dos, Issues and Meetings',
     icon: 'target',
     cards: [],
     nav: [
@@ -154,7 +154,7 @@ const MODULES = [
   {
     id: 'talent',
     name: 'Talent Management',
-    blurb: 'Live HR, shifts, attendance, leaves, payroll and talent operations on Frappe ERP',
+    blurb: 'HR, shifts, leave and payroll',
     icon: 'users',
     cards: [
       ['Employees', '0', 'active in organization'],
