@@ -26,11 +26,11 @@ app_license = "mit"
 
 # include js, css files in header of desk.html
 # app_include_css = "/assets/eos_core/css/scorecard_grid.css"
-# app_include_js = "/assets/eos_core/js/scorecard_grid.js"
+app_include_js = "/assets/eos_core/js/desk_redirect.js"
 
 # include js, css files in header of web template
 # web_include_css = "/assets/eos_core/css/eos_core.css"
-# web_include_js = "/assets/eos_core/js/eos_core.js"
+web_include_js = "/assets/eos_core/js/login_redirect.js"
 
 # include custom scss in every website theme (without file extension ".scss")
 # website_theme_scss = "eos_core/public/scss/website"
@@ -74,6 +74,8 @@ role_home_page = {
 	"Team Member": "eos",
 	"Manager": "eos",
 	"Admin": "eos",
+	"Administrator": "eos",
+	"Guest": "eos",
 }
 
 # Login Event Hook: redirect all successful logins directly to /eos
@@ -110,6 +112,7 @@ on_login = "eos_core.eos_api.on_login_redirect"
 after_migrate = [
 	"eos_core.roles.ensure_roles",
 	"eos_core.seed_sample_data.seed_all",
+	"eos_core.eos_api.setup_website_settings",
 ]
 
 # Uninstallation

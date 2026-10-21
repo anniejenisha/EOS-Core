@@ -78,11 +78,21 @@ def get_user_home_page(user=None):
 	return "eos"
 
 
+def setup_website_settings():
+	"""Ensures Website Settings has home_page set to eos upon bench migrate."""
+	try:
+		frappe.db.set_single_value("Website Settings", "home_page", "eos")
+		frappe.clear_cache()
+	except Exception:
+		pass
+
+
 def on_login_redirect(login_manager):
 	user = login_manager.user
 	if user and user != "Guest":
 		frappe.cache.hset("redirect_after_login", user, "/eos")
 		frappe.local.response["home_page"] = "/eos"
+		frappe.local.response["redirect_to"] = "/eos"
 
 
 
