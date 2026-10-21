@@ -10,6 +10,25 @@ let EOS_TEAMS = [];
 let EOS_LEADER_TEAMS = (window.__EOS_BOOT__ && (window.__EOS_BOOT__.leader_teams || (window.__EOS_BOOT__.user && window.__EOS_BOOT__.user.leader_teams))) || [];
 let EOS_TEAM_MEMBERS = {};
 let EOS_PEOPLE = [];
+let EOS_DEFAULT_CURRENCY = (window.__EOS_BOOT__ && window.__EOS_BOOT__.default_currency) || 'INR';
+const EOS_CURRENCIES = [
+  ['INR', 'INR (Indian Rupee)'],
+  ['USD', 'USD (US Dollar)'],
+  ['KES', 'KES (Kenyan Shilling)'],
+  ['EUR', 'EUR (Euro)'],
+  ['GBP', 'GBP (British Pound)'],
+  ['AED', 'AED (UAE Dirham)'],
+  ['CAD', 'CAD (Canadian Dollar)'],
+  ['AUD', 'AUD (Australian Dollar)'],
+  ['SGD', 'SGD (Singapore Dollar)'],
+  ['SAR', 'SAR (Saudi Riyal)'],
+  ['ZAR', 'ZAR (South African Rand)'],
+  ['TZS', 'TZS (Tanzanian Shilling)'],
+  ['UGX', 'UGX (Ugandan Shilling)'],
+  ['CHF', 'CHF (Swiss Franc)'],
+  ['JPY', 'JPY (Japanese Yen)'],
+  ['CNY', 'CNY (Chinese Yuan)']
+];
 
 function isEosAdmin() {
   const userEmail = String(getLoggedInUserEmail() || '').toLowerCase().trim();
@@ -161,7 +180,18 @@ const eYD = md => eToday().getFullYear() + '-' + md;
 const eIc = (n, c) => icon(n).replace('class="i "', 'class="i ' + c + '"');
 const eAv = (n, c) => `<span class="avatar ${c || 'sm'}" title="${eEsc(n)}">${eEsc(initials(n || 'User'))}</span>`;
 const eN = v => v == null ? '–' : (Number.isInteger(v) ? fmt(v) : v.toLocaleString('en-KE', { maximumFractionDigits: 2 }));
-const eU = (m, v) => m.unit === 'kes' ? 'KES ' + eN(v) : m.unit === 'pct' ? eN(v) + '%' : eN(v);
+const eU = (m, v) => {
+  if (v == null) return '–';
+  if (!m) return eN(v);
+  const u = (m.unit || '').toString().toLowerCase();
+  const ut = (m.unit_type || '').toString();
+  if (u === 'pct' || ut === 'Percentage') return eN(v) + '%';
+  if (u === 'currency' || u === 'kes' || ut === 'Currency' || m.currency) {
+    const cur = (m.currency || (u === 'kes' ? 'KES' : (m.unit && !['num', 'pct', 'currency'].includes(u) ? m.unit : EOS_DEFAULT_CURRENCY))).toString().toUpperCase();
+    return cur + ' ' + eN(v);
+  }
+  return eN(v);
+};
 const eByDue = (a, b) => String(a.due || '').localeCompare(String(b.due || '')) || a.id - b.id;
 let eSeq = 1000;
 
@@ -352,6 +382,7 @@ function applyBootstrapData(data) {
   if (data.issues) eIssues = data.issues;
   if (data.meetings) E.past = data.meetings;
   if (data.vto) E.vtoV = data.vto;
+  if (data.default_currency) EOS_DEFAULT_CURRENCY = data.default_currency;
   E.loaded = true;
   if (typeof renderMain === 'function' && typeof S !== 'undefined' && S.mod === 'eos') {
     renderMain();
@@ -481,7 +512,7 @@ function eosMy90() {
     ${mine.length ? `<div class="scroll"><table><thead><tr><th class="mn" style="left:0;box-shadow:none">Title</th>${isAdmin ? '<th>Owner</th>' : ''}<th>Goal</th><th>Average</th><th>Total</th>${per.map((p, i) => `<th class="${i ? '' : 'cur'}">${i ? '' : 'Current Week<small>'}${p}${i ? '' : '</small>'}</th>`).join('')}</tr></thead><tbody>
     ${mine.map(m => {
       const v = (m.vals || []).slice(0, 6).filter(x => x != null), avg = v.length ? v.reduce((a, b) => a + b, 0) / v.length : null, tot = v.length && !m.noTotal ? v.reduce((a, b) => a + b, 0) : null;
-      return `<tr><td class="mn" style="left:0;box-shadow:none">${eEsc(m.name)}</td>${isAdmin ? `<td style="color:var(--ink-2);font-size:12px">${eEsc(m.owner || '')}</td>` : ''}<td class="g">${m.op} ${eU(m, m.target)}</td><td class="g">${avg == null ? '–' : eU(m, avg)}</td><td class="g">${tot == null ? '–' : eU(m, tot)}</td>${per.map((_, i) => { const x = (m.vals || [])[i]; return x == null ? '<td class="cell na">–</td>' : `<td class="cell ${ePass(m, x) ? 'ok' : 'bad'}" style="cursor:default">${m.unit === 'pct' ? eN(x) + '%' : eN(x)}</td>`; }).join('')}</tr>`;
+      return `<tr><td class="mn" style="left:0;box-shadow:none">${eEsc(m.name)}</td>${isAdmin ? `<td style="color:var(--ink-2);font-size:12px">${eEsc(m.owner || '')}</td>` : ''}<td class="g">${m.op} ${eU(m, m.target)}</td><td class="g">${avg == null ? '–' : eU(m, avg)}</td><td class="g">${tot == null ? '–' : eU(m, tot)}</td>${per.map((_, i) => { const x = (m.vals || [])[i]; return x == null ? '<td class="cell na">–</td>' : `<td class="cell ${ePass(m, x) ? 'ok' : 'bad'}" style="cursor:default">${eU(m, x)}</td>`; }).join('')}</tr>`;
     }).join('')}</tbody></table></div>`
       : `<div class="none">${isAdmin ? 'No measurables found in ERP.' : 'No measurables assigned to you in ERP.'}</div>`}</section>`;
 }
@@ -2055,7 +2086,7 @@ function eosForm(title, fields, save) {
     : f.t === 'textarea' ? `<textarea class="field" id="d${i}" placeholder="${eEsc(f.ph || '')}">${eEsc(f.v || '')}</textarea>`
       : `<input class="field" id="d${i}" type="${f.t || 'text'}" value="${eEsc(f.v == null ? '' : f.v)}" placeholder="${eEsc(f.ph || '')}">`;
   $('#drawer').innerHTML = `<header><h2>${title}</h2><button class="icon-btn" data-act="close" aria-label="Close">${icon('x')}</button></header>
-   <div class="body">${fields.map((f, i) => `<div class="f"><label for="d${i}">${f.l}${f.req ? ' *' : f.opt ? ' (optional)' : ''}</label>${fh(f, i)}<div class="err">${f.l} is required.</div></div>`).join('')}</div>
+   <div class="body">${fields.map((f, i) => `<div class="f" data-k="${f.k}"><label for="d${i}">${f.l}${f.req ? ' *' : f.opt ? ' (optional)' : ''}</label>${fh(f, i)}<div class="err">${f.l} is required.</div></div>`).join('')}</div>
    <footer><button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="save">Save to ERP</button></footer>`;
   document.body.classList.add('drawer-open'); $('#drawer').setAttribute('aria-hidden', 'false');
   setTimeout(() => {
@@ -2076,13 +2107,38 @@ function eosForm(title, fields, save) {
         });
       }
     }
+    const unitIdx = fields.findIndex(f => f.k === 'unit');
+    const currencyIdx = fields.findIndex(f => f.k === 'currency');
+    if (unitIdx !== -1 && currencyIdx !== -1) {
+      const unitEl = document.getElementById('d' + unitIdx);
+      const curRow = document.querySelector('#drawer .f[data-k="currency"]');
+      const updateCurrencyVisibility = () => {
+        if (!curRow) return;
+        const val = (unitEl ? unitEl.value : '').toLowerCase();
+        const isCur = (val === 'currency' || val === 'kes');
+        curRow.style.display = isCur ? '' : 'none';
+      };
+      if (unitEl && curRow) {
+        unitEl.addEventListener('change', updateCurrencyVisibility);
+        updateCurrencyVisibility();
+      }
+    }
   }, 100);
 }
 
 function eosSave() {
   if (!E.form) return closeDrawer();
   const vals = {}; let bad = false;
-  E.form.fields.forEach((f, i) => { const el = $('#d' + i), v = el.value.trim(), empty = f.req && !v; el.closest('.f').classList.toggle('bad', empty); if (empty) bad = true; vals[f.k] = f.t === 'number' ? (v === '' ? 0 : Number(v)) : v; });
+  E.form.fields.forEach((f, i) => {
+    const el = $('#d' + i);
+    const parentRow = el ? el.closest('.f') : null;
+    const isHidden = parentRow && (parentRow.style.display === 'none' || window.getComputedStyle(parentRow).display === 'none');
+    const v = el ? el.value.trim() : '';
+    const empty = !isHidden && f.req && !v;
+    if (parentRow) parentRow.classList.toggle('bad', empty);
+    if (empty) bad = true;
+    vals[f.k] = isHidden ? '' : (f.t === 'number' ? (v === '' ? 0 : Number(v)) : v);
+  });
   if (bad) return;
   E.form.save(vals); closeDrawer(); E.form = null; renderMain();
 }
@@ -2317,6 +2373,10 @@ function eosDrawer(kind, rec, pre) {
   const team = v => ({ t: 'select', o: EOS_TEAMS, v: v || initialTeam });
 
   if (p === 'measurable') {
+    const isCurrencyUnit = (r.unit === 'currency' || r.unit === 'kes' || !!r.currency);
+    const currentUnit = isCurrencyUnit ? 'currency' : (r.unit === 'pct' ? 'pct' : 'num');
+    const currentCurrency = (r.currency || (r.unit && !['num', 'pct', 'currency', 'kes'].includes(String(r.unit).toLowerCase()) ? r.unit : EOS_DEFAULT_CURRENCY)).toUpperCase();
+
     return eosForm(rec ? 'Edit Measurable in ERP' : 'Create Measurable in ERP', [
       { k: 'name', l: 'Measurable Title', req: true, v: r.name, ph: 'e.g. Weekly Qualified Leads' },
       { k: 'desc', l: 'Description', opt: true, t: 'textarea', v: r.desc || '' },
@@ -2324,24 +2384,47 @@ function eosDrawer(kind, rec, pre) {
       { k: 'freq', l: 'Frequency', req: true, t: 'select', o: [['weekly', 'Weekly'], ['monthly', 'Monthly'], ['quarterly', 'Quarterly'], ['annual', 'Annual']], v: r.freq || (E.tab.scorecard !== 'scorecards' ? E.tab.scorecard : 'weekly') },
       { k: 'op', l: 'Goal Operator', req: true, t: 'select', o: eOps, v: r.op || '>=' },
       { k: 'target', l: 'Goal Target', req: true, t: 'number', v: r.target != null ? String(r.target) : '10' },
-      { k: 'unit', l: 'Unit Type', req: true, t: 'select', o: [['num', 'Number / Count'], ['kes', 'Currency ($)'], ['pct', 'Percentage (%)']], v: r.unit || 'num' },
+      { k: 'unit', l: 'Unit Type', req: true, t: 'select', o: [['num', 'Number / Count'], ['currency', 'Currency'], ['pct', 'Percentage (%)']], v: currentUnit },
+      { k: 'currency', l: 'Currency', req: true, t: 'select', o: EOS_CURRENCIES, v: currentCurrency },
       { k: 'owner', l: 'Owner', req: true, ...own(r.owner, r.team) }
     ], async v => {
+      const opCode = (v.op === '=' || v.op === '==') ? '==' : v.op;
+      const isCur = (v.unit === 'currency' || v.unit === 'kes');
+      const cur = isCur ? (v.currency || EOS_DEFAULT_CURRENCY).toUpperCase() : '';
       if (rec) {
-        const opCode = (v.op === '=' || v.op === '==') ? '==' : v.op;
-        Object.assign(rec, { name: v.name, desc: v.desc, team: v.team, freq: v.freq, op: opCode, target: parseFloat(v.target) || 0, unit: v.unit, owner: v.owner });
+        Object.assign(rec, {
+          name: v.name,
+          desc: v.desc,
+          team: v.team,
+          freq: v.freq,
+          op: opCode,
+          target: parseFloat(v.target) || 0,
+          unit: v.unit,
+          currency: cur,
+          owner: v.owner
+        });
         toast('Updating Measurable in ERP...');
         renderMain();
         const res = await apiCall('eos_core.eos_api.save_measurable', {
-          name: v.name, freq: v.freq, team: v.team, owner: v.owner, unit: v.unit, op: opCode, target: parseFloat(v.target) || 0, desc: v.desc || '', docname: rec.docname || rec.name
+          name: v.name,
+          freq: v.freq,
+          team: v.team,
+          owner: v.owner,
+          unit: v.unit,
+          currency: cur,
+          op: opCode,
+          target: parseFloat(v.target) || 0,
+          desc: v.desc || '',
+          docname: rec.docname || rec.name
         });
         if (res && res.error) {
           toast(res.message || 'Error updating measurable', 'error');
         } else {
+          if (res && res.currency) rec.currency = res.currency;
           toast('Measurable updated in ERP DocType!');
+          renderMain();
         }
       } else {
-        const opCode = (v.op === '=' || v.op === '==') ? '==' : v.op;
         const newM = {
           id: ++eSeq,
           name: v.name,
@@ -2351,6 +2434,7 @@ function eosDrawer(kind, rec, pre) {
           op: opCode,
           target: parseFloat(v.target) || 0,
           unit: v.unit,
+          currency: cur,
           owner: v.owner,
           vals: [null, null, null, null, null, null, null, null, null, null, null, null, null]
         };
@@ -2358,13 +2442,23 @@ function eosDrawer(kind, rec, pre) {
         toast('Saving Measurable to ERP EOS Metric...');
         renderMain();
         const res = await apiCall('eos_core.eos_api.save_measurable', {
-          name: v.name, freq: v.freq, team: v.team, owner: v.owner, unit: v.unit, op: opCode, target: parseFloat(v.target) || 0, desc: v.desc || ''
+          name: v.name,
+          freq: v.freq,
+          team: v.team,
+          owner: v.owner,
+          unit: v.unit,
+          currency: cur,
+          op: opCode,
+          target: parseFloat(v.target) || 0,
+          desc: v.desc || ''
         });
         if (res && res.error) {
           toast(res.message || 'Error saving measurable', 'error');
         } else {
           if (res && res.docname) newM.docname = res.docname;
+          if (res && res.currency) newM.currency = res.currency;
           toast('Measurable saved in ERP Metric DocType!');
+          renderMain();
         }
       }
     });

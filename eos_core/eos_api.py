@@ -32,6 +32,7 @@ def get_eos_bootstrap(user_email=None):
 		"issues": get_issues_list(is_admin=is_admin, allocated_teams=allocated_teams),
 		"meetings": get_meetings_list(is_admin=is_admin, allocated_teams=allocated_teams),
 		"vto": get_vto_info(),
+		"default_currency": frappe.db.get_single_value("Global Defaults", "default_currency") or "INR",
 	}
 
 
@@ -361,9 +362,27 @@ def get_measurables_list(is_admin=True, allocated_teams=None):
 				vals = w_vals
 
 			unit = "num"
-			if m.unit_type == "Currency" or "kes" in (m.unit or "").lower() or "$" in (m.unit or ""):
-				unit = "kes"
-			elif m.unit_type == "Percentage" or "%" in (m.unit or ""):
+			currency = ""
+			u_raw = (m.unit or "").strip()
+			if m.unit_type == "Currency" or "kes" in u_raw.lower() or "$" in u_raw or u_raw.upper() in ["INR", "USD", "KES", "EUR", "GBP", "AED", "CAD", "AUD", "TZS", "UGX", "ZAR", "SAR", "SGD", "CHF", "JPY", "CNY"]:
+				unit = "currency"
+				if u_raw.upper() in ["INR", "USD", "KES", "EUR", "GBP", "AED", "CAD", "AUD", "TZS", "UGX", "ZAR", "SAR", "SGD", "CHF", "JPY", "CNY"]:
+					currency = u_raw.upper()
+				elif "$" in u_raw:
+					currency = "USD"
+				elif "kes" in u_raw.lower() or "sh" in u_raw.lower():
+					currency = "KES"
+				elif "₹" in u_raw or "inr" in u_raw.lower():
+					currency = "INR"
+				elif "€" in u_raw:
+					currency = "EUR"
+				elif "£" in u_raw:
+					currency = "GBP"
+				elif u_raw and len(u_raw) <= 5 and u_raw.isalpha():
+					currency = u_raw.upper()
+				else:
+					currency = frappe.db.get_single_value("Global Defaults", "default_currency") or "INR"
+			elif m.unit_type == "Percentage" or "%" in u_raw:
 				unit = "pct"
 
 			out.append({
@@ -377,6 +396,7 @@ def get_measurables_list(is_admin=True, allocated_teams=None):
 				"op": m.operator or ">=",
 				"target": flt(m.target_value),
 				"unit": unit,
+				"currency": currency,
 				"noTotal": (unit == "pct" or m.rollup == "Average"),
 				"vals": vals,
 				"monthly_vals": m_vals,
@@ -826,7 +846,7 @@ def ensure_player_in_team(user, team):
 
 
 @frappe.whitelist(allow_guest=True)
-def save_measurable(name, freq="Weekly", team=None, owner=None, unit="num", op=">=", target=0, desc="", docname=None):
+def save_measurable(name, freq="Weekly", team=None, owner=None, unit="num", op=">=", target=0, desc="", docname=None, currency=None):
 	owner_user = resolve_user_email(owner) or frappe.session.user or "Administrator"
 	target_team = team or "Leadership Team"
 	if target_team and not frappe.db.exists("Team", target_team):
@@ -839,7 +859,18 @@ def save_measurable(name, freq="Weekly", team=None, owner=None, unit="num", op="
 			pass
 	ensure_player_in_team(owner_user, target_team)
 
-	unit_type = "Currency" if unit == "kes" else ("Percentage" if unit == "pct" else "Number")
+	is_curr = (unit in ["currency", "kes"]) or bool(currency and str(currency).strip())
+	unit_type = "Currency" if is_curr else ("Percentage" if unit == "pct" else "Number")
+	
+	chosen_currency = ""
+	if is_curr:
+		site_default_curr = frappe.db.get_single_value("Global Defaults", "default_currency") or "INR"
+		chosen_currency = (currency or site_default_curr).strip().upper()
+		unit_val = chosen_currency
+	elif unit == "pct":
+		unit_val = "%"
+	else:
+		unit_val = ""
 	
 	existing_name = docname if (docname and frappe.db.exists("EOS Metric", docname)) else None
 
@@ -860,7 +891,7 @@ def save_measurable(name, freq="Weekly", team=None, owner=None, unit="num", op="
 		doc.team = target_team
 		doc.owner_user = owner_user
 		doc.unit_type = unit_type
-		doc.unit = "$" if unit == "kes" else ("%" if unit == "pct" else "")
+		doc.unit = unit_val
 		doc.operator = op_str
 		doc.target_value = flt(target)
 		doc.description = desc
@@ -874,14 +905,14 @@ def save_measurable(name, freq="Weekly", team=None, owner=None, unit="num", op="
 			"team": target_team,
 			"owner_user": owner_user,
 			"unit_type": unit_type,
-			"unit": "$" if unit == "kes" else ("%" if unit == "pct" else ""),
+			"unit": unit_val,
 			"operator": op_str,
 			"target_value": flt(target),
 			"description": desc,
 			"archived": 0
 		}).insert(ignore_permissions=True)
 	frappe.db.commit()
-	return {"status": "ok", "docname": doc.name}
+	return {"status": "ok", "docname": doc.name, "currency": chosen_currency, "unit": unit_val}
 
 
 @frappe.whitelist(allow_guest=True)
