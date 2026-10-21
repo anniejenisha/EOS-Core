@@ -2068,7 +2068,7 @@ function renderEos() {
 function eMenuItems(t, id) {
   if (t === 'todo') { const x = eTodos.find(a => a.id === +id); return x && [['Edit', 'eos-edit-todo', id], [x.archived ? 'Restore' : 'Archive', 'eos-todo-arch', id]]; }
   if (t === 'issue') { const x = eIssues.find(a => a.id === +id); return x && [['Edit', 'eos-edit-issue', id], [x.archived ? 'Restore' : 'Archive', 'eos-issue-arch', id]]; }
-  if (t === 'rock') { const r = eRocks.find(a => a.id === +id); return r && [...['On-track', 'Off-track', 'Done'].filter(s => s !== r.status).map(s => ['Mark ' + s.toLowerCase(), 'eos-rock-st', id + ':' + s]), ['Add milestone', 'eos-ms-add', id], [r.archived ? 'Restore' : 'Archive', 'eos-rock-st', id + ':archive']]; }
+  if (t === 'rock') { const r = eRocks.find(a => a.id === +id); return r && [['Edit', 'eos-edit-rock', id], ...['On-track', 'Off-track', 'Done'].filter(s => s !== r.status).map(s => ['Mark ' + s.toLowerCase(), 'eos-rock-st', id + ':' + s]), ['Add milestone', 'eos-ms-add', id], [r.archived ? 'Restore' : 'Archive', 'eos-rock-st', id + ':archive']]; }
   if (t === 'ms') return [['Delete milestone', 'eos-ms-del', id]];
 }
 
@@ -2480,17 +2480,51 @@ function eosDrawer(kind, rec, pre) {
     });
   }
   else if (p === 'rocks') {
-    const o = q.owner;
-    eosForm('Create Rock in ERP', [{ k: 'type', l: 'Rock type', t: 'select', o: [['personal', 'Individual Rock'], ['company', 'Company Rock']], v: o === 'company' ? 'company' : 'personal' },
-    { k: 'name', l: 'Title', req: true, ph: 'Add a title for the Rock' }, { k: 'team', l: 'Team', ...team(r.team) },
-    { k: 'owner', l: 'Owner', ...own(o && o !== 'company' ? o : null, r.team) }, { k: 'end', l: 'Due date', t: 'date', v: eYD('12-31'), req: true },
-    { k: 'status', l: 'Status', t: 'select', o: ['On-track', 'Off-track'] }, { k: 'desc', l: 'Description', opt: true, t: 'textarea' }],
+    const o = rec ? (rec.company ? 'company' : rec.owner) : (q.owner);
+    const curType = rec ? (rec.company ? 'company' : 'personal') : (o === 'company' ? 'company' : 'personal');
+    eosForm(rec ? 'Edit Rock in ERP' : 'Create Rock in ERP', [
+      { k: 'type', l: 'Rock type', t: 'select', o: [['personal', 'Individual Rock'], ['company', 'Company Rock']], v: curType },
+      { k: 'name', l: 'Title', req: true, ph: 'Add a title for the Rock', v: r.name || '' },
+      { k: 'team', l: 'Team', ...team(r.team) },
+      { k: 'owner', l: 'Owner', ...own(r.owner || (o && o !== 'company' ? o : null), r.team) },
+      { k: 'end', l: 'Due date', t: 'date', v: r.end || eYD('12-31'), req: true },
+      { k: 'status', l: 'Status', t: 'select', o: ['On-track', 'Off-track', 'Done'], v: r.status || 'On-track' },
+      { k: 'desc', l: 'Description', opt: true, t: 'textarea', v: r.desc || '' }
+    ],
       async v => {
-        const newR = { id: ++eSeq, name: v.name, owner: v.owner, team: v.team, status: v.status, end: v.end, desc: v.desc, ms: [], company: v.type === 'company', archived: false };
-        eRocks.push(newR); E.tab.rocks = 'list'; toast('Saving to Rock DocType...');
-        const res = await apiCall('eos_core.eos_api.save_rock', { name: v.name, owner: v.owner, team: v.team, end: v.end, status: v.status, is_company: v.type === 'company', desc: v.desc });
-        if (res && res.docname) newR.docname = res.docname;
-        toast('Rock saved to ERP Document!');
+        if (rec) {
+          Object.assign(rec, {
+            name: v.name,
+            owner: v.owner,
+            team: v.team,
+            status: v.status,
+            end: v.end,
+            desc: v.desc,
+            company: v.type === 'company'
+          });
+          toast('Updating Rock in ERP...');
+          renderMain();
+          await apiCall('eos_core.eos_api.save_rock', {
+            docname: rec.docname,
+            name: v.name,
+            owner: v.owner,
+            team: v.team,
+            end: v.end,
+            status: v.status,
+            is_company: v.type === 'company',
+            desc: v.desc
+          });
+          toast('Rock updated in ERP!');
+          renderMain();
+        } else {
+          const newR = { id: ++eSeq, name: v.name, owner: v.owner, team: v.team, status: v.status, end: v.end, desc: v.desc, ms: [], company: v.type === 'company', archived: false };
+          eRocks.push(newR); E.tab.rocks = 'list'; toast('Saving to Rock DocType...');
+          renderMain();
+          const res = await apiCall('eos_core.eos_api.save_rock', { name: v.name, owner: v.owner, team: v.team, end: v.end, status: v.status, is_company: v.type === 'company', desc: v.desc });
+          if (res && res.docname) newR.docname = res.docname;
+          toast('Rock saved to ERP Document!');
+          renderMain();
+        }
       });
   } else if (p === 'to-dos') eosForm(rec ? 'Edit To-Do in ERP' : 'Create To-Do in ERP', [{ k: 'name', l: 'Title', req: true, v: r.name }, { k: 'team', l: 'Team', ...team(r.team) }, { k: 'owner', l: 'Owner', ...own(r.owner, r.team) }, { k: 'due', l: 'Due date', t: 'date', v: r.due || eRel(7), req: true },
   { k: 'vis', l: 'Visibility', t: 'select', o: [['team', 'Team'], ['private', 'Private']], v: rec ? (r.priv ? 'private' : 'team') : (q.vis || E.tab.todos) }],
@@ -2650,6 +2684,11 @@ async function eosAct(a, el, e) {
       break;
     }
     case 'eos-ms-add': { const n = +id; E.openRock.add(n); E.focusMs = n; renderMain(); break; }
+    case 'eos-edit-rock': {
+      const r = eRocks.find(x => x.id === +id);
+      if (r) eosDrawer('rocks', r);
+      break;
+    }
     case 'eos-add-rock': eosDrawer('rocks', null, { owner: id }); break;
     case 'eos-add-todo': eosDrawer('to-dos', null, { vis: id === 'private' ? 'private' : 'team' }); break;
     case 'eos-archive-done': {
