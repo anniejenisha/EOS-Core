@@ -18,9 +18,11 @@ def get_eos_bootstrap(user_email=None):
 	allocated_teams = get_user_allocated_teams(user_id) if not is_admin else None
 	leader_teams = get_user_leader_teams(user_id)
 	user_info["leader_teams"] = leader_teams
+	perms = get_user_permissions(user_email=user_id or user_email)
 
 	return {
 		"user": user_info,
+		"permissions": perms,
 		"teams": get_teams_list(is_admin=is_admin, user_id=user_id, allocated_teams=allocated_teams),
 		"leader_teams": leader_teams,
 		"team_members": get_team_members_map(),
@@ -34,6 +36,54 @@ def get_eos_bootstrap(user_email=None):
 		"vto": get_vto_info(),
 		"default_currency": frappe.db.get_single_value("Global Defaults", "default_currency") or "INR",
 	}
+
+
+@frappe.whitelist(allow_guest=True)
+def get_user_permissions(user_email=None):
+	user = user_email or frappe.session.user
+	if not user or user == "Guest":
+		user_param = frappe.form_dict.get("user") or frappe.form_dict.get("user_email")
+		if user_param and frappe.db.exists("User", user_param):
+			user = user_param
+
+	if not user or user == "Guest":
+		return {"eos": False, "talent": False, "is_admin": False}
+
+	user_roles = frappe.get_roles(user)
+	is_admin = bool(
+		user in ("Administrator", "administrator", "info@true-group.org")
+		or "System Manager" in user_roles
+		or "Administrator" in user_roles
+	)
+
+	# Talent Management permission:
+	can_talent = is_admin or any(r in user_roles for r in [
+		"HR Manager", "HR User", "Employee", "Employee Self Service", "Leave Approver", "Expense Approver"
+	]) or bool(frappe.db.exists("Employee", {"user_id": user, "status": "Active"})) or frappe.has_permission("Employee", "read", user=user)
+
+	# EOS permission:
+	can_eos = is_admin or any(r in user_roles for r in [
+		"Admin", "Owner", "Coach", "Manager", "Team Member", "Observer", "EOS User", "EOS Leader"
+	]) or bool(frappe.db.exists("Player", {"user": user, "archived": 0})) or frappe.has_permission("EOS Metric", "read", user=user)
+
+	return {
+		"eos": bool(can_eos),
+		"talent": bool(can_talent),
+		"is_admin": is_admin
+	}
+
+
+@frappe.whitelist(allow_guest=True)
+def get_user_home_page(user=None):
+	return "eos"
+
+
+def on_login_redirect(login_manager):
+	user = login_manager.user
+	if user and user != "Guest":
+		frappe.cache.hset("redirect_after_login", user, "/eos")
+		frappe.local.response["home_page"] = "/eos"
+
 
 
 def get_current_user_info(user_email=None):

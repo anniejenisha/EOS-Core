@@ -56,16 +56,29 @@ doctype_js = {
 # include app icons in desk
 # app_include_icons = "eos_core/public/icons.svg"
 
-# Home Pages
+# Home Pages & Login Redirection
 # ----------
 
 # application home page (will override Website Settings)
-# home_page = "login"
+home_page = "eos"
+website_user_home_page = "eos"
+get_website_user_home_page = "eos_core.eos_api.get_user_home_page"
 
 # website user home page (by Role)
-# role_home_page = {
-# 	"Role": "home_page"
-# }
+role_home_page = {
+	"All": "eos",
+	"System Manager": "eos",
+	"Employee": "eos",
+	"HR Manager": "eos",
+	"HR User": "eos",
+	"Team Member": "eos",
+	"Manager": "eos",
+	"Admin": "eos",
+}
+
+# Login Event Hook: redirect all successful logins directly to /eos
+on_login = "eos_core.eos_api.on_login_redirect"
+
 
 # Generators
 # ----------

@@ -3,6 +3,18 @@
    ===================================================================== */
 const $ = (s, r = document) => r.querySelector(s);
 const slug = s => s.toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+function getInitialModule() {
+  const params = new URLSearchParams(window.location.search);
+  const qMod = params.get('mod');
+  if (qMod && (qMod === 'eos' || qMod === 'talent') && hasModulePermission(qMod)) {
+    return qMod;
+  }
+  if (hasModulePermission('eos')) return 'eos';
+  if (hasModulePermission('talent')) return 'talent';
+  return 'eos';
+}
+
 const S = {
   view: 'workspace',
   mod: 'eos',
@@ -16,12 +28,13 @@ const S = {
   act: {},
   palI: 0,
   hidden: false,
-  open: new Set(['eos:overview'])
+  loading: false,
+  open: new Set(['eos:overview', 'talent:shift-and-attendance', 'talent:hrpro-applications', 'talent:lifecycle', 'talent:performance', 'talent:expenses-and-travel'])
 };
 
-const fmt = v => typeof v === 'number' ? v.toLocaleString('en-KE') : v;
+const fmt = v => typeof v === 'number' ? v.toLocaleString('en-KE') : (v == null || v === '' ? '—' : v);
 const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
-const initials = n => n.replace(/[^A-Za-z ]/g, '').split(' ').map(x => x[0]).join('').slice(0, 2).toUpperCase();
+const initials = n => String(n || '').replace(/[^A-Za-z ]/g, '').split(' ').map(x => x[0]).join('').slice(0, 2).toUpperCase() || 'U';
 const mobile = () => innerWidth <= 900;
 const mod = () => MODULES.find(m => m.id === S.mod) || MODULES[0];
 const pgDef = () => PAGES[S.mod + ':' + S.page];
@@ -38,7 +51,7 @@ const parentOf = (m, p) => {
   const e = m.nav.find(([l, , k]) => k && k.some(c => slug(c) === p));
   return e ? slug(e[0]) : null;
 };
-const findRec = (set, id) => set && set.rows.find(r => r.id === id);
+const findRec = (set, id) => set && set.rows.find(r => String(r.id) === String(id));
 
 function go(m, p, rec = null) {
   S.mod = m;
@@ -57,10 +70,20 @@ function go(m, p, rec = null) {
   enter();
   const page = $('.page');
   if (page) page.scrollTop = 0;
+
+  if (S.mod === 'talent') {
+    if (S.view === 'list' && typeof fetchTalentList === 'function') {
+      fetchTalentList();
+    } else if (S.view === 'record' && typeof fetchTalentRecordDetails === 'function') {
+      fetchTalentRecordDetails(rec);
+    } else if (S.view === 'workspace' && typeof fetchTalentBootstrap === 'function' && (!TALENT_BOOTSTRAP.dropdowns || !TALENT_BOOTSTRAP.dropdowns.companies || !TALENT_BOOTSTRAP.dropdowns.companies.length)) {
+      fetchTalentBootstrap();
+    }
+  }
 }
 
 function home() {
-  go('eos', 'overview');
+  go(S.mod, 'overview');
 }
 
 function enter() {
@@ -82,15 +105,23 @@ function toast(m) {
 }
 
 /* =====================================================================
-   E. SHELL RENDER (100% EOS ONLY)
+   E. SHELL RENDER
    ===================================================================== */
 function renderRail() {
   const brand = BRAND.logo ? `<img src="${BRAND.logo}" alt="${BRAND.name}" style="width:38px;height:38px;object-fit:contain" onerror="if(!this.dataset.fallback){this.dataset.fallback=1;this.src='/files/bel-logo-256.png?v=2.0.6';}else{this.outerHTML='<span>${BRAND.mono}</span>';}">` : `<span>${BRAND.mono}</span>`;
   const rail = $('#rail');
   if (!rail) return;
+
+  const permitted = MODULES.filter(m => hasModulePermission(m.id));
+  const modBtns = permitted.map(m => `
+    <button class="rb" data-act="mod" data-id="${m.id}" title="${m.name}" aria-label="${m.name}" ${S.mod === m.id ? 'aria-current="true"' : ''}>
+      ${icon(m.icon)}
+    </button>
+  `).join('');
+
   rail.innerHTML = `<button class="brand ${BRAND.logo ? 'has-logo' : ''}" data-act="home" title="${BRAND.name}" aria-label="${BRAND.name} home">${brand}</button>` +
-   `<button class="rb" data-act="mod" data-id="eos" title="EOS" aria-label="EOS" aria-current="true">${icon('target')}</button>` +
-   `<span class="spacer"></span><button class="rb" title="Settings" aria-label="Settings">${icon('sliders')}</button>`;
+    modBtns +
+    `<span class="spacer"></span><button class="rb" data-act="settings" title="Settings" aria-label="Settings">${icon('sliders')}</button>`;
 }
 
 function renderTop() {
@@ -106,7 +137,7 @@ function renderTop() {
 }
 
 function renderSide() {
-  const m = MODULES[0];
+  const m = mod();
   const head = `<h2>${m.name}</h2><button class="icon-btn" data-act="sbtoggle" aria-label="Hide sidebar" title="Hide sidebar">${icon('panel')}</button>`;
   const nav = m.nav.map(([l, ic, kids]) => {
     const id = slug(l);
@@ -121,7 +152,7 @@ function renderSide() {
 
 function crumbs() {
   const sep = '<span class="sep">/</span>';
-  return `<b>EOS</b>${S.page && S.page !== 'overview' ? sep + '<b>' + navLabel() + '</b>' : ''}`;
+  return `<b>${mod().name}</b>${S.page && S.page !== 'overview' ? sep + '<b>' + navLabel() + '</b>' : ''}`;
 }
 
 /* =====================================================================
@@ -141,10 +172,13 @@ function assigned() {
 }
 
 function renderHome() {
-  renderEos();
+  renderMain();
 }
 
 function renderWorkspace() {
+  if (S.mod === 'talent' && typeof renderTalentWorkspace === 'function') {
+    return renderTalentWorkspace();
+  }
   const m = mod();
   const short = Object.entries(PAGES).filter(([k]) => k.startsWith(m.id + ':'));
   const cards = m.nav.filter(([l, , k]) => k).map(([l, , k]) => `<div class="panel" style="padding:16px"><h3 style="font-size:14px;font-weight:600;margin-bottom:10px;color:var(--g900)">${l}</h3><div style="display:flex;flex-direction:column;gap:6px">${k.map(c => `<button class="btn" style="justify-content:space-between;width:100%" data-act="nav" data-id="${slug(c)}"><span>${c}</span>${icon('chev')}</button>`).join('')}</div></div>`).join('');
@@ -158,16 +192,20 @@ function renderWorkspace() {
 }
 
 function visibleRows(set) {
+  if (!set) return [];
   let r = set.rows;
-  if (S.vw === 'attn') r = r.filter(x => set.attention.includes(x.status));
+  if (S.vw === 'attn') r = r.filter(x => set.attention && set.attention.includes(x.status));
   if (S.vw === 'mine') r = r.filter(x => x.owner === USER.name);
   const q = S.q.trim().toLowerCase();
   if (q) r = r.filter(x => Object.values(x).join(' ').toLowerCase().includes(q));
   return r;
 }
-const cell = (c, v) => c.t === 'pill' ? `<td><span class="pill ${TONE[v] || 'neutral'}">${v}</span></td>` : `<td class="${c.t || ''}">${fmt(v)}</td>`;
+const cell = (c, v) => c.t === 'pill' ? `<td><span class="pill ${TONE[v] || 'neutral'}">${v || '—'}</span></td>` : `<td class="${c.t || ''}">${fmt(v)}</td>`;
 
 function renderList() {
+  if (S.mod === 'talent' && typeof renderTalentList === 'function') {
+    return renderTalentList();
+  }
   const set = curSet(), name = dt();
   let html = `<div class="ph"><h1>${name}</h1><div class="row"><button class="btn primary" data-act="create">${icon('plus')}Add ${name}</button></div></div>`;
   if (!set) {
@@ -215,6 +253,9 @@ function actFor(set, r) {
 }
 
 function renderRecord() {
+  if (S.mod === 'talent' && typeof renderTalentRecord === 'function') {
+    return renderTalentRecord();
+  }
   const set = curSet(), r = findRec(set, S.rec);
   if (!r) { S.view = 'list'; return renderList(); }
   const ap = set.approve && r.status === set.approve.from;
@@ -235,7 +276,13 @@ function renderRecord() {
 }
 
 function renderMain() {
-  renderEos();
+  if (S.mod === 'eos') {
+    renderEos();
+  } else if (S.mod === 'talent') {
+    if (typeof renderTalent === 'function') renderTalent();
+  } else {
+    renderWorkspace();
+  }
 }
 
 function render() {
@@ -251,7 +298,10 @@ function render() {
    G. ACTIONS
    ===================================================================== */
 function decide(id, ok, silent) {
-  const set = curSet(), r = findRec(set, id), a = set.approve;
+  if (S.mod === 'talent' && typeof decideTalentRecord === 'function') {
+    return decideTalentRecord(id, ok, silent);
+  }
+  const set = curSet(), r = findRec(set, id), a = set ? set.approve : null;
   if (!r || !a) return;
   r.status = ok ? a.ok : a.no;
   actFor(set, r).push({ who: USER.name, t: 'Just now', text: 'changed Status to ' + r.status });
@@ -260,6 +310,7 @@ function decide(id, ok, silent) {
 
 function openDrawer() {
   if (S.mod === 'eos') return eosDrawer();
+  if (S.mod === 'talent' && typeof openTalentDrawer === 'function') return openTalentDrawer();
   const set = curSet(), form = set ? set.form : [['Name', 'name', 'text']];
   $('#drawer').innerHTML = `<header><h2>New ${dt()}</h2><button class="icon-btn" data-act="close" aria-label="Close">${icon('x')}</button></header>
    <div class="body">${form.map((f, i) => `<div class="f"><label for="d${i}">${f[0]}</label>${f[2] === 'select' ? `<select class="field" id="d${i}" data-k="${f[1]}">${f[3].map(o => `<option>${o}</option>`).join('')}</select>` : `<input class="field" id="d${i}" data-k="${f[1]}" type="${f[2]}" placeholder="${f[3] || ''}">`}<div class="err">${f[0]} is required.</div></div>`).join('')}</div>
@@ -277,6 +328,7 @@ function closeDrawer() {
 
 function saveDrawer() {
   if (S.mod === 'eos') return eosSave();
+  if (S.mod === 'talent' && typeof saveTalentDrawer === 'function') return saveTalentDrawer();
   const set = curSet();
   if (!set) { closeDrawer(); toast(dt() + ' saved'); return; }
   const vals = {}; let bad = false;
@@ -300,6 +352,7 @@ function saveDrawer() {
 }
 
 function postNote() {
+  if (S.mod === 'talent' && typeof postTalentNote === 'function') return postTalentNote();
   const i = $('#note');
   if (!i || !i.value.trim()) return;
   const set = curSet(), r = findRec(set, S.rec);
@@ -312,7 +365,8 @@ function postNote() {
 function commands() {
   const c = [{ g: 'Go to', l: 'Home', run: home }];
   if (S.view === 'list' || S.view === 'record') c.unshift({ g: 'Actions', l: 'Add ' + dt(), h: 'C', run: openDrawer });
-  MODULES.forEach(m => {
+  const permitted = MODULES.filter(m => hasModulePermission(m.id));
+  permitted.forEach(m => {
     c.push({ g: 'Go to', l: m.name, h: 'Module', run: () => go(m.id, 'overview') });
     m.nav.forEach(([l, , k]) => {
       if (k) k.forEach(x => c.push({ g: 'Go to', l: `${m.name} / ${x}`, run: () => go(m.id, slug(x)) }));
@@ -321,8 +375,8 @@ function commands() {
   });
   for (const [k, p] of Object.entries(PAGES)) {
     const [m, pg] = k.split(':'), set = SETS[p.set];
-    if (set) {
-      set.rows.forEach(r => c.push({ g: 'Records', l: `${r.id} · ${r[set.titleKey]}`, h: p.dt, run: () => go(m, pg, r.id) }));
+    if (set && hasModulePermission(m)) {
+      set.rows.forEach(r => c.push({ g: 'Records', l: `${r.id} · ${r[set.titleKey] || r.id}`, h: p.dt, run: () => go(m, pg, r.id) }));
     }
   }
   return c;
@@ -338,7 +392,7 @@ function renderPal() {
   $('#palList').innerHTML = it.length ? it.map((x, i) => {
     const g = x.g !== last ? `<li class="g">${x.g}</li>` : '';
     last = x.g;
-    return g + `<li class="it" role="option" data-act="palrun" data-i="${i}" aria-selected="${i === S.palI}">${x.l}${x.h ? `<small>${x.h}</small>` : ''}</li>`;
+    return g + `<li class="it" role="option" data-act="palrun" data-i="${i}" aria-selected="${i === S.palI}"><span>${x.l}</span>${x.h ? `<small>${x.h}</small>` : ''}</li>`;
   }).join('') : '<li class="none">No results. Try a document ID or module name.</li>';
   renderPal.items = it;
 }
@@ -387,8 +441,17 @@ document.addEventListener('click', e => {
      renderMain();
      break;
    }
-   case 'open': S.rec = id; S.view = 'record'; render(); enter(); $('.page').scrollTop = 0; break;
-   case 'back': S.rec = null; S.view = 'list'; render(); enter(); break;
+   case 'open':
+     S.rec = id;
+     S.view = 'record';
+     render();
+     enter();
+     $('.page').scrollTop = 0;
+     if (S.mod === 'talent' && typeof fetchTalentRecordDetails === 'function') {
+       fetchTalentRecordDetails(id);
+     }
+     break;
+   case 'back': S.rec = null; S.view = (S.page === 'overview' ? 'workspace' : 'list'); render(); enter(); break;
    case 'approve': decide(id, true); renderMain(); break;
    case 'reject': decide(id, false); renderMain(); break;
    case 'bulk-ok': case 'bulk-no': {
@@ -406,7 +469,12 @@ document.addEventListener('click', e => {
    case 'palrun': { const it = renderPal.items[+el.dataset.i]; closePal(); it && it.run(); break; }
    case 'work': go(el.dataset.m, el.dataset.p, id); break;
    case 'note': postNote(); break;
-   default: if (typeof eosAct === 'function') eosAct(a, el, e);
+   default:
+     if (S.mod === 'eos' && typeof eosAct === 'function') eosAct(a, el, e);
+     else if (S.mod === 'talent' && typeof talentAct === 'function') talentAct(a, el, e);
+     else if (typeof eosAct === 'function') eosAct(a, el, e);
+     else if (typeof talentAct === 'function') talentAct(a, el, e);
+     break;
   }
 });
 
@@ -444,5 +512,22 @@ document.addEventListener('keydown', e => {
   }
 });
 
+// Setup Initial Module
+const initMod = getInitialModule();
+S.mod = initMod;
+if (initMod === 'talent') {
+  const urlParams = new URLSearchParams(window.location.search);
+  const qPage = urlParams.get('page');
+  if (qPage) {
+    S.page = qPage;
+    S.view = 'list';
+  }
+}
+
 // Initial boot
 render();
+
+// Pre-fetch talent bootstrap if permitted
+if (hasModulePermission('talent') && typeof fetchTalentBootstrap === 'function') {
+  fetchTalentBootstrap();
+}
