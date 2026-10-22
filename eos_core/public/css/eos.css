@@ -328,19 +328,23 @@ td .icon-btn svg{width:16px;height:16px}
 .nn-sc-tbl thead th.nn-col-owner { position: sticky; left: 240px; top: 0; z-index: 25; background: #fafafa !important; box-shadow: 0 1px 0 #e5e7eb; }
 .nn-sc-tbl thead th.nn-col-goal { position: sticky; left: 308px; top: 0; z-index: 25; background: #fafafa !important; border-right: 2px solid #e2e8f0 !important; box-shadow: 3px 1px 6px -2px rgba(0,0,0,0.06); }
 .nn-sc-tbl tbody tr:hover td.nn-col-metric, .nn-sc-tbl tbody tr:hover td.nn-col-owner, .nn-sc-tbl tbody tr:hover td.nn-col-goal { background: #f9fafb !important; }
-.nn-sc-cell { min-width: 68px; text-align: center; }
-.nn-sc-cell.pass { background-color: #dcfce7 !important; color: #15803d !important; font-weight: 700; }
-.nn-sc-cell.fail { background-color: #fee2e2 !important; color: #dc2626 !important; font-weight: 700; }
+.nn-sc-cell { min-width: 68px; text-align: center; cursor: pointer; transition: background-color 0.12s ease, outline 0.12s ease; user-select: none; }
+.nn-sc-cell:hover { background-color: #f0fdf4 !important; outline: 1.5px solid #10b981; outline-offset: -1.5px; }
+.nn-sc-cell.pass:hover { background-color: #bbf7d0 !important; }
+.nn-sc-cell.fail:hover { background-color: #fecaca !important; }
+.nn-sc-cell.editing, .nn-sc-cell.editing:hover { background-color: #ffffff !important; outline: none !important; cursor: default; }
+.nn-cell-val { display: inline-block; width: 100%; height: 100%; padding: 4px 6px; cursor: pointer; }
+.nn-cell-val.empty { color: #9ca3af; font-weight: 500; }
 
 /* Meeting Tools Floating Menu & Drawer */
 .nn-l10-tools-menu { position: absolute; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.14); z-index: 9999; padding: 6px; min-width: 180px; }
 
 /* Scorecard Measurables Grid & Cells */
-.nn-cell-wrap { display: inline-flex; align-items: center; justify-content: center; gap: 4px; position: relative; }
-.nn-cell-badge { display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; line-height: 1.2; color: inherit; }
+.nn-cell-wrap { display: inline-flex; align-items: center; justify-content: center; gap: 4px; position: relative; width: 100%; height: 100%; cursor: pointer; }
+.nn-cell-badge { display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; line-height: 1.2; color: inherit; cursor: pointer; }
 .nn-cell-badge.pass { background: transparent !important; color: #15803d !important; border: none !important; }
 .nn-cell-badge.fail { background: transparent !important; color: #dc2626 !important; border: none !important; }
-.nn-sc-cell-input { width: 68px; height: 28px; border: 2px solid #064e3b; border-radius: 6px; text-align: center; font-size: 12.5px; font-weight: 700; color: #111827; background: #ffffff; outline: none; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+.nn-sc-cell-input { width: 72px; height: 30px; border: 2px solid #059669; border-radius: 6px; text-align: center; font-size: 13px; font-weight: 700; color: #111827; background: #ffffff; outline: none; box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.25), 0 2px 8px rgba(0,0,0,0.08); }
 .nn-btn-make-issue { display: inline-flex; align-items: center; gap: 3px; padding: 2px 5px; font-size: 10px; font-weight: 600; color: #b91c1c; background: #ffffff; border: 1px solid #fca5a5; border-radius: 4px; cursor: pointer; line-height: 1.2; transition: all 0.15s ease; white-space: nowrap; }
 .nn-btn-make-issue:hover { background: #fee2e2; border-color: #ef4444; color: #991b1b; }
 .nn-cell-issue-link { display: inline-flex; align-items: center; gap: 2px; font-size: 10px; font-weight: 600; color: #4338ca; background: #e0e7ff; border: 1px solid #c7d2fe; border-radius: 4px; padding: 2px 5px; text-decoration: none; line-height: 1.2; white-space: nowrap; transition: all 0.15s ease; max-width: 90px; overflow: hidden; text-overflow: ellipsis; }

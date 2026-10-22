@@ -742,18 +742,18 @@ function renderMeasurablesGrid(curTab) {
     const av = initials(m.owner || 'U');
     let cells = "";
     for (let i = 0; i < rangeCount; i++) {
-      const isEditing = E.edit && E.edit.id === m.id && E.edit.i === i;
+      const isEditing = E.edit && String(E.edit.id) === String(m.id) && Number(E.edit.i) === i;
       const val = getMeasurableVal(m, curTab, i);
       if (isEditing) {
         cells += `
-                    <td class="nn-sc-cell">
-                      <input class="nn-sc-cell-input" data-eos-cell autofocus value="${val != null ? val : ''}">
+                    <td class="nn-sc-cell editing" data-act="eos-cell" data-mid="${eEsc(m.id)}" data-idx="${i}" data-id="${eEsc(m.id)}:${i}">
+                      <input class="nn-sc-cell-input" data-eos-cell data-mid="${eEsc(m.id)}" data-idx="${i}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other" value="${val != null ? val : ''}">
                     </td>
                   `;
       } else {
         if (val == null) {
           cells += `
-                      <td class="nn-sc-cell" data-act="eos-cell" data-id="${m.id}:${i}">
+                      <td class="nn-sc-cell" data-act="eos-cell" data-mid="${eEsc(m.id)}" data-idx="${i}" data-id="${eEsc(m.id)}:${i}">
                         <span class="nn-cell-val empty">–</span>
                       </td>
                     `;
@@ -761,7 +761,7 @@ function renderMeasurablesGrid(curTab) {
           const pass = ePass(m, val);
           const cls = pass ? "pass" : "fail";
           cells += `
-                      <td class="nn-sc-cell ${cls}" data-act="eos-cell" data-id="${m.id}:${i}">
+                      <td class="nn-sc-cell ${cls}" data-act="eos-cell" data-mid="${eEsc(m.id)}" data-idx="${i}" data-id="${eEsc(m.id)}:${i}">
                         <div class="nn-cell-wrap">
                           <span class="nn-cell-badge ${cls}">${eU(m, val)}</span>
                         </div>
@@ -2568,11 +2568,20 @@ function eosDrawer(kind, rec, pre) {
 }
 
 /* ---------- actions & backend sync ---------- */
-async function eosCommit(el) {
+async function eosCommit(el, shouldRender = true) {
   if (!E.edit) return;
-  const m = eMeas.find(x => x.id === E.edit.id), i = E.edit.i, v = el.value.trim();
+  const editId = String(E.edit.id);
+  const i = Number(E.edit.i);
+  const v = (el && el.value !== undefined ? el.value : '').trim();
   const curTab = E.tab.scorecard || 'weekly';
+  const m = eMeas.find(x => String(x.id) === editId || (x.docname && String(x.docname) === editId) || (x.name && String(x.name) === editId));
+  
   E.edit = null;
+  if (!m) {
+    if (shouldRender) renderMain();
+    return;
+  }
+
   const numVal = v === '' ? null : Number(v);
   if (curTab === 'monthly') {
     if (!m.monthly_vals) m.monthly_vals = [];
@@ -2587,10 +2596,15 @@ async function eosCommit(el) {
     while (m.annual_vals.length <= i) m.annual_vals.push(null);
     m.annual_vals[i] = numVal;
   } else {
-    while ((m.vals || []).length <= i) m.vals.push(null);
+    if (!m.vals) m.vals = [];
+    while (m.vals.length <= i) m.vals.push(null);
     m.vals[i] = numVal;
   }
-  renderMain();
+
+  if (shouldRender) {
+    renderMain();
+  }
+
   if (v !== '' && !ePass(m, Number(v))) toast('Off goal. Hover the value to add it to Issues');
 
   // Sync to Scorecard Entry DocType
@@ -2610,13 +2624,109 @@ async function eosCommit(el) {
     cellDate = eISO(eAdd(mon, -7 * i));
   }
 
-  toast('Saving cell to Scorecard Entry DocType...');
-  await apiCall('eos_core.eos_api.save_scorecard_cell', {
-    docname_or_metric: m.docname || m.name,
-    week_start_date: cellDate,
-    value: numVal
-  });
-  toast('Scorecard Entry saved to ERP!');
+  try {
+    await apiCall('eos_core.eos_api.save_scorecard_cell', {
+      docname_or_metric: m.docname || m.name,
+      week_start_date: cellDate,
+      value: numVal
+    });
+  } catch (err) {
+    console.error('save_scorecard_cell error:', err);
+  }
+}
+
+function eosNavigateCell(dir) {
+  if (!E.edit) return;
+  const curTab = E.tab.scorecard || 'weekly';
+  const F = E.f.scorecard;
+  const defaultRange = curTab === 'monthly' ? 6 : curTab === 'quarterly' ? 4 : curTab === 'annual' ? 3 : 13;
+  const rangeCount = parseInt(F.range, 10) || defaultRange;
+
+  let metrics = (eMeas || []).filter(m => (m.freq || 'weekly').toLowerCase() === curTab.toLowerCase());
+  if (F.team && F.team !== 'All Teams') {
+    metrics = metrics.filter(m => !m.team || m.team === F.team);
+  }
+  const q = (F.q_meas || S.q || '').trim().toLowerCase();
+  if (q) {
+    metrics = metrics.filter(m => (m.name || '').toLowerCase().includes(q) || (m.owner || '').toLowerCase().includes(q));
+  }
+  const allOwners = getScorecardOwners(curTab, F.team);
+  const myOwners = allOwners.filter(o => isMyOwnerName(o));
+  const isSuperAdmin = isEosAdmin();
+  const isTeamLeader = isSuperAdmin || (F.team && F.team !== 'All Teams' && isLeaderOfTeam(F.team));
+  let effectiveSelectedOwners = null;
+  if (F.owners_customized) {
+    effectiveSelectedOwners = F.owners;
+  } else if (!isTeamLeader) {
+    effectiveSelectedOwners = myOwners;
+  }
+  if (Array.isArray(effectiveSelectedOwners)) {
+    metrics = metrics.filter(m => (effectiveSelectedOwners.length ? effectiveSelectedOwners.includes(m.owner) : false) || isMyItem(m));
+  }
+
+  const curEditId = String(E.edit.id);
+  const rIdx = metrics.findIndex(m => String(m.id) === curEditId || (m.docname && String(m.docname) === curEditId) || (m.name && String(m.name) === curEditId));
+  const cIdx = Number(E.edit.i);
+
+  if (rIdx === -1) return;
+
+  let nextR = rIdx;
+  let nextC = cIdx;
+
+  if (dir === 'down') {
+    if (rIdx + 1 < metrics.length) {
+      nextR = rIdx + 1;
+    } else {
+      const input = document.querySelector('[data-eos-cell]');
+      if (input) eosCommit(input, true);
+      return;
+    }
+  } else if (dir === 'up') {
+    if (rIdx - 1 >= 0) {
+      nextR = rIdx - 1;
+    } else {
+      return;
+    }
+  } else if (dir === 'next') {
+    if (cIdx + 1 < rangeCount) {
+      nextC = cIdx + 1;
+    } else if (rIdx + 1 < metrics.length) {
+      nextR = rIdx + 1;
+      nextC = 0;
+    } else {
+      const input = document.querySelector('[data-eos-cell]');
+      if (input) eosCommit(input, true);
+      return;
+    }
+  } else if (dir === 'prev') {
+    if (cIdx - 1 >= 0) {
+      nextC = cIdx - 1;
+    } else if (rIdx - 1 >= 0) {
+      nextR = rIdx - 1;
+      nextC = rangeCount - 1;
+    } else {
+      return;
+    }
+  }
+
+  const targetMetric = metrics[nextR];
+  if (!targetMetric) return;
+
+  const input = document.querySelector('[data-eos-cell]');
+  if (input) {
+    eosCommit(input, false);
+  }
+
+  E.edit = { id: String(targetMetric.id), i: nextC };
+  renderMain();
+
+  setTimeout(() => {
+    const nextInput = document.querySelector('[data-eos-cell]');
+    if (nextInput) {
+      nextInput.focus();
+      nextInput.select();
+    }
+  }, 10);
 }
 
 async function eosAct(a, el, e) {
@@ -2642,9 +2752,27 @@ async function eosAct(a, el, e) {
       break;
     }
     case 'eos-tog': { const [p, k] = id.split('.'); E.f[p][k] = !E.f[p][k]; if (E.f[p].page) E.f[p].page = 1; renderMain(); break; }
-    case 'eos-cell': { if (e && e.target.tagName === 'INPUT') return; const [m, i] = id.split(':').map(Number); E.edit = { id: m, i }; renderMain(); break; }
+    case 'eos-cell': {
+      if (e && e.target.tagName === 'INPUT') return;
+      const mid = el.dataset.mid || (id ? id.slice(0, id.lastIndexOf(':')) : null);
+      const rawIdx = el.dataset.idx !== undefined ? el.dataset.idx : (id ? id.slice(id.lastIndexOf(':') + 1) : '0');
+      const idx = parseInt(rawIdx, 10);
+      if (mid != null && !isNaN(idx)) {
+        E.edit = { id: String(mid), i: idx };
+        renderMain();
+        setTimeout(() => {
+          const c = $('[data-eos-cell]');
+          if (c) { c.focus(); c.select(); }
+        }, 10);
+      }
+      break;
+    }
     case 'eos-issue-from': {
-      const [m, i] = id.split(':').map(Number), mm = eMeas.find(x => x.id === m), v = (mm.vals || [])[i], nm = `${mm.name} off goal (${eU(mm, v)} vs ${mm.op} ${eU(mm, mm.target)})`;
+      const k = id.lastIndexOf(':');
+      const mid = id.slice(0, k), i = parseInt(id.slice(k + 1), 10);
+      const mm = eMeas.find(x => String(x.id) === String(mid) || (x.docname && String(x.docname) === String(mid)) || (x.name && String(x.name) === String(mid)));
+      if (!mm) return;
+      const v = (mm.vals || [])[i], nm = `${mm.name} off goal (${eU(mm, v)} vs ${mm.op} ${eU(mm, mm.target)})`;
       if (eIssues.some(x => x.name === nm)) return toast('Already in Issues');
       const newI = { id: ++eSeq, name: nm, desc: 'Raised from the scorecard.', team: mm.team, owner: mm.owner, term: 'short', pri: '1', archived: false, raised: eRel(0) };
       eIssues.push(newI); toast('Creating Issue DocType...'); renderMain();
@@ -3282,7 +3410,55 @@ document.addEventListener('change', async e => {
   }
 });
 
-document.addEventListener('focusout', e => { if (e.target.hasAttribute && e.target.hasAttribute('data-eos-cell')) eosCommit(e.target); });
+// Instant cell-to-cell click handling with no dropped clicks or focus races
+document.addEventListener('mousedown', e => {
+  const cell = e.target.closest('[data-act="eos-cell"]');
+  if (cell) {
+    const activeInput = document.querySelector('[data-eos-cell]');
+    const mid = cell.dataset.mid || (cell.dataset.id ? cell.dataset.id.slice(0, cell.dataset.id.lastIndexOf(':')) : null);
+    const rawIdx = cell.dataset.idx !== undefined ? cell.dataset.idx : (cell.dataset.id ? cell.dataset.id.slice(cell.dataset.id.lastIndexOf(':') + 1) : '0');
+    const idx = parseInt(rawIdx, 10);
+
+    // If clicking inside the currently edited cell, let standard click proceed
+    if (activeInput && E.edit && String(E.edit.id) === String(mid) && Number(E.edit.i) === idx) {
+      return;
+    }
+
+    e.preventDefault(); // Prevents premature focusout destroying DOM before mouseup
+
+    if (activeInput && E.edit) {
+      eosCommit(activeInput, false);
+    }
+
+    if (mid != null && !isNaN(idx)) {
+      E.edit = { id: String(mid), i: idx };
+      renderMain();
+      setTimeout(() => {
+        const nextInput = document.querySelector('[data-eos-cell]');
+        if (nextInput) {
+          nextInput.focus();
+          nextInput.select();
+        }
+      }, 10);
+    }
+    return;
+  }
+});
+
+document.addEventListener('focusout', e => {
+  if (e.target && e.target.hasAttribute && e.target.hasAttribute('data-eos-cell')) {
+    setTimeout(() => {
+      // If focus transitioned to another cell input, do nothing (already handled by mousedown)
+      if (document.activeElement && document.activeElement.hasAttribute && document.activeElement.hasAttribute('data-eos-cell')) {
+        return;
+      }
+      if (E.edit) {
+        eosCommit(e.target, true);
+      }
+    }, 60);
+  }
+});
+
 document.addEventListener('keydown', async e => {
   if (e.key === 'Escape' && E.owner_filter_open) {
     E.owner_filter_open = false;
@@ -3292,8 +3468,23 @@ document.addEventListener('keydown', async e => {
   const t = e.target; if (!t || !t.hasAttribute) return;
   if (e.key === 'Escape' && E.menu) { E.menu = null; if (S.mod === 'eos') renderMain(); }
   if (t.hasAttribute('data-eos-cell')) {
-    if (e.key === 'Enter') { e.preventDefault(); eosCommit(t); }
-    else if (e.key === 'Escape') { E.edit = null; renderMain(); }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      eosNavigateCell('down');
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      eosNavigateCell(e.shiftKey ? 'prev' : 'next');
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      eosNavigateCell('down');
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      eosNavigateCell('up');
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      E.edit = null;
+      renderMain();
+    }
   } else if (t.hasAttribute('data-eos-ms') && e.key === 'Enter' && t.value.trim()) {
     const r = eRocks.find(x => x.id === +t.dataset.eosMs);
     if (!r.ms) r.ms = [];
