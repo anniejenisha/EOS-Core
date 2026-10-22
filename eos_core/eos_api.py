@@ -47,6 +47,8 @@ def get_user_permissions(user_email=None):
 			user = user_param
 
 	is_admin = False
+	can_access_talent = False
+	user_roles = []
 	if user and user != "Guest":
 		user_roles = frappe.get_roles(user)
 		is_admin = bool(
@@ -54,12 +56,16 @@ def get_user_permissions(user_email=None):
 			or "System Manager" in user_roles
 			or "Administrator" in user_roles
 		)
+		can_access_talent = bool(
+			"Talent Manager" in user_roles
+			or user in ("Administrator", "administrator")
+		)
 
-	# Always show EOS and Talent modules on the workspace
 	return {
 		"eos": True,
-		"talent": True,
-		"is_admin": is_admin
+		"talent": can_access_talent,
+		"is_admin": is_admin,
+		"roles": user_roles
 	}
 
 

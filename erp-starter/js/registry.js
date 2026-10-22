@@ -67,7 +67,18 @@ let USER = {
 };
 
 function hasModulePermission(modId) {
-  // Always permit EOS and Talent modules to ensure cards and rail navigation render
+  if (modId === 'talent') {
+    if (window.__EOS_BOOT__ && window.__EOS_BOOT__.permissions && typeof window.__EOS_BOOT__.permissions.talent !== 'undefined') {
+      return Boolean(window.__EOS_BOOT__.permissions.talent);
+    }
+    if (window.parent && window.parent.frappe && window.parent.frappe.user && window.parent.frappe.user.has_role) {
+      return window.parent.frappe.user.has_role('Talent Manager') || (window.parent.frappe.session && window.parent.frappe.session.user === 'Administrator');
+    }
+    if (window.frappe && window.frappe.user && window.frappe.user.has_role) {
+      return window.frappe.user.has_role('Talent Manager') || (window.frappe.session && window.frappe.session.user === 'Administrator');
+    }
+    return false;
+  }
   return true;
 }
 

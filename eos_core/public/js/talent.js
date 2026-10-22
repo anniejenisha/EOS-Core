@@ -292,20 +292,77 @@ function renderTalentList() {
     $('#main').innerHTML = html;
 }
 
+function getFilteredDepartmentOptions(company, curVal = '') {
+    const allDepts = (BOOTSTRAP && BOOTSTRAP.dropdowns && BOOTSTRAP.dropdowns.departments) || [];
+    let filtered = allDepts;
+    if (company) {
+        filtered = allDepts.filter(d => {
+            const c = (typeof d === 'object') ? (d.company || '') : '';
+            return !c || c === company;
+        });
+    }
+    const opts = filtered.map(d => {
+        const val = (typeof d === 'object') ? d.value : d;
+        const lbl = (typeof d === 'object') ? d.label : d;
+        return [val, lbl];
+    });
+    if (curVal && !opts.some(([v]) => String(v) === String(curVal))) {
+        opts.unshift([curVal, curVal]);
+    }
+    return opts;
+}
+
+function getFilteredDesignationOptions(company, curVal = '') {
+    const allDesigs = (BOOTSTRAP && BOOTSTRAP.dropdowns && BOOTSTRAP.dropdowns.designations) || [];
+    let filtered = allDesigs;
+    if (company) {
+        const matched = allDesigs.filter(d => {
+            if (typeof d === 'object') {
+                if (d.company && d.company === company) return true;
+                if (d.companies && d.companies.includes(company)) return true;
+            }
+            return false;
+        });
+        if (matched.length > 0) {
+            filtered = matched;
+        } else {
+            const unassigned = allDesigs.filter(d => typeof d === 'object' ? !d.company : true);
+            filtered = unassigned.length > 0 ? unassigned : allDesigs;
+        }
+    }
+    const opts = filtered.map(d => {
+        const val = (typeof d === 'object') ? d.value : d;
+        const lbl = (typeof d === 'object') ? d.label : d;
+        return [val, lbl];
+    });
+    if (curVal && !opts.some(([v]) => String(v) === String(curVal))) {
+        opts.unshift([curVal, curVal]);
+    }
+    return opts;
+}
+
 function renderTalentRecordFieldInput(f, r) {
         let options = [];
+        const curVal = (r[f.k] != null && r[f.k] !== '') ? String(r[f.k]) : '';
+        const set = curSet();
+
         if (f.source && BOOTSTRAP.dropdowns && BOOTSTRAP.dropdowns[f.source]) {
-            const src = BOOTSTRAP.dropdowns[f.source];
-            if (src.length && typeof src[0] === 'object') {
-                options = src.map(x => [x.value, x.label]);
+            const comp = r.company || (BOOTSTRAP.dropdowns && BOOTSTRAP.dropdowns.default_company) || '';
+            if (f.source === 'departments' && ((set && set.noun === 'employee') || r.company)) {
+                options = getFilteredDepartmentOptions(comp, curVal);
+            } else if (f.source === 'designations' && ((set && set.noun === 'employee') || r.company)) {
+                options = getFilteredDesignationOptions(comp, curVal);
             } else {
-                options = src.map(x => [x, x]);
+                const src = BOOTSTRAP.dropdowns[f.source];
+                if (src.length && typeof src[0] === 'object') {
+                    options = src.map(x => [x.value, x.label]);
+                } else {
+                    options = src.map(x => [x, x]);
+                }
             }
         } else if (f.o) {
             options = f.o.map(x => Array.isArray(x) ? x : [x, x]);
         }
-
-        const curVal = (r[f.k] != null && r[f.k] !== '') ? String(r[f.k]) : '';
 
         if (f.t === 'select') {
             if (curVal && !options.some(([v]) => String(v) === curVal)) {
@@ -446,6 +503,34 @@ function bindTalentRecordEvents(r) {
             });
         }
 
+        // If Employee form, dynamic company filtering for department and designation
+        if (set && set.noun === 'employee') {
+            const compEl = formEl.querySelector('.rec-field[data-k="company"]');
+            const deptEl = formEl.querySelector('.rec-field[data-k="department"]');
+            const desigEl = formEl.querySelector('.rec-field[data-k="designation"]');
+
+            const refreshRecordOptions = (compVal) => {
+                if (deptEl) {
+                    const curDept = deptEl.value;
+                    const deptOpts = getFilteredDepartmentOptions(compVal, curDept);
+                    deptEl.innerHTML = `<option value="">Select Department...</option>` +
+                        deptOpts.map(([v, l]) => `<option value="${esc(v)}" ${curDept === String(v) ? 'selected' : ''}>${esc(l)}</option>`).join('');
+                }
+                if (desigEl) {
+                    const curDesig = desigEl.value;
+                    const desigOpts = getFilteredDesignationOptions(compVal, curDesig);
+                    desigEl.innerHTML = `<option value="">Select Designation...</option>` +
+                        desigOpts.map(([v, l]) => `<option value="${esc(v)}" ${curDesig === String(v) ? 'selected' : ''}>${esc(l)}</option>`).join('');
+                }
+            };
+
+            if (compEl) {
+                compEl.addEventListener('change', () => {
+                    refreshRecordOptions(compEl.value);
+                });
+            }
+        }
+
         // Allow keyboard shortcut Ctrl+S / Cmd+S inside record view to save
         formEl.addEventListener('keydown', (e) => {
             if ((e.ctrlKey || e.metaKey) && e.key === 's') {
@@ -530,21 +615,34 @@ function openTalentDrawer() {
 
         const renderFieldInput = (f, i) => {
             let options = [];
+            const defaultComp = (BOOTSTRAP.dropdowns && BOOTSTRAP.dropdowns.default_company) || '';
             if (f.source && BOOTSTRAP.dropdowns && BOOTSTRAP.dropdowns[f.source]) {
-                const src = BOOTSTRAP.dropdowns[f.source];
-                if (src.length && typeof src[0] === 'object') {
-                    options = src.map(x => [x.value, x.label]);
+                if (f.source === 'departments' && set && set.noun === 'employee') {
+                    options = getFilteredDepartmentOptions(defaultComp, f.def);
+                } else if (f.source === 'designations' && set && set.noun === 'employee') {
+                    options = getFilteredDesignationOptions(defaultComp, f.def);
                 } else {
-                    options = src.map(x => [x, x]);
+                    const src = BOOTSTRAP.dropdowns[f.source];
+                    if (src.length && typeof src[0] === 'object') {
+                        options = src.map(x => [x.value, x.label]);
+                    } else {
+                        options = src.map(x => [x, x]);
+                    }
                 }
             } else if (f.o) {
                 options = f.o.map(x => Array.isArray(x) ? x : [x, x]);
             }
 
+            let selVal = f.def != null ? String(f.def) : '';
+            // Auto default single employee if only 1 permitted employee
+            if (!selVal && f.source === 'employees' && options.length === 1) {
+                selVal = String(options[0][0]);
+            }
+
             if (f.t === 'select') {
                 return `<select class="field" id="d${i}" data-k="${f.k}" aria-label="${f.l}">
                     <option value="">Select ${f.l}...</option>
-                    ${options.map(([v, l]) => `<option value="${String(v).replace(/"/g, '&quot;')}" ${f.def && String(f.def) === String(v) ? 'selected' : ''}>${String(l).replace(/</g, '&lt;')}</option>`).join('')}
+                    ${options.map(([v, l]) => `<option value="${String(v).replace(/"/g, '&quot;')}" ${selVal && selVal === String(v) ? 'selected' : ''}>${String(l).replace(/</g, '&lt;')}</option>`).join('')}
                 </select>`;
             } else if (f.t === 'textarea') {
                 return `<textarea class="field" id="d${i}" data-k="${f.k}" placeholder="${f.ph || ''}" style="height:70px;padding:8px 12px;font:inherit;resize:vertical"></textarea>`;
@@ -691,6 +789,37 @@ function openTalentDrawer() {
                     }
                 }
             });
+        }
+
+        // If Employee drawer, dynamic company filtering for department and designation
+        if (set && set.noun === 'employee') {
+            const compEl = drawer.querySelector('.field[data-k="company"]');
+            const deptEl = drawer.querySelector('.field[data-k="department"]');
+            const desigEl = drawer.querySelector('.field[data-k="designation"]');
+
+            const refreshDrawerOptions = (compVal) => {
+                if (deptEl) {
+                    const curDept = deptEl.value;
+                    const deptOpts = getFilteredDepartmentOptions(compVal, curDept);
+                    deptEl.innerHTML = `<option value="">Select Department...</option>` +
+                        deptOpts.map(([v, l]) => `<option value="${esc(v)}" ${curDept === String(v) ? 'selected' : ''}>${esc(l)}</option>`).join('');
+                }
+                if (desigEl) {
+                    const curDesig = desigEl.value;
+                    const desigOpts = getFilteredDesignationOptions(compVal, curDesig);
+                    desigEl.innerHTML = `<option value="">Select Designation...</option>` +
+                        desigOpts.map(([v, l]) => `<option value="${esc(v)}" ${curDesig === String(v) ? 'selected' : ''}>${esc(l)}</option>`).join('');
+                }
+            };
+
+            if (compEl) {
+                if (compEl.value) {
+                    refreshDrawerOptions(compEl.value);
+                }
+                compEl.addEventListener('change', () => {
+                    refreshDrawerOptions(compEl.value);
+                });
+            }
         }
 
         document.body.classList.add('drawer-open');
