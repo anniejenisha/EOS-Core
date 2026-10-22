@@ -2,6 +2,33 @@
 (function () {
     var TARGET_ROUTE = '/desk/eos';
 
+    function isGenericDeskRoute(val) {
+        if (!val) return true;
+        try {
+            var decoded = decodeURIComponent(val).trim().replace(/\/$/, '');
+            return (
+                decoded === '' ||
+                decoded === '/desk' ||
+                decoded === '/apps' ||
+                decoded === '/app' ||
+                decoded === '/app/home' ||
+                decoded === '/desk/home' ||
+                decoded === '/' ||
+                decoded === 'desk' ||
+                decoded === 'app'
+            );
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function getCleanRedirectTarget(rawVal) {
+        if (isGenericDeskRoute(rawVal)) {
+            return TARGET_ROUTE;
+        }
+        return rawVal;
+    }
+
     // 1. If user is already logged in and navigates to /login, redirect straight to /desk/eos
     function checkAlreadyLoggedIn() {
         try {
@@ -15,15 +42,19 @@
         return false;
     }
 
-    // 2. Ensure redirect-to query parameter is set on /login so Frappe's standard login.js routes to /desk/eos
+    // 2. Ensure redirect-to query parameter is rewritten from /desk to /desk/eos
     function ensureRedirectParam() {
         try {
             if (window.location.pathname.startsWith('/login')) {
                 var url = new URL(window.location.href);
-                if (!url.searchParams.get('redirect-to')) {
+                var currentRedirect = url.searchParams.get('redirect-to');
+                
+                // If redirect-to is missing or points to generic /desk or /apps, force to /desk/eos
+                if (isGenericDeskRoute(currentRedirect)) {
                     url.searchParams.set('redirect-to', TARGET_ROUTE);
                     window.history.replaceState(null, '', url.pathname + url.search + url.hash);
                 }
+
                 if (window.localStorage) {
                     localStorage.setItem('last_visited', TARGET_ROUTE);
                 }
@@ -42,10 +73,10 @@
                     if (window.login && window.login.set_status) {
                         window.login.set_status('Success', 'green');
                     }
-                    var target = (window.frappe && frappe.utils && frappe.utils.get_url_arg)
+                    var urlRedirect = (window.frappe && frappe.utils && frappe.utils.get_url_arg)
                         ? frappe.utils.sanitise_redirect(frappe.utils.get_url_arg('redirect-to'))
                         : null;
-                    target = target || data.redirect_to || TARGET_ROUTE;
+                    var target = getCleanRedirectTarget(urlRedirect || data.redirect_to || TARGET_ROUTE);
                     window.location.href = target;
                     return;
                 }
@@ -72,10 +103,10 @@
                     try {
                         var res = xhr.responseJSON;
                         if (res && (res.message === 'Logged In' || res.message === 'No App')) {
-                            var target = (window.frappe && frappe.utils && frappe.utils.get_url_arg)
+                            var urlRedirect = (window.frappe && frappe.utils && frappe.utils.get_url_arg)
                                 ? frappe.utils.sanitise_redirect(frappe.utils.get_url_arg('redirect-to'))
                                 : null;
-                            target = target || res.redirect_to || TARGET_ROUTE;
+                            var target = getCleanRedirectTarget(urlRedirect || res.redirect_to || TARGET_ROUTE);
                             window.location.href = target;
                         }
                     } catch (e) {}

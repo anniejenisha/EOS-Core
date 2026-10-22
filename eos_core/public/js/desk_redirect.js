@@ -1,4 +1,4 @@
-// Desk redirect: redirect root desk/home views to /desk/eos
+// Desk redirect: redirect root desk/apps launcher to /desk/eos
 (function() {
     var TARGET_ROUTE = '/desk/eos';
 
@@ -11,34 +11,35 @@
         const path = window.location.pathname.replace(/\/$/, '');
         const hash = window.location.hash || '';
 
-        // Check if user landed on apps launcher (/apps, /desk) or default home workspace
-        const isAppsOrDesk = (
-            path === '/desk' ||
-            path === '/apps' ||
-            path === '/app' ||
-            path === '/app/home' ||
-            path === '/app/workspace/Home' ||
-            path === '/app/workspaces/Home'
-        );
+        // If the user is on the apps launcher or root desk
+        if (path === '/desk' || path === '/apps' || path === '/app' || path === '/app/home') {
+            if (window.location.pathname !== TARGET_ROUTE) {
+                window.location.href = TARGET_ROUTE;
+                return;
+            }
+        }
 
+        // Check if route inside desk is workspace/Home
         const isHomeHash = (!hash || hash === '#' || hash === '#workspace/Home' || hash === '#workspaces/Home');
-
-        if (isAppsOrDesk && isHomeHash) {
+        if (isHomeHash && (path.startsWith('/app/workspace') || path.startsWith('/app/workspaces') || path === '/desk/workspace/Home')) {
             const route = (window.frappe && frappe.get_route) ? frappe.get_route() : [];
-            // If route is empty or default workspace/Home, route to /desk/eos
             if (!route || !route.length || (route.length <= 2 && (route[0] === 'workspaces' || route[0] === 'workspace') && (!route[1] || route[1].toLowerCase() === 'home'))) {
                 if (window.location.pathname !== TARGET_ROUTE) {
                     window.location.href = TARGET_ROUTE;
+                    return;
                 }
             }
         }
     }
 
+    // Run immediately
+    checkDeskRedirect();
+
     if (document.readyState === 'complete' || document.readyState === 'interactive') {
-        setTimeout(checkDeskRedirect, 100);
+        setTimeout(checkDeskRedirect, 50);
     } else {
         document.addEventListener('DOMContentLoaded', function() {
-            setTimeout(checkDeskRedirect, 100);
+            setTimeout(checkDeskRedirect, 50);
         });
     }
 
@@ -54,7 +55,7 @@
                     setTimeout(checkDeskRedirect, 50);
                 });
             }
-            setTimeout(checkDeskRedirect, 100);
+            setTimeout(checkDeskRedirect, 50);
         });
     }
 
