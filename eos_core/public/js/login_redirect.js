@@ -1,35 +1,37 @@
-// Ensure login always redirects directly to /eos without modifying Frappe core
+// Ensure login always redirects directly to /desk/eos without modifying Frappe core
 (function () {
-    // 1. If user is already logged in and navigates to /login, redirect straight to /eos
+    var TARGET_ROUTE = '/desk/eos';
+
+    // 1. If user is already logged in and navigates to /login, redirect straight to /desk/eos
     function checkAlreadyLoggedIn() {
         try {
             var status = document.body ? document.body.getAttribute('frappe-session-status') : null;
             var path = window.location.pathname;
             if (status === 'logged-in' && (path === '/login' || path.startsWith('/login/'))) {
-                window.location.href = '/eos';
+                window.location.href = TARGET_ROUTE;
                 return true;
             }
         } catch (e) {}
         return false;
     }
 
-    // 2. Ensure redirect-to query parameter is set on /login so Frappe's standard login.js routes to /eos
+    // 2. Ensure redirect-to query parameter is set on /login so Frappe's standard login.js routes to /desk/eos
     function ensureRedirectParam() {
         try {
             if (window.location.pathname.startsWith('/login')) {
                 var url = new URL(window.location.href);
                 if (!url.searchParams.get('redirect-to')) {
-                    url.searchParams.set('redirect-to', '/eos');
+                    url.searchParams.set('redirect-to', TARGET_ROUTE);
                     window.history.replaceState(null, '', url.pathname + url.search + url.hash);
                 }
                 if (window.localStorage) {
-                    localStorage.setItem('last_visited', '/eos');
+                    localStorage.setItem('last_visited', TARGET_ROUTE);
                 }
             }
         } catch (e) {}
     }
 
-    // 3. Patch window.login.login_handlers[200] to redirect directly to /eos upon successful login
+    // 3. Patch window.login.login_handlers[200] to redirect directly to /desk/eos upon successful login
     function patchLoginHandler() {
         if (window.login && window.login.login_handlers && window.login.login_handlers[200]) {
             if (window.login.login_handlers._eos_redirect_patched) return true;
@@ -43,7 +45,7 @@
                     var target = (window.frappe && frappe.utils && frappe.utils.get_url_arg)
                         ? frappe.utils.sanitise_redirect(frappe.utils.get_url_arg('redirect-to'))
                         : null;
-                    target = target || data.redirect_to || '/eos';
+                    target = target || data.redirect_to || TARGET_ROUTE;
                     window.location.href = target;
                     return;
                 }
@@ -73,7 +75,7 @@
                             var target = (window.frappe && frappe.utils && frappe.utils.get_url_arg)
                                 ? frappe.utils.sanitise_redirect(frappe.utils.get_url_arg('redirect-to'))
                                 : null;
-                            target = target || res.redirect_to || '/eos';
+                            target = target || res.redirect_to || TARGET_ROUTE;
                             window.location.href = target;
                         }
                     } catch (e) {}

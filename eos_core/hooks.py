@@ -11,15 +11,14 @@ app_license = "mit"
 # required_apps = []
 
 # Each item in the list will be shown as an app in the apps page
-# add_to_apps_screen = [
-# 	{
-# 		"name": "eos_core",
-# 		"logo": "/assets/eos_core/logo.png",
-# 		"title": "Eos Core",
-# 		"route": "/eos_core",
-# 		"has_permission": "eos_core.api.permission.has_app_permission"
-# 	}
-# ]
+add_to_apps_screen = [
+	{
+		"name": "eos_core",
+		"logo": "/assets/eos_core/img/bel-logo-256.png",
+		"title": "EOS",
+		"route": "/desk/eos",
+	}
+]
 
 # Includes in <head>
 # ------------------

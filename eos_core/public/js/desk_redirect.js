@@ -1,5 +1,7 @@
-// Desk redirect: redirect root desk/home views to /eos portal
+// Desk redirect: redirect root desk/home views to /desk/eos
 (function() {
+    var TARGET_ROUTE = '/desk/eos';
+
     function checkDeskRedirect() {
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('desk') === '1' || urlParams.get('no_redirect') === '1') {
@@ -9,9 +11,11 @@
         const path = window.location.pathname.replace(/\/$/, '');
         const hash = window.location.hash || '';
 
-        const isRootOrHomeApp = (
-            path === '/app' ||
+        // Check if user landed on apps launcher (/apps, /desk) or default home workspace
+        const isAppsOrDesk = (
             path === '/desk' ||
+            path === '/apps' ||
+            path === '/app' ||
             path === '/app/home' ||
             path === '/app/workspace/Home' ||
             path === '/app/workspaces/Home'
@@ -19,10 +23,13 @@
 
         const isHomeHash = (!hash || hash === '#' || hash === '#workspace/Home' || hash === '#workspaces/Home');
 
-        if (isRootOrHomeApp && isHomeHash) {
+        if (isAppsOrDesk && isHomeHash) {
             const route = (window.frappe && frappe.get_route) ? frappe.get_route() : [];
+            // If route is empty or default workspace/Home, route to /desk/eos
             if (!route || !route.length || (route.length <= 2 && (route[0] === 'workspaces' || route[0] === 'workspace') && (!route[1] || route[1].toLowerCase() === 'home'))) {
-                window.location.href = '/eos';
+                if (window.location.pathname !== TARGET_ROUTE) {
+                    window.location.href = TARGET_ROUTE;
+                }
             }
         }
     }
@@ -51,12 +58,12 @@
         });
     }
 
-    // Add a Portal button to Desk navbar
+    // Add an EOS Portal button to Desk navbar
     if (window.$) {
         $(document).on('toolbar_setup', function() {
             if ($('#navbar-eos-portal').length === 0) {
                 $('.navbar .container .vertical-bar').after(
-                    '<li class="nav-item" id="navbar-eos-portal"><a class="nav-link" href="/eos" title="Open Portal" style="font-weight:600;color:var(--primary,#0070f3);display:flex;align-items:center;gap:4px">EOS Portal</a></li>'
+                    '<li class="nav-item" id="navbar-eos-portal"><a class="nav-link" href="' + TARGET_ROUTE + '" title="Open EOS" style="font-weight:600;color:var(--primary,#0070f3);display:flex;align-items:center;gap:4px">EOS</a></li>'
                 );
             }
         });
