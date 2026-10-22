@@ -49,10 +49,11 @@
                 var url = new URL(window.location.href);
                 var currentRedirect = url.searchParams.get('redirect-to');
                 
-                // If redirect-to is missing or points to generic /desk or /apps, force to /desk/eos
+                // If redirect-to is missing or points to generic /desk or /apps, redirect to /desk/eos
                 if (isGenericDeskRoute(currentRedirect)) {
                     url.searchParams.set('redirect-to', TARGET_ROUTE);
-                    window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+                    window.location.replace(url.toString());
+                    return;
                 }
 
                 if (window.localStorage) {

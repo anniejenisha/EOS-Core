@@ -86,6 +86,41 @@ def on_login_redirect(login_manager):
 		frappe.local.response["redirect_to"] = "/desk/eos"
 
 
+class LoginRedirectRenderer:
+	def __init__(self, path, http_status_code=None):
+		self.path = path
+		self.http_status_code = http_status_code or 200
+
+	def can_render(self):
+		if self.path == "login":
+			req = getattr(frappe.local, "request", None)
+			if not req:
+				return False
+			redirect_to = req.args.get("redirect-to") if hasattr(req, "args") else None
+			if redirect_to:
+				redirect_to = redirect_to.strip().rstrip("/")
+			# If user is already logged in, redirect directly to /desk/eos
+			if frappe.session.user and frappe.session.user != "Guest":
+				return True
+			# If redirect-to is missing or generic desk/app route, redirect to /desk/eos
+			generic_routes = (
+				"", None, "/desk", "/apps", "/app", "/app/home",
+				"/desk/home", "/", "desk", "app"
+			)
+			if redirect_to in generic_routes:
+				return True
+		return False
+
+	def render(self):
+		from werkzeug.utils import redirect
+		if frappe.session.user and frappe.session.user != "Guest":
+			target = "/desk/eos"
+		else:
+			target = "/login?redirect-to=%2Fdesk%2Feos"
+		return redirect(target, code=302)
+
+
+
 
 def get_current_user_info(user_email=None):
 	user = user_email or frappe.form_dict.get("user") or frappe.form_dict.get("user_email") or frappe.session.user

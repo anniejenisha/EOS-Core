@@ -80,6 +80,9 @@ role_home_page = {
 # Login Event Hook: redirect all successful logins directly to /eos
 on_login = "eos_core.eos_api.on_login_redirect"
 
+# Custom Page Renderer: intercept /login with generic /desk and redirect to /login?redirect-to=%2Fdesk%2Feos
+page_renderer = ["eos_core.eos_api.LoginRedirectRenderer"]
+
 
 # Generators
 # ----------
