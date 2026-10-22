@@ -67,18 +67,7 @@ let USER = {
 };
 
 function hasModulePermission(modId) {
-  const bootPerms = (window.__EOS_BOOT__ && window.__EOS_BOOT__.permissions) || null;
-  if (bootPerms) {
-    if (bootPerms.is_admin) return true;
-    if (modId === 'eos') return Boolean(bootPerms.eos);
-    if (modId === 'talent') return Boolean(bootPerms.talent);
-    return true;
-  }
-
-  const email = getLoggedInUserEmail();
-  if (email === 'administrator' || email === 'info@true-group.org' || email === 'anniejenisha.p@gmail.com') {
-    return true;
-  }
+  // Always permit EOS and Talent modules to ensure cards and rail navigation render
   return true;
 }
 

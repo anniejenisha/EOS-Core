@@ -46,29 +46,19 @@ def get_user_permissions(user_email=None):
 		if user_param and frappe.db.exists("User", user_param):
 			user = user_param
 
-	if not user or user == "Guest":
-		return {"eos": False, "talent": False, "is_admin": False}
+	is_admin = False
+	if user and user != "Guest":
+		user_roles = frappe.get_roles(user)
+		is_admin = bool(
+			user in ("Administrator", "administrator", "info@true-group.org")
+			or "System Manager" in user_roles
+			or "Administrator" in user_roles
+		)
 
-	user_roles = frappe.get_roles(user)
-	is_admin = bool(
-		user in ("Administrator", "administrator", "info@true-group.org")
-		or "System Manager" in user_roles
-		or "Administrator" in user_roles
-	)
-
-	# Talent Management permission:
-	can_talent = is_admin or any(r in user_roles for r in [
-		"HR Manager", "HR User", "Employee", "Employee Self Service", "Leave Approver", "Expense Approver"
-	]) or bool(frappe.db.exists("Employee", {"user_id": user, "status": "Active"})) or frappe.has_permission("Employee", "read", user=user)
-
-	# EOS permission:
-	can_eos = is_admin or any(r in user_roles for r in [
-		"Admin", "Owner", "Coach", "Manager", "Team Member", "Observer", "EOS User", "EOS Leader"
-	]) or bool(frappe.db.exists("Player", {"user": user, "archived": 0})) or frappe.has_permission("EOS Metric", "read", user=user)
-
+	# Always show EOS and Talent modules on the workspace
 	return {
-		"eos": bool(can_eos),
-		"talent": bool(can_talent),
+		"eos": True,
+		"talent": True,
 		"is_admin": is_admin
 	}
 
