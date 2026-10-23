@@ -3,9 +3,9 @@ from frappe.model.document import Document
 
 VALID_TODO_TRANSITIONS = {
 	"Not Started": ["In Progress", "Complete", "Dropped"],
-	"In Progress": ["Complete", "Dropped"],
-	"Complete": [],
-	"Dropped": [],
+	"In Progress": ["Complete", "Dropped", "Not Started"],
+	"Complete": ["In Progress", "Not Started"],
+	"Dropped": ["In Progress", "Not Started"],
 }
 
 

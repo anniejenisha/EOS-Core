@@ -54,6 +54,14 @@ function isLeaderOfTeam(teamName) {
   return Array.isArray(EOS_LEADER_TEAMS) && EOS_LEADER_TEAMS.includes(teamName);
 }
 
+function isUserTeamLeader(teamName) {
+  if (isEosAdmin()) return true;
+  if (!teamName || teamName === 'All Teams') {
+    return false;
+  }
+  return isLeaderOfTeam(teamName);
+}
+
 function isMyOwnerName(ownerStr) {
   if (!ownerStr) return false;
   const myEmail = getLoggedInUserEmail();
@@ -256,14 +264,14 @@ function eRelTime(iso) {
 }
 
 const E = {
-  tab: { scorecard: 'scorecards', sc_freq: 'weekly', rocks: 'list', todos: 'team', issues: 'short', meet: 'upcoming' },
+  tab: { scorecard: 'weekly', sc_freq: 'weekly', rocks: 'list', todos: 'team', issues: 'short', meet: 'upcoming' },
   f: {
     scorecard: { team: 'All Teams', q_id: '', q_meas: '', timeframe: 'All', per: '20', range: '13', page: 1, sort: 'Created On', owners: null },
     rocks: { team: 'All Teams', owner: 'All', status: 'All', people: false },
-    todos: { team: 'All Teams', owner: 'All', arch: false, per: '25', page: 1 },
+    todos: { team: 'All Teams', owner: 'All', status: 'All', arch: false, per: '25', page: 1 },
     issues: { team: 'All Teams', owner: 'All', arch: false, per: '25', page: 1 },
     meet: { team: 'All Teams', per: '10', page: 1 },
-    my: { team: 'All Teams', priv: 'Incomplete', rocks: 'All' }
+    my: { team: 'All Teams', priv: 'All', rocks: 'All' }
   },
   edit: null, menu: null, vto: false, vtoV: { rev: '', profit: '', meas: '' }, collapsed: new Set(), openRock: new Set(),
   form: null, preOwner: null, focusMs: null, live: null, past: [], upcoming: [], loaded: false,
@@ -358,7 +366,6 @@ function applyBootstrapData(data) {
   if (data.teams && data.teams.length) {
     EOS_TEAMS = data.teams;
     const isSuperAdmin = isEosAdmin();
-    const primaryTeam = isSuperAdmin ? 'All Teams' : ((EOS_LEADER_TEAMS && EOS_LEADER_TEAMS[0]) || EOS_TEAMS[0]);
     ['my', 'rocks', 'todos', 'issues', 'meet', 'scorecard'].forEach(k => {
       if (E.f[k]) {
         if (isSuperAdmin) {
@@ -366,8 +373,12 @@ function applyBootstrapData(data) {
             E.f[k].team = 'All Teams';
           }
         } else {
-          if (!E.f[k].team || E.f[k].team === 'All Teams' || !EOS_TEAMS.includes(E.f[k].team)) {
-            E.f[k].team = primaryTeam;
+          if (EOS_TEAMS.length === 1) {
+            E.f[k].team = EOS_TEAMS[0];
+          } else if (EOS_TEAMS.length > 1) {
+            if (!E.f[k].team || (E.f[k].team !== 'All Teams' && !EOS_TEAMS.includes(E.f[k].team))) {
+              E.f[k].team = 'All Teams';
+            }
           }
         }
       }
@@ -440,7 +451,11 @@ const eOwners = team => {
   const list = Array.from(set).filter(Boolean).sort((a, b) => a.localeCompare(b));
   return ['All', ...list];
 };
-const eMatch = (x, F) => (F.team === 'All Teams' || x.team === F.team) && (!F.owner || F.owner === 'All' || x.owner === F.owner);
+const eMatch = (x, F) => {
+  const teamMatch = F.team === 'All Teams' ? (isEosAdmin() || !x.team || EOS_TEAMS.includes(x.team)) : x.team === F.team;
+  const ownerMatch = !F.owner || F.owner === 'All' || x.owner === F.owner;
+  return teamMatch && ownerMatch;
+};
 const eQ = s => !S.q.trim() || String(s).toLowerCase().includes(S.q.trim().toLowerCase());
 const eMenuBtn = (t, id) => { const o = E.menu && E.menu.t === t && String(E.menu.id) === String(id); return `<button class="icon-btn" data-act="eos-menu" data-id="${t}:${id}" aria-haspopup="menu" aria-expanded="${o}" aria-label="More actions">${icon('more')}</button>`; };
 const eCheck = (on, act, id, label) => `<button class="ck-c ${on ? 'on' : ''}" data-act="${act}" data-id="${id}" role="checkbox" aria-checked="${!!on}" aria-label="${eEsc(label)}">${on ? icon('check') : ''}</button>`;
@@ -472,11 +487,17 @@ function eosMy90() {
   if (isAdmin) {
     if (!F.team) F.team = 'All Teams';
   } else {
-    if (!F.team || (F.team === 'All Teams' && EOS_TEAMS.length >= 1)) {
-      F.team = (EOS_LEADER_TEAMS && EOS_LEADER_TEAMS[0]) || EOS_TEAMS[0] || 'All Teams';
+    if (EOS_TEAMS.length === 1) {
+      F.team = EOS_TEAMS[0];
+    } else if (EOS_TEAMS.length > 1) {
+      if (!F.team || (F.team !== 'All Teams' && !EOS_TEAMS.includes(F.team))) {
+        F.team = 'All Teams';
+      }
+    } else {
+      F.team = 'All Teams';
     }
   }
-  const tf = x => F.team === 'All Teams' || x.team === F.team;
+  const tf = x => F.team === 'All Teams' ? (isAdmin || !x.team || EOS_TEAMS.includes(x.team)) : x.team === F.team;
 
   const team = eTodos.filter(t => !t.priv && !t.archived && tf(t)).sort(eByDue);
   const priv = eTodos.filter(t => t.priv && (isAdmin || isMyItem(t)) && !t.archived && (F.priv === 'All' || !t.done) && tf(t)).sort(eByDue);
@@ -636,9 +657,18 @@ function renderMeasurablesGrid(curTab) {
   const rangeCount = parseInt(F.range, 10) || defaultRange;
   const periods = ePeriods(curTab === 'weekly' ? 'weekly' : curTab, rangeCount);
 
+  const isSuperAdmin = isEosAdmin();
+  if (!isSuperAdmin) {
+    if (!F.team || F.team === 'All Teams' || !EOS_TEAMS.includes(F.team)) {
+      F.team = (EOS_LEADER_TEAMS && EOS_LEADER_TEAMS[0]) || EOS_TEAMS[0] || '';
+    }
+  }
+
   let metrics = (eMeas || []).filter(m => (m.freq || 'weekly').toLowerCase() === curTab.toLowerCase());
   if (F.team && F.team !== 'All Teams') {
     metrics = metrics.filter(m => !m.team || m.team === F.team);
+  } else if (!isSuperAdmin) {
+    metrics = metrics.filter(m => !m.team || EOS_TEAMS.includes(m.team));
   }
   const q = (F.q_meas || S.q || '').trim().toLowerCase();
   if (q) {
@@ -648,11 +678,14 @@ function renderMeasurablesGrid(curTab) {
   const allOwners = getScorecardOwners(curTab, F.team);
   const myOwners = allOwners.filter(o => isMyOwnerName(o));
 
-  const isSuperAdmin = isEosAdmin();
-  const isTeamLeader = isSuperAdmin || (F.team && F.team !== 'All Teams' && isLeaderOfTeam(F.team));
+  const isTeamLeader = isUserTeamLeader(F.team);
 
   let effectiveSelectedOwners = null;
-  if (F.owners_customized) {
+  if (!isTeamLeader) {
+    // Non-team leader: ALWAYS see only their own scorecards
+    effectiveSelectedOwners = myOwners;
+    metrics = metrics.filter(m => isMyItem(m) || (myOwners.length && myOwners.includes(m.owner)));
+  } else if (F.owners_customized) {
     if (Array.isArray(F.owners)) {
       F.owners = F.owners.filter(o => allOwners.includes(o));
       if (F.owners.length === allOwners.length) {
@@ -660,18 +693,15 @@ function renderMeasurablesGrid(curTab) {
       }
     }
     effectiveSelectedOwners = F.owners;
-  } else if (isTeamLeader) {
-    // Leader of this team: Show their team members' scorecards only
-    effectiveSelectedOwners = null;
+    if (Array.isArray(effectiveSelectedOwners)) {
+      metrics = metrics.filter(m => (effectiveSelectedOwners.length ? effectiveSelectedOwners.includes(m.owner) : false));
+    }
   } else {
-    // Player (or viewing All Teams): Show ONLY their own scorecard
-    effectiveSelectedOwners = myOwners;
+    // Team Leader by default: view ALL users' scorecards for this team
+    effectiveSelectedOwners = null;
   }
 
-  const isOwnerFiltered = Array.isArray(effectiveSelectedOwners) && effectiveSelectedOwners.length < allOwners.length;
-  if (Array.isArray(effectiveSelectedOwners)) {
-    metrics = metrics.filter(m => (effectiveSelectedOwners.length ? effectiveSelectedOwners.includes(m.owner) : false) || isMyItem(m));
-  }
+  const isOwnerFiltered = isTeamLeader && Array.isArray(effectiveSelectedOwners) && effectiveSelectedOwners.length < allOwners.length;
 
   let rangeOptions = [];
   if (curTab === 'monthly') {
@@ -684,12 +714,16 @@ function renderMeasurablesGrid(curTab) {
     rangeOptions = [[13, 'Last 13 Weeks'], [26, 'Last 26 Weeks'], [52, 'Last 52 Weeks']];
   }
 
+  const userTeams = isSuperAdmin ? EOS_TEAMS : (EOS_TEAMS || []);
+  const teamDropdownOptions = isSuperAdmin
+    ? `<option value="All Teams" ${(!F.team || F.team === 'All Teams') ? 'selected' : ''}>Team: All Teams</option>${userTeams.map(t => `<option value="${eEsc(t)}" ${F.team === t ? 'selected' : ''}>${eEsc(t)}</option>`).join('')}`
+    : userTeams.map(t => `<option value="${eEsc(t)}" ${F.team === t ? 'selected' : ''}>Team: ${eEsc(t)}</option>`).join('');
+
   const bar = `
     <div class="fbar sc-fbar" style="display:flex;align-items:center;gap:10px;padding:8px 0;margin-bottom:14px;flex-wrap:wrap">
       <div class="sc-input-box">
         <select class="field sc-team-sel" style="height:32px;padding:0 10px;font-size:12.5px;border-radius:6px;background:var(--g50);min-width:140px" data-eos-f="scorecard.team">
-          <option value="All Teams" ${(!F.team || F.team === 'All Teams') ? 'selected' : ''}>Team: All Teams</option>
-          ${EOS_TEAMS.map(t => `<option value="${eEsc(t)}" ${F.team === t ? 'selected' : ''}>${eEsc(t)}</option>`).join('')}
+          ${teamDropdownOptions}
         </select>
       </div>
       <div class="sc-input-box">
@@ -709,7 +743,7 @@ function renderMeasurablesGrid(curTab) {
   `;
 
   const body = `
-    <div class="nn-card-wrap" style="min-height:420px">
+    <div class="nn-card-wrap" style="height:auto !important;min-height:0 !important">
       <div class="nn-card-header">
         <div style="display:flex;align-items:center;gap:8px">
           <span style="font-size:16px;font-weight:700;color:#111827">
@@ -719,19 +753,20 @@ function renderMeasurablesGrid(curTab) {
         </div>
       </div>
 
-      <div class="nn-table-scroll" style="min-height:380px">
-        <table class="nn-sc-tbl">
+      <div class="nn-table-scroll" style="height:auto !important;min-height:0 !important">
+        <table class="nn-sc-tbl" style="height:1px !important">
           <thead>
             <tr>
               <th class="left nn-col-metric" style="width:240px;min-width:240px;max-width:240px">Measurable</th>
               <th class="nn-col-owner" style="width:68px;min-width:68px;max-width:68px;text-align:center;">
                 <div style="display:inline-flex;align-items:center;justify-content:center;gap:4px">
                   <span>Owner</span>
+                  ${isTeamLeader ? `
                   <button class="nn-owner-filter-btn ${isOwnerFiltered ? 'active' : ''}" data-act="eos-toggle-owner-filter" title="Filter by Owner" style="color:${isOwnerFiltered ? '#047857' : '#9ca3af'};">
                     ${icon('filter')}
-                  </button>
+                  </button>` : ''}
                 </div>
-                ${E.owner_filter_open ? renderOwnerFilterPopover(allOwners, effectiveSelectedOwners, E.owner_filter_search || '') : ''}
+                ${(isTeamLeader && E.owner_filter_open) ? renderOwnerFilterPopover(allOwners, effectiveSelectedOwners, E.owner_filter_search || '') : ''}
               </th>
               <th class="nn-col-goal" style="width:130px;min-width:130px;max-width:130px;text-align:center">Goal</th>
               ${periods.map(p => `<th style="min-width:80px;text-align:center">${eEsc(p)}</th>`).join('')}
@@ -808,7 +843,9 @@ function renderMeasurablesGrid(curTab) {
 
 function renderScorecardsDirectory() {
   const F = E.f.scorecard;
+  const isLeader = isUserTeamLeader(F.team);
   let rows = eScorecards.filter(sc => {
+    if (!isLeader && !EOS_TEAMS.includes(sc.team)) return false;
     const matchTeam = (F.team === 'All Teams' || sc.team === F.team);
     const matchTf = (F.timeframe === 'All' || sc.timeframe === F.timeframe);
     const qId = (F.q_id || '').trim().toLowerCase();
@@ -961,11 +998,23 @@ function eosTodos() {
   const F = E.f.todos, tab = E.tab.todos;
   const ownerOpts = eOwners(F.team);
   if (F.owner !== 'All' && !ownerOpts.includes(F.owner)) F.owner = 'All';
-  const rs = eTodos.filter(t => eMatch(t, F) && t.archived === F.arch && (tab === 'private' ? t.priv && isMyItem(t) : !t.priv) && eQ(t.name)).sort(eByDue);
+  const st = F.status || 'All';
+  const rs = eTodos.filter(t => {
+    const matchStatus = (st === 'All') || (st === 'Complete' ? t.done : !t.done);
+    return eMatch(t, F) && matchStatus && t.archived === F.arch && (tab === 'private' ? t.priv && isMyItem(t) : !t.priv) && eQ(t.name);
+  }).sort(eByDue);
   const vis = eSlice('todos', rs);
+  const hasDone = eTodos.some(t => t.done && !t.archived && (tab === 'private' ? t.priv && isMyItem(t) : !t.priv));
   return eHead('To-Dos', 'Live tasks fetched and synced directly with Frappe To Do DocType.', eCreate('Create To-Do')) +
     eTabs('todos', [['team', 'Team'], ['private', 'Private']]) +
-    `<div class="fbar">${eSel('todos', 'team', 'Team', eTeams(), F.team)}${eSel('todos', 'owner', 'Owner', ownerOpts, F.owner)}${eTog('todos.arch', 'Archive', F.arch)}<div class="grow">${eSearch('Search To-Dos')}</div></div>
+    `<div class="fbar">
+      ${eSel('todos', 'team', 'Team', eTeams(), F.team)}
+      ${eSel('todos', 'owner', 'Owner', ownerOpts, F.owner)}
+      ${eSel('todos', 'status', 'Status', ['All', 'Incomplete', 'Complete'], F.status || 'All')}
+      ${eTog('todos.arch', 'Archive', F.arch)}
+      <button class="btn sec" data-act="eos-archive-done" ${hasDone ? '' : 'disabled'} style="height:32px;font-size:12px;padding:0 10px;border-radius:6px;border:1px solid var(--line-2);color:var(--ink-2);${hasDone ? '' : 'opacity:.5;cursor:default'}">Archive Completed</button>
+      <div class="grow">${eSearch('Search To-Dos')}</div>
+    </div>
    <div class="eos-col"><div class="panel"><div class="pnl-h"><h2>${tab === 'private' ? 'Private To-Dos' : 'Team To-Dos'}<span class="pcount">${rs.length}</span></h2></div>
    ${vis.length ? `<div class="scroll"><table class="eos-t"><thead><tr><th class="ck"></th><th>Title</th><th>Due by</th><th>Owner</th><th class="act"></th></tr></thead><tbody>
    ${vis.map(t => `<tr><td class="ck">${eCheck(t.done, 'eos-todo-done', t.id, (t.done ? 'Mark not done: ' : 'Mark done: ') + t.name)}</td><td class="tdn ${t.done ? 'done' : ''}">${eEsc(t.name)}</td><td>${eDue(t.due, t.done)}</td><td>${eAv(t.owner)}</td><td class="act">${eMenuBtn('todo', t.id)}</td></tr>`).join('')}</tbody></table></div>`
@@ -1530,9 +1579,9 @@ function renderL10ScorecardStep(team) {
       </div>
     </div>
 
-    <div class="nn-card-wrap">
-      <div class="nn-table-scroll">
-        <table class="nn-sc-tbl">
+    <div class="nn-card-wrap" style="height:auto !important;min-height:0 !important">
+      <div class="nn-table-scroll" style="height:auto !important;min-height:0 !important">
+        <table class="nn-sc-tbl" style="height:1px !important">
           <thead>
             <tr>
               <th class="left nn-col-metric">Weekly KPIs</th>
@@ -2014,7 +2063,10 @@ function renderL10ToolDrawer(team) {
         <div style="display:flex;flex-direction:column;gap:8px">
           ${todos.map(t => `
             <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid #e5e7eb;border-radius:6px;background:#fff">
-              <div style="font-size:13px;font-weight:500;color:#111827">${eEsc(t.name)}</div>
+              <div style="display:flex;align-items:center;gap:10px">
+                ${eCheck(t.done, 'eos-todo-done', t.id, (t.done ? 'Mark not done: ' : 'Mark done: ') + t.name)}
+                <div style="font-size:13px;font-weight:500;color:#111827" class="${t.done ? 'done' : ''}">${eEsc(t.name)}</div>
+              </div>
               <span style="font-size:11px;color:#6b7280">${eEsc(t.owner || '')}</span>
             </div>
           `).join('')}
@@ -2567,22 +2619,42 @@ function eosDrawer(kind, rec, pre) {
     });
 }
 
-/* ---------- actions & backend sync ---------- */
-async function eosCommit(el, shouldRender = true) {
-  if (!E.edit) return;
-  const editId = String(E.edit.id);
-  const i = Number(E.edit.i);
-  const v = (el && el.value !== undefined ? el.value : '').trim();
-  const curTab = E.tab.scorecard || 'weekly';
-  const m = eMeas.find(x => String(x.id) === editId || (x.docname && String(x.docname) === editId) || (x.name && String(x.name) === editId));
-  
-  E.edit = null;
-  if (!m) {
-    if (shouldRender) renderMain();
-    return;
-  }
+/* ---------- scorecard cell editing & backend sync ---------- */
+let eosCellSaveTimer = null;
 
-  const numVal = v === '' ? null : Number(v);
+function getScorecardPeriodDate(curTab, i) {
+  const t = eToday();
+  if (curTab === 'monthly') {
+    const d = new Date(t.getFullYear(), t.getMonth() - i, 1);
+    return eISO(d);
+  } else if (curTab === 'quarterly') {
+    const tot = t.getFullYear() * 4 + Math.floor(t.getMonth() / 3) - i;
+    const q = ((tot % 4) + 4) % 4, y = Math.floor(tot / 4);
+    return eISO(new Date(y, q * 3, 1));
+  } else if (curTab === 'annual') {
+    return `${t.getFullYear() - i}-01-01`;
+  } else {
+    const mon = eAdd(t, -((t.getDay() + 6) % 7));
+    return eISO(eAdd(mon, -7 * i));
+  }
+}
+
+async function eosSaveMetricValue(m, curTab, i, numVal) {
+  if (!m) return;
+  const cellDate = getScorecardPeriodDate(curTab, i);
+  try {
+    await apiCall('eos_core.eos_api.save_scorecard_cell', {
+      docname_or_metric: m.docname || m.name,
+      week_start_date: cellDate,
+      value: numVal
+    });
+  } catch (err) {
+    console.error('save_scorecard_cell error:', err);
+  }
+}
+
+function eosUpdateMetricInMemory(m, curTab, i, numVal) {
+  if (!m) return;
   if (curTab === 'monthly') {
     if (!m.monthly_vals) m.monthly_vals = [];
     while (m.monthly_vals.length <= i) m.monthly_vals.push(null);
@@ -2600,39 +2672,101 @@ async function eosCommit(el, shouldRender = true) {
     while (m.vals.length <= i) m.vals.push(null);
     m.vals[i] = numVal;
   }
+}
 
-  if (shouldRender) {
+function eosRenderCellDisplay(td, m, curTab, i) {
+  if (!td || !m) return;
+  td.classList.remove('editing');
+  const val = getMeasurableVal(m, curTab, i);
+  if (val == null) {
+    td.className = 'nn-sc-cell';
+    td.innerHTML = '<span class="nn-cell-val empty">–</span>';
+  } else {
+    const pass = ePass(m, val);
+    const cls = pass ? 'pass' : 'fail';
+    td.className = `nn-sc-cell ${cls}`;
+    td.innerHTML = `<div class="nn-cell-wrap"><span class="nn-cell-badge ${cls}">${eU(m, val)}</span></div>`;
+  }
+}
+
+async function eosCommitActiveCell(shouldRender = false) {
+  if (!E.edit) return;
+  const editId = String(E.edit.id);
+  const i = Number(E.edit.i);
+  const td = E.edit.td;
+  const curTab = E.tab.scorecard || 'weekly';
+  const m = eMeas.find(x => String(x.id) === editId || (x.docname && String(x.docname) === editId) || (x.name && String(x.name) === editId));
+
+  if (eosCellSaveTimer) {
+    clearTimeout(eosCellSaveTimer);
+    eosCellSaveTimer = null;
+  }
+
+  const inp = td ? td.querySelector('input[data-eos-cell]') : document.querySelector('input[data-eos-cell]');
+  let numVal = null;
+  if (inp && m) {
+    const v = inp.value.trim();
+    numVal = v === '' ? null : Number(v);
+    if (!isNaN(numVal)) {
+      eosUpdateMetricInMemory(m, curTab, i, numVal);
+      if (v !== '' && !ePass(m, numVal)) toast('Off goal. Hover the value to add it to Issues');
+    }
+  }
+
+  const targetTd = td || (m ? document.querySelector(`[data-act="eos-cell"][data-mid="${m.id}"][data-idx="${i}"]`) : null);
+  E.edit = null;
+
+  if (targetTd && m && !shouldRender) {
+    eosRenderCellDisplay(targetTd, m, curTab, i);
+  } else if (shouldRender) {
     renderMain();
   }
 
-  if (v !== '' && !ePass(m, Number(v))) toast('Off goal. Hover the value to add it to Issues');
+  if (m) {
+    await eosSaveMetricValue(m, curTab, i, numVal);
+  }
+}
 
-  // Sync to Scorecard Entry DocType
-  const t = eToday();
-  let cellDate = '';
-  if (curTab === 'monthly') {
-    const d = new Date(t.getFullYear(), t.getMonth() - i, 1);
-    cellDate = eISO(d);
-  } else if (curTab === 'quarterly') {
-    const tot = t.getFullYear() * 4 + Math.floor(t.getMonth() / 3) - i;
-    const q = ((tot % 4) + 4) % 4, y = Math.floor(tot / 4);
-    cellDate = eISO(new Date(y, q * 3, 1));
-  } else if (curTab === 'annual') {
-    cellDate = `${t.getFullYear() - i}-01-01`;
-  } else {
-    const mon = eAdd(t, -((t.getDay() + 6) % 7));
-    cellDate = eISO(eAdd(mon, -7 * i));
+function eosActivateCell(td) {
+  if (!td) return;
+  const mid = td.dataset.mid || (td.dataset.id ? td.dataset.id.slice(0, td.dataset.id.lastIndexOf(':')) : null);
+  const rawIdx = td.dataset.idx !== undefined ? td.dataset.idx : (td.dataset.id ? td.dataset.id.slice(td.dataset.id.lastIndexOf(':') + 1) : '0');
+  const idx = parseInt(rawIdx, 10);
+  if (mid == null || isNaN(idx)) return;
+
+  const curTab = E.tab.scorecard || 'weekly';
+  const m = eMeas.find(x => String(x.id) === String(mid) || (x.docname && String(x.docname) === String(mid)) || (x.name && String(x.name) === String(mid)));
+  if (!m) return;
+
+  // If already editing this cell, keep focus
+  if (E.edit && String(E.edit.id) === String(mid) && Number(E.edit.i) === idx) {
+    const existingInput = td.querySelector('input[data-eos-cell]');
+    if (existingInput) {
+      existingInput.focus();
+      return;
+    }
   }
 
-  try {
-    await apiCall('eos_core.eos_api.save_scorecard_cell', {
-      docname_or_metric: m.docname || m.name,
-      week_start_date: cellDate,
-      value: numVal
-    });
-  } catch (err) {
-    console.error('save_scorecard_cell error:', err);
+  // Commit previous active cell in-place before opening new one
+  if (E.edit) {
+    eosCommitActiveCell(false);
   }
+
+  const val = getMeasurableVal(m, curTab, idx);
+  td.className = 'nn-sc-cell editing';
+  td.innerHTML = `<input class="nn-sc-cell-input" data-eos-cell data-mid="${eEsc(m.id)}" data-idx="${idx}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other" value="${val != null ? val : ''}">`;
+
+  E.edit = { id: String(m.id), i: idx, td };
+
+  const inp = td.querySelector('input[data-eos-cell]');
+  if (inp) {
+    inp.focus();
+    inp.select();
+  }
+}
+
+async function eosCommit(el, shouldRender = true) {
+  await eosCommitActiveCell(shouldRender);
 }
 
 function eosNavigateCell(dir) {
@@ -2652,8 +2786,7 @@ function eosNavigateCell(dir) {
   }
   const allOwners = getScorecardOwners(curTab, F.team);
   const myOwners = allOwners.filter(o => isMyOwnerName(o));
-  const isSuperAdmin = isEosAdmin();
-  const isTeamLeader = isSuperAdmin || (F.team && F.team !== 'All Teams' && isLeaderOfTeam(F.team));
+  const isTeamLeader = isUserTeamLeader(F.team);
   let effectiveSelectedOwners = null;
   if (F.owners_customized) {
     effectiveSelectedOwners = F.owners;
@@ -2677,8 +2810,7 @@ function eosNavigateCell(dir) {
     if (rIdx + 1 < metrics.length) {
       nextR = rIdx + 1;
     } else {
-      const input = document.querySelector('[data-eos-cell]');
-      if (input) eosCommit(input, true);
+      eosCommitActiveCell(false);
       return;
     }
   } else if (dir === 'up') {
@@ -2694,8 +2826,7 @@ function eosNavigateCell(dir) {
       nextR = rIdx + 1;
       nextC = 0;
     } else {
-      const input = document.querySelector('[data-eos-cell]');
-      if (input) eosCommit(input, true);
+      eosCommitActiveCell(false);
       return;
     }
   } else if (dir === 'prev') {
@@ -2712,21 +2843,12 @@ function eosNavigateCell(dir) {
   const targetMetric = metrics[nextR];
   if (!targetMetric) return;
 
-  const input = document.querySelector('[data-eos-cell]');
-  if (input) {
-    eosCommit(input, false);
+  const targetTd = document.querySelector(`[data-act="eos-cell"][data-mid="${targetMetric.id}"][data-idx="${nextC}"]`);
+  if (targetTd) {
+    eosActivateCell(targetTd);
+  } else {
+    eosCommitActiveCell(true);
   }
-
-  E.edit = { id: String(targetMetric.id), i: nextC };
-  renderMain();
-
-  setTimeout(() => {
-    const nextInput = document.querySelector('[data-eos-cell]');
-    if (nextInput) {
-      nextInput.focus();
-      nextInput.select();
-    }
-  }, 10);
 }
 
 async function eosAct(a, el, e) {
@@ -2754,17 +2876,7 @@ async function eosAct(a, el, e) {
     case 'eos-tog': { const [p, k] = id.split('.'); E.f[p][k] = !E.f[p][k]; if (E.f[p].page) E.f[p].page = 1; renderMain(); break; }
     case 'eos-cell': {
       if (e && e.target.tagName === 'INPUT') return;
-      const mid = el.dataset.mid || (id ? id.slice(0, id.lastIndexOf(':')) : null);
-      const rawIdx = el.dataset.idx !== undefined ? el.dataset.idx : (id ? id.slice(id.lastIndexOf(':') + 1) : '0');
-      const idx = parseInt(rawIdx, 10);
-      if (mid != null && !isNaN(idx)) {
-        E.edit = { id: String(mid), i: idx };
-        renderMain();
-        setTimeout(() => {
-          const c = $('[data-eos-cell]');
-          if (c) { c.focus(); c.select(); }
-        }, 10);
-      }
+      eosActivateCell(el);
       break;
     }
     case 'eos-issue-from': {
@@ -2828,21 +2940,29 @@ async function eosAct(a, el, e) {
       break;
     }
     case 'eos-todo-done': {
-      const t = eTodos.find(x => x.id === +id);
-      t.done = !t.done; renderMain();
-      toast('Updating To Do status in ERP...');
-      await apiCall('eos_core.eos_api.toggle_todo', { docname: t.docname || t.name, done: t.done ? 1 : 0 });
-      toast('To Do status committed to ERP!');
+      const t = eTodos.find(x => x.id === +id || String(x.id) === String(id) || x.docname === id || x.name === id);
+      if (t) {
+        t.done = !t.done; renderMain();
+        toast('Updating To Do status in ERP...');
+        await apiCall('eos_core.eos_api.toggle_todo', { docname: t.docname || t.name, done: t.done ? 1 : 0 });
+        toast('To Do status committed to ERP!');
+      }
       break;
     }
     case 'eos-todo-arch': {
-      const t = eTodos.find(x => x.id === +id);
-      t.archived = !t.archived; toast(t.archived ? 'Archiving To Do in ERP...' : 'Restoring To Do in ERP...'); renderMain();
-      await apiCall('eos_core.eos_api.archive_todo', { docname: t.docname || t.name, archived: t.archived ? 1 : 0 });
-      toast('To Do archive state updated in ERP!');
+      const t = eTodos.find(x => x.id === +id || String(x.id) === String(id) || x.docname === id || x.name === id);
+      if (t) {
+        t.archived = !t.archived; toast(t.archived ? 'Archiving To Do in ERP...' : 'Restoring To Do in ERP...'); renderMain();
+        await apiCall('eos_core.eos_api.archive_todo', { docname: t.docname || t.name, archived: t.archived ? 1 : 0 });
+        toast('To Do archive state updated in ERP!');
+      }
       break;
     }
-    case 'eos-edit-todo': eosDrawer('to-dos', eTodos.find(x => x.id === +id)); break;
+    case 'eos-edit-todo': {
+      const t = eTodos.find(x => x.id === +id || String(x.id) === String(id) || x.docname === id || x.name === id);
+      eosDrawer('to-dos', t);
+      break;
+    }
     case 'eos-issue-done': {
       const i = eIssues.find(x => x.id === +id);
       i.archived = !i.archived; toast(i.archived ? 'Solving Issue in ERP...' : 'Reopening Issue in ERP...'); renderMain();
@@ -3018,7 +3138,7 @@ async function eosAct(a, el, e) {
       break;
     }
     case 'eos-l10-todo-toggle': {
-      const item = eTodos.find(x => x.id === +id);
+      const item = eTodos.find(x => x.id === +id || String(x.id) === String(id) || x.docname === id || x.name === id);
       if (item) {
         item.done = !item.done;
         renderMain();
@@ -3259,6 +3379,17 @@ async function eosAct(a, el, e) {
 }
 
 document.addEventListener('click', e => {
+  const cell = e.target.closest('[data-act="eos-cell"]');
+  if (cell) {
+    if (E.edit && E.edit.td === cell && e.target.tagName === 'INPUT') {
+      return;
+    }
+    eosActivateCell(cell);
+    return;
+  }
+  if (E.edit && !e.target.closest('[data-eos-cell]')) {
+    eosCommitActiveCell(false);
+  }
   if (E.owner_filter_open && !e.target.closest('.nn-owner-filter-popover, [data-act="eos-toggle-owner-filter"]')) {
     E.owner_filter_open = false;
     E.owner_filter_search = '';
@@ -3275,6 +3406,25 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('scroll', () => { if (E.menu) { E.menu = null; if (S.mod === 'eos') renderMain(); } }, true);
 document.addEventListener('input', e => {
+  if (e.target && e.target.hasAttribute && e.target.hasAttribute('data-eos-cell')) {
+    const inp = e.target;
+    const mid = inp.dataset.mid;
+    const idx = parseInt(inp.dataset.idx, 10);
+    const curTab = E.tab.scorecard || 'weekly';
+    const m = eMeas.find(x => String(x.id) === String(mid) || (x.docname && String(x.docname) === String(mid)) || (x.name && String(x.name) === String(mid)));
+    if (m && !isNaN(idx)) {
+      const v = inp.value.trim();
+      const numVal = v === '' ? null : Number(v);
+      if (!isNaN(numVal)) {
+        eosUpdateMetricInMemory(m, curTab, idx, numVal);
+      }
+      if (eosCellSaveTimer) clearTimeout(eosCellSaveTimer);
+      eosCellSaveTimer = setTimeout(() => {
+        eosSaveMetricValue(m, curTab, idx, numVal);
+      }, 400);
+    }
+    return;
+  }
   if (e.target.classList.contains('nn-owner-filter-search')) {
     E.owner_filter_search = e.target.value;
     const q = e.target.value.toLowerCase().trim();
@@ -3410,50 +3560,13 @@ document.addEventListener('change', async e => {
   }
 });
 
-// Instant cell-to-cell click handling with no dropped clicks or focus races
-document.addEventListener('mousedown', e => {
-  const cell = e.target.closest('[data-act="eos-cell"]');
-  if (cell) {
-    const activeInput = document.querySelector('[data-eos-cell]');
-    const mid = cell.dataset.mid || (cell.dataset.id ? cell.dataset.id.slice(0, cell.dataset.id.lastIndexOf(':')) : null);
-    const rawIdx = cell.dataset.idx !== undefined ? cell.dataset.idx : (cell.dataset.id ? cell.dataset.id.slice(cell.dataset.id.lastIndexOf(':') + 1) : '0');
-    const idx = parseInt(rawIdx, 10);
-
-    // If clicking inside the currently edited cell, let standard click proceed
-    if (activeInput && E.edit && String(E.edit.id) === String(mid) && Number(E.edit.i) === idx) {
-      return;
-    }
-
-    e.preventDefault(); // Prevents premature focusout destroying DOM before mouseup
-
-    if (activeInput && E.edit) {
-      eosCommit(activeInput, false);
-    }
-
-    if (mid != null && !isNaN(idx)) {
-      E.edit = { id: String(mid), i: idx };
-      renderMain();
-      setTimeout(() => {
-        const nextInput = document.querySelector('[data-eos-cell]');
-        if (nextInput) {
-          nextInput.focus();
-          nextInput.select();
-        }
-      }, 10);
-    }
-    return;
-  }
-});
-
 document.addEventListener('focusout', e => {
   if (e.target && e.target.hasAttribute && e.target.hasAttribute('data-eos-cell')) {
     setTimeout(() => {
-      // If focus transitioned to another cell input, do nothing (already handled by mousedown)
-      if (document.activeElement && document.activeElement.hasAttribute && document.activeElement.hasAttribute('data-eos-cell')) {
-        return;
-      }
-      if (E.edit) {
-        eosCommit(e.target, true);
+      if (!document.activeElement || !document.activeElement.hasAttribute || !document.activeElement.hasAttribute('data-eos-cell')) {
+        if (E.edit) {
+          eosCommitActiveCell(false);
+        }
       }
     }, 60);
   }
@@ -3482,8 +3595,7 @@ document.addEventListener('keydown', async e => {
       eosNavigateCell('up');
     } else if (e.key === 'Escape') {
       e.preventDefault();
-      E.edit = null;
-      renderMain();
+      eosCommitActiveCell(false);
     }
   } else if (t.hasAttribute('data-eos-ms') && e.key === 'Enter' && t.value.trim()) {
     const r = eRocks.find(x => x.id === +t.dataset.eosMs);

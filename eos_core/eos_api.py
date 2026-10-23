@@ -19,12 +19,19 @@ def get_eos_bootstrap(user_email=None):
 	leader_teams = get_user_leader_teams(user_id)
 	user_info["leader_teams"] = leader_teams
 	perms = get_user_permissions(user_email=user_id or user_email)
+	roles = perms.get("roles", [])
+	is_team_leader = bool(
+		is_admin
+		or bool(leader_teams)
+	)
+	user_info["is_team_leader"] = is_team_leader
 
 	return {
 		"user": user_info,
 		"permissions": perms,
 		"teams": get_teams_list(is_admin=is_admin, user_id=user_id, allocated_teams=allocated_teams),
 		"leader_teams": leader_teams,
+		"team_leaders": get_team_leaders_map(),
 		"team_members": get_team_members_map(),
 		"people": get_people_list(),
 		"scorecards": get_scorecards_list(is_admin=is_admin, allocated_teams=allocated_teams),
@@ -194,6 +201,22 @@ def get_user_leader_teams(user_id):
 		prefix = user_id.split("@")[0].lower() if "@" in user_id else user_id.lower()
 		clean_prefix = re.sub(r'[^a-z0-9]', '', prefix)
 
+		# Collect player records and identities associated with this user
+		my_player_ids = set()
+		my_player_ids.add(user_id.lower())
+		if fullname:
+			my_player_ids.add(fullname.lower())
+
+		players = frappe.db.sql("""
+			SELECT name, player_name, user FROM `tabPlayer`
+			WHERE (user = %s OR player_name = %s OR name = %s) AND archived = 0
+		""", (user_id, fullname, user_id), as_dict=True)
+		for p in players:
+			if p.get("name"):
+				my_player_ids.add(str(p["name"]).strip().lower())
+			if p.get("player_name"):
+				my_player_ids.add(str(p["player_name"]).strip().lower())
+
 		teams = frappe.get_all("Team", filters={"archived": 0}, fields=["name", "team_name", "leader", "owner"])
 		lead_teams = set()
 		for t in teams:
@@ -201,14 +224,23 @@ def get_user_leader_teams(user_id):
 			leader = str(t.leader or "").strip()
 			if not leader:
 				continue
-			if user_id.lower() == leader.lower() or fullname.lower() == leader.lower():
+			leader_lower = leader.lower()
+			if leader_lower in my_player_ids:
 				lead_teams.add(t_name)
 				continue
+
 			clean_leader = re.sub(r'\s*\([^)]*\)\s*', ' ', leader).strip().lower()
-			if fullname.lower() == clean_leader or (clean_prefix and clean_prefix in re.sub(r'[^a-z0-9]', '', clean_leader)):
+			if clean_leader in my_player_ids:
 				lead_teams.add(t_name)
 				continue
-			player_user = frappe.db.get_value("Player", {"player_name": leader}, "user")
+
+			clean_leader_alpha = re.sub(r'[^a-z0-9]', '', clean_leader)
+			if clean_prefix and clean_prefix in clean_leader_alpha:
+				lead_teams.add(t_name)
+				continue
+
+			# Check if Player pointed to by leader has this user
+			player_user = frappe.db.get_value("Player", leader, "user") or frappe.db.get_value("Player", {"player_name": leader}, "user")
 			if player_user and (player_user.lower() == user_id.lower() or (clean_prefix and clean_prefix in player_user.lower())):
 				lead_teams.add(t_name)
 				continue
@@ -217,6 +249,19 @@ def get_user_leader_teams(user_id):
 	except Exception as e:
 		frappe.log_error("get_user_leader_teams error", str(e))
 		return []
+
+
+def get_team_leaders_map():
+	try:
+		teams = frappe.get_all("Team", filters={"archived": 0}, fields=["name", "team_name", "leader"])
+		leaders_map = {}
+		for t in teams:
+			t_name = t.team_name or t.name
+			if t_name:
+				leaders_map[t_name] = str(t.leader or "").strip()
+		return leaders_map
+	except Exception:
+		return {}
 
 
 def get_user_allocated_teams(user_id):
@@ -268,6 +313,8 @@ def get_user_allocated_teams(user_id):
 		for r in leader_teams:
 			if r.get("team"):
 				all_alloc.add(r["team"])
+
+		all_alloc.update(get_user_leader_teams(user_id))
 
 		return sorted(list(all_alloc))
 	except Exception as e:
@@ -731,12 +778,19 @@ def save_todo(docname=None, name=None, owner=None, due=None, team=None, priv=Fal
 
 @frappe.whitelist(allow_guest=True)
 def toggle_todo(docname, done):
+	target = None
 	if frappe.db.exists("To Do", docname):
-		doc = frappe.get_doc("To Do", docname)
-		doc.status = "Complete" if cint(done) else "In Progress"
-		doc.save(ignore_permissions=True)
+		target = docname
+	elif frappe.db.exists("To Do", {"todo_name": docname}):
+		target = frappe.db.get_value("To Do", {"todo_name": docname}, "name")
+	elif frappe.db.exists("To Do", f"TD-{docname}"):
+		target = f"TD-{docname}"
+
+	if target:
+		new_status = "Complete" if cint(done) else "In Progress"
+		frappe.db.set_value("To Do", target, "status", new_status)
 		frappe.db.commit()
-		return {"status": "ok", "todo_status": doc.status}
+		return {"status": "ok", "todo_status": new_status, "docname": target}
 	return {"status": "not_found"}
 
 

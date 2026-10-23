@@ -235,24 +235,41 @@
 				let team_names = [];
 				if (frappe.db && frappe.db.get_list) {
 					const res = await frappe.db.get_list("Team", {
-						fields: ["name", "team_name", "archived"],
+						fields: ["name", "team_name", "leader", "archived"],
 						limit: 200,
 						order_by: "team_name asc"
 					});
+					this.teams_raw = res || [];
 					if (res && res.length) {
 						team_names = res.map(t => t.team_name || t.name).filter(Boolean);
 					}
 				}
 				if (!team_names.length) {
-					const res = await this.list("Team", ["name", "team_name"], {}, "team_name asc", 200);
+					const res = await this.list("Team", ["name", "team_name", "leader"], {}, "team_name asc", 200);
 					if (res.ok && res.data && res.data.length) {
+						this.teams_raw = res.data || [];
 						team_names = res.data.map(t => t.team_name || t.name).filter(Boolean);
 					}
 				}
-				const unique_teams = Array.from(new Set(team_names));
-				this.all_teams = ["All Teams", ...unique_teams];
-				if (!this.s.team) {
-					this.s.team = "All Teams";
+				const cur_user = (frappe.session && frappe.session.user) || "";
+				const is_admin = cur_user.toLowerCase() === "administrator" || cur_user.toLowerCase() === "info@true-group.org" || (frappe.user_roles || []).some(r => /system manager|administrator/i.test(r));
+
+				let user_teams = null;
+				if (window.__EOS_BOOT__ && Array.isArray(window.__EOS_BOOT__.teams) && window.__EOS_BOOT__.teams.length) {
+					user_teams = window.__EOS_BOOT__.teams;
+				}
+
+				if (!is_admin && user_teams && user_teams.length) {
+					this.all_teams = [...user_teams];
+					if (!this.s.team || !this.all_teams.includes(this.s.team)) {
+						this.s.team = this.all_teams[0];
+					}
+				} else {
+					const unique_teams = Array.from(new Set(team_names));
+					this.all_teams = ["All Teams", ...unique_teams];
+					if (!this.s.team) {
+						this.s.team = is_admin ? "All Teams" : (unique_teams[0] || "All Teams");
+					}
 				}
 			} catch (e) {
 				console.warn("fetch_all_teams failed", e);
@@ -281,6 +298,70 @@
 				console.warn("fetch_players failed", e);
 				this.players = [];
 			}
+		}
+
+		is_team_leader(team = null) {
+			const cur_user = (frappe.session && frappe.session.user) || "";
+			if (!cur_user || cur_user === "Guest") return false;
+			if (cur_user.toLowerCase() === "administrator" || cur_user.toLowerCase() === "info@true-group.org") return true;
+
+			const roles = frappe.user_roles || (frappe.user && frappe.user.get_roles && frappe.user.get_roles()) || [];
+			if (roles.some(r => /system manager|administrator/i.test(r))) return true;
+
+			if (!team || team === "All Teams") {
+				return false;
+			}
+
+			if (window.__EOS_BOOT__ && Array.isArray(window.__EOS_BOOT__.leader_teams)) {
+				if (window.__EOS_BOOT__.leader_teams.includes(team)) return true;
+			}
+
+			const cur_fullname = (frappe.session && frappe.session.user_fullname) || "";
+			const my_player_names = (this.players || [])
+				.filter(p => (p.user && p.user.toLowerCase() === cur_user.toLowerCase()) || (cur_fullname && p.player_name && p.player_name.toLowerCase() === cur_fullname.toLowerCase()))
+				.map(p => (p.player_name || p.name || "").toLowerCase());
+			const my_player_ids = cur_user ? [cur_user.toLowerCase(), ...my_player_names] : my_player_names;
+			if (cur_fullname) my_player_ids.push(cur_fullname.toLowerCase());
+
+			const teams = this.teams_raw || [];
+			const t_obj = teams.find(t => (t.team_name === team || t.name === team));
+			if (!t_obj || !t_obj.leader) return false;
+			const lead = String(t_obj.leader).trim().toLowerCase();
+			if (my_player_ids.includes(lead)) return true;
+			const clean_lead = lead.replace(/\s*\([^)]*\)\s*/g, ' ').trim();
+			if (my_player_ids.includes(clean_lead)) return true;
+			if (cur_user.includes("@")) {
+				const prefix = cur_user.split("@")[0].toLowerCase().replace(/[^a-z0-9]/g, '');
+				const lead_alpha = clean_lead.replace(/[^a-z0-9]/g, '');
+				if (prefix && lead_alpha && (prefix === lead_alpha || prefix.startsWith(lead_alpha) || lead_alpha.startsWith(prefix))) return true;
+			}
+			return false;
+		}
+
+		is_my_metric(m) {
+			if (!m) return false;
+			const cur_user = (frappe.session && frappe.session.user) || "";
+			const cur_fullname = (frappe.session && frappe.session.user_fullname) || "";
+			const owner = String(m.owner || "").trim().toLowerCase();
+			if (!owner) return false;
+			if (cur_user && owner === cur_user.toLowerCase()) return true;
+			if (cur_fullname && owner === cur_fullname.toLowerCase()) return true;
+
+			const my_player_names = (this.players || [])
+				.filter(p => (p.user && p.user.toLowerCase() === cur_user.toLowerCase()) || (cur_fullname && p.player_name && p.player_name.toLowerCase() === cur_fullname.toLowerCase()))
+				.map(p => (p.player_name || p.name || "").toLowerCase());
+			if (my_player_names.includes(owner)) return true;
+
+			const clean_owner = owner.replace(/\s*\([^)]*\)\s*/g, ' ').trim();
+			if (cur_fullname && clean_owner === cur_fullname.toLowerCase().replace(/\s*\([^)]*\)\s*/g, ' ').trim()) return true;
+			if (my_player_names.includes(clean_owner)) return true;
+
+			if (cur_user.includes("@")) {
+				const prefix = cur_user.split("@")[0].toLowerCase().replace(/[^a-z0-9]/g, '');
+				const owner_alpha = clean_owner.replace(/[^a-z0-9]/g, '');
+				if (prefix && owner_alpha && (prefix === owner_alpha || prefix.startsWith(owner_alpha) || owner_alpha.startsWith(prefix))) return true;
+			}
+			return false;
 		}
 
 		get_user_display_name(u) {
@@ -532,13 +613,14 @@
 			.nn-badge-company { font-size: 10px; font-weight: 600; background: #e0f2fe; color: #0369a1; padding: 1px 6px; border-radius: 4px; margin-left: 8px; vertical-align: middle; }
 
 			/* Scorecard Grid Table */
-			.nn-card-wrap { border: 1px solid #e5e7eb; border-radius: 8px; background: #ffffff; overflow: hidden; }
+			.nn-card-wrap { border: 1px solid #e5e7eb; border-radius: 8px; background: #ffffff; min-height: 0 !important; height: auto !important; }
 			.nn-card-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid #f1f3f5; }
-			.nn-table-scroll { overflow-x: auto; max-width: 100%; position: relative; }
-			.nn-sc-tbl { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12.5px; }
-			.nn-sc-tbl th { padding: 8px 12px; background: #fafafa; border-bottom: 1px solid #e5e7eb; border-right: 1px solid #f1f3f5; font-size: 11px; font-weight: 600; color: #6b7280; text-align: right; white-space: nowrap; }
+			.nn-table-scroll { overflow-x: auto; overflow-y: auto; max-width: 100%; position: relative; min-height: 0 !important; height: auto !important; max-height: calc(100vh - 250px); }
+			.nn-sc-tbl { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12.5px; height: 1px !important; }
+			.nn-sc-tbl thead th { padding: 6px 12px; background: #fafafa !important; border-bottom: 1px solid #e5e7eb; border-right: 1px solid #f1f3f5; font-size: 11px; font-weight: 600; color: #6b7280; text-align: right; white-space: nowrap; height: 36px !important; box-sizing: border-box; }
 			.nn-sc-tbl th.left { text-align: left; }
-			.nn-sc-tbl td { padding: 10px 12px; border-bottom: 1px solid #f1f3f5; border-right: 1px solid #f8fafc; text-align: right; vertical-align: middle; background: #fff; white-space: nowrap; }
+			.nn-sc-tbl tbody tr { height: 38px !important; max-height: 38px !important; }
+			.nn-sc-tbl td { padding: 4px 12px !important; border-bottom: 1px solid #f1f3f5; border-right: 1px solid #f8fafc; text-align: right; vertical-align: middle; background: #fff; white-space: nowrap; height: 38px !important; max-height: 38px !important; box-sizing: border-box; }
 			.nn-sc-tbl td.left { text-align: left; }
 			.nn-sc-tbl th.nn-col-metric, .nn-sc-tbl td.nn-col-metric, .nn-col-metric { position: sticky; left: 0; z-index: 4; width: 240px; min-width: 240px; max-width: 240px; background: #fff; white-space: normal !important; word-break: break-word !important; overflow-wrap: break-word !important; line-height: 1.35; box-sizing: border-box; }
 			.nn-col-metric .nn-metric-title { white-space: normal !important; word-break: break-word !important; overflow-wrap: break-word !important; display: block; max-width: 100%; }
@@ -566,6 +648,7 @@
 			.nn-sc-cell.pass:hover { background-color: #bbf7d0 !important; }
 			.nn-sc-cell.fail { background-color: #fee2e2 !important; color: #dc2626 !important; }
 			.nn-sc-cell.fail:hover { background-color: #fecaca !important; }
+			.nn-sc-cell.editing, .nn-sc-cell.editing:hover { background-color: #ffffff !important; outline: none !important; cursor: default; }
 			.nn-cell-val.empty { color: #9ca3af; font-size: 13px; font-weight: 500; }
 			.nn-cell-badge { display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; line-height: 1.2; color: inherit; }
 			.nn-cell-badge.pass { background: transparent !important; color: #15803d !important; border: none !important; }
@@ -625,6 +708,7 @@
 			.nn-todo-circle-check { width: 17px; height: 17px; border-radius: 50%; border: 1.5px solid #d1d5db; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.15s ease; background: #ffffff; flex-shrink: 0; }
 			.nn-todo-circle-check:hover { border-color: #059669; }
 			.nn-todo-circle-check.checked { background: #059669; border-color: #059669; color: #ffffff; }
+			.nn-todo-circle-check.checked svg { stroke: #ffffff !important; fill: none !important; stroke-width: 2.5 !important; width: 11px !important; height: 11px !important; display: block !important; }
 
 			.nn-todo-row .nn-todo-col-title { font-size: 13px; font-weight: 500; color: #111827; cursor: pointer; }
 			.nn-todo-row .nn-todo-col-title:hover { color: #064e3b; }
@@ -4809,11 +4893,14 @@
 			const q = (this.s.search || "").toLowerCase().trim();
 			let metrics = this.data.metrics.filter(m => !q || m.title.toLowerCase().includes(q));
 
+			const is_leader = this.is_team_leader(this.s.team);
 			const all_owners = Array.from(new Set((this.data.metrics || []).map(m => m.owner).filter(Boolean))).sort();
-			const is_owner_filtered = Array.isArray(this.s.owner_filter) && this.s.owner_filter.length < all_owners.length;
-			if (Array.isArray(this.s.owner_filter)) {
+			if (!is_leader) {
+				metrics = metrics.filter(m => self.is_my_metric(m));
+			} else if (Array.isArray(this.s.owner_filter)) {
 				metrics = metrics.filter(m => this.s.owner_filter.includes(m.owner));
 			}
+			const is_owner_filtered = is_leader && Array.isArray(this.s.owner_filter) && this.s.owner_filter.length < all_owners.length;
 
 			const ths = P.map(p => `<th>${p.label}</th>`).join("");
 			const rows = metrics.length ? metrics.map(m => {
@@ -4866,11 +4953,12 @@
 							<th class="nn-col-owner" style="width:76px;min-width:76px;text-align:center;position:relative;">
 								<div style="display:inline-flex;align-items:center;justify-content:center;gap:4px">
 									<span>${this.get_field_label("EOS Metric", "owner_user", "Owner")}</span>
+									${is_leader ? `
 									<button class="nn-btn-icon nn-owner-filter-btn ${is_owner_filtered ? 'active' : ''}" id="nn-sc-owner-filter" title="${__("Filter by Owner")}" style="color:${is_owner_filtered ? '#047857' : '#9ca3af'};background:none;border:none;padding:1px;cursor:pointer;display:inline-flex;align-items:center;">
 										${ic("filter", 12)}
-									</button>
+									</button>` : ''}
 								</div>
-								${this.s.owner_popover_open ? this.render_owner_popover(all_owners) : ''}
+								${(is_leader && this.s.owner_popover_open) ? this.render_owner_popover(all_owners) : ''}
 							</th>
 							<th class="nn-col-goal" style="width:90px;min-width:90px;text-align:center">${this.get_field_label("EOS Metric", "target_value", "Goal")}</th>
 							${ths}
@@ -4879,6 +4967,8 @@
 					<tbody>${rows}</tbody>
 				</table>
 			`);
+
+			this.$main.find(".nn-badge-cnt").text(metrics.length);
 
 			this.bind_grid_cell_events();
 		}
@@ -4891,7 +4981,52 @@
 				self.open_measurable_drawer($(this).attr("data-id"));
 			});
 
-			$m.find(".nn-sc-cell").off("click").on("click", function (e) {
+			const commit_active_cell = async ($active_td, should_focus_next = null) => {
+				const $inp = $active_td.find(".nn-sc-cell-input");
+				if (!$inp.length) return;
+				const metric_id = $active_td.attr("data-metric");
+				const key = $active_td.attr("data-key");
+				const goal = Number($active_td.attr("data-goal")) || 0;
+				const op = $active_td.attr("data-op") || ">=";
+				const metric = self.data.metrics.find(x => x.id === metric_id);
+
+				if ($active_td.data("cell-timer")) {
+					clearTimeout($active_td.data("cell-timer"));
+					$active_td.removeData("cell-timer");
+				}
+
+				const raw = $inp.val().trim();
+				const new_val = raw === "" ? null : Number(raw);
+
+				if (new_val === null) {
+					if (metric && metric.values) delete metric.values[key];
+					$active_td.removeClass("pass fail editing").html('<span class="nn-cell-val empty">-</span>');
+					await self.save_scorecard_entry(metric_id, key, null);
+				} else if (isNaN(new_val)) {
+					frappe.show_alert({ message: __("Please enter a valid number"), indicator: "red" });
+					self.render_grid();
+					return;
+				} else {
+					if (metric) {
+						if (!metric.values) metric.values = {};
+						metric.values[key] = new_val;
+					}
+					const pass = self.check_goal_pass(new_val, goal, op);
+					const cls = pass ? "pass" : "fail";
+					$active_td.removeClass("pass fail editing").addClass(cls).html(`
+						<div class="nn-cell-wrap">
+							<span class="nn-cell-badge ${cls}">${new_val}</span>
+						</div>
+					`);
+					await self.save_scorecard_entry(metric_id, key, new_val);
+				}
+
+				if (should_focus_next && should_focus_next.length) {
+					should_focus_next.trigger("click");
+				}
+			};
+
+			$m.off("click.sccell").on("click.sccell", ".nn-sc-cell", function (e) {
 				if (self.s.timeframe && self.s.timeframe !== "Week") {
 					frappe.show_alert({
 						message: __("Rolled-up view is read-only. Switch to Weekly KPIs to enter data."),
@@ -4899,9 +5034,14 @@
 					});
 					return;
 				}
-				if ($(this).find(".nn-sc-cell-input").length) return;
-
 				const $td = $(this);
+				if ($td.find(".nn-sc-cell-input").length) return;
+
+				const $other_active = $m.find(".nn-sc-cell:has(.nn-sc-cell-input)");
+				if ($other_active.length && !$other_active.is($td)) {
+					commit_active_cell($other_active);
+				}
+
 				const metric_id = $td.attr("data-metric");
 				const key = $td.attr("data-key");
 				const goal = Number($td.attr("data-goal")) || 0;
@@ -4910,99 +5050,55 @@
 				const cur_val = metric && metric.values && metric.values[key] != null ? metric.values[key] : "";
 
 				const $inp = $(`<input type="number" step="any" class="nn-sc-cell-input" value="${cur_val}">`);
-				$td.empty().append($inp);
+				$td.addClass("editing").empty().append($inp);
 				$inp.focus().select();
 
-				let finished = false;
-				const save_cell = async () => {
-					if (finished) return;
-					finished = true;
-					const raw = $inp.val().trim();
-					const new_val = raw === "" ? null : Number(raw);
-
-					if (new_val === null) {
-						if (metric) delete metric.values[key];
-						$td.removeClass("pass fail").html('<span class="nn-cell-val empty">-</span>');
-						await self.save_scorecard_entry(metric_id, key, null);
-						return;
+				$inp.on("input", function () {
+					const raw = $(this).val().trim();
+					const val_num = raw === "" ? null : Number(raw);
+					if (metric && !isNaN(val_num)) {
+						if (!metric.values) metric.values = {};
+						if (val_num === null) delete metric.values[key];
+						else metric.values[key] = val_num;
 					}
+					if ($td.data("cell-timer")) clearTimeout($td.data("cell-timer"));
+					const timer = setTimeout(async () => {
+						await self.save_scorecard_entry(metric_id, key, val_num);
+					}, 400);
+					$td.data("cell-timer", timer);
+				});
 
-					if (isNaN(new_val)) {
-						frappe.show_alert({ message: __("Please enter a valid number"), indicator: "red" });
-						self.render_grid();
-						return;
-					}
+				$inp.on("blur", function () {
+					commit_active_cell($td);
+				});
 
-					if (metric) metric.values[key] = new_val;
-					const pass = self.check_goal_pass(new_val, goal, op);
-					const cls = pass ? "pass" : "fail";
-					const existing_issue = self.created_issues && self.created_issues[`${metric_id}_${key}`];
-					let issue_html = "";
-					if (!pass) {
-						if (existing_issue) {
-							issue_html = `<a href="/app/issue/${encodeURIComponent(existing_issue)}" class="nn-cell-issue-link" target="_blank" title="${__("View Issue: ")}${self.esc(existing_issue)}">${ic("arrow-up-right", 9)} ${__("Issue")}</a>`;
-						} else {
-							issue_html = `
-								<button class="nn-btn-make-issue" title="${__("Make it an Issue")}" data-metric="${self.esc(metric_id)}" data-date="${key}">
-									${ic("alert-circle", 10)}
-									<span class="nn-make-issue-text">${__("Issue")}</span>
-								</button>`;
-						}
-					}
-					$td.removeClass("pass fail").addClass(cls).html(`
-						<div class="nn-cell-wrap">
-							<span class="nn-cell-badge ${cls}">${new_val}</span>
-						</div>
-					`);
-					self.bind_grid_cell_events();
-
-					if (!pass) {
-						frappe.show_alert({
-							message: __(`Saved: ${new_val} (Off-track: less than goal ${op} ${goal})`),
-							indicator: "red"
-						});
-					} else {
-						frappe.show_alert({
-							message: __(`Saved: ${new_val} (On-track)`),
-							indicator: "green"
-						});
-					}
-
-					await self.save_scorecard_entry(metric_id, key, new_val);
-				};
-
-				$inp.on("blur", save_cell);
 				$inp.on("keydown", function (ev) {
 					if (ev.key === "Enter") {
 						ev.preventDefault();
-						$inp.blur();
+						const $next_tr = $td.closest("tr").next("tr");
+						const col_idx = $td.index();
+						const $next_td = $next_tr.length ? $next_tr.children().eq(col_idx) : null;
+						commit_active_cell($td, $next_td);
+					} else if (ev.key === "Tab") {
+						ev.preventDefault();
+						const $next_td = ev.shiftKey ? $td.prev(".nn-sc-cell") : $td.next(".nn-sc-cell");
+						commit_active_cell($td, $next_td);
 					} else if (ev.key === "Escape") {
 						ev.preventDefault();
-						finished = true;
+						if ($td.data("cell-timer")) {
+							clearTimeout($td.data("cell-timer"));
+							$td.removeData("cell-timer");
+						}
 						if (cur_val !== "") {
 							const pass = self.check_goal_pass(cur_val, goal, op);
 							const cls = pass ? "pass" : "fail";
-							const existing_issue = self.created_issues && self.created_issues[`${metric_id}_${key}`];
-							let issue_html = "";
-							if (!pass) {
-								if (existing_issue) {
-									issue_html = `<a href="/app/issue/${encodeURIComponent(existing_issue)}" class="nn-cell-issue-link" target="_blank" title="${__("View Issue: ")}${self.esc(existing_issue)}">${ic("arrow-up-right", 9)} ${__("Issue")}</a>`;
-								} else {
-									issue_html = `
-										<button class="nn-btn-make-issue" title="${__("Make it an Issue")}" data-metric="${self.esc(metric_id)}" data-date="${key}">
-											${ic("alert-circle", 10)}
-											<span class="nn-make-issue-text">${__("Issue")}</span>
-										</button>`;
-								}
-							}
-							$td.removeClass("pass fail").addClass(cls).html(`
+							$td.removeClass("pass fail editing").addClass(cls).html(`
 								<div class="nn-cell-wrap">
 									<span class="nn-cell-badge ${cls}">${cur_val}</span>
 								</div>
 							`);
-							self.bind_grid_cell_events();
 						} else {
-							$td.removeClass("pass fail").html('<span class="nn-cell-val empty">-</span>');
+							$td.removeClass("pass fail editing").html('<span class="nn-cell-val empty">-</span>');
 						}
 					}
 				});
