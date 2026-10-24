@@ -12,6 +12,7 @@
   "column_break_1",
   "owner_user",
   "team",
+  "rock",
   "due_date",
   "section_break_details",
   "description",
@@ -64,6 +65,12 @@
    "in_list_view": 1,
    "label": "Team",
    "options": "Team"
+  },
+  {
+   "fieldname": "rock",
+   "fieldtype": "Link",
+   "label": "Rock",
+   "options": "Rock"
   },
   {
    "fieldname": "due_date",

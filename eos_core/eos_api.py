@@ -614,7 +614,7 @@ def get_todos_list(is_admin=True, allocated_teams=None):
 		todos = frappe.get_all(
 			"To Do",
 			filters=filters,
-			fields=["name", "todo_name", "owner_user", "team", "due_date", "status", "archived", "priority"],
+			fields=["name", "todo_name", "owner_user", "team", "due_date", "status", "archived", "priority", "rock"],
 			order_by="due_date asc, creation desc"
 		)
 		out = []
@@ -634,7 +634,8 @@ def get_todos_list(is_admin=True, allocated_teams=None):
 				"due": str(t.due_date or nowdate()),
 				"done": done,
 				"archived": bool(cint(t.archived)),
-				"priv": priv
+				"priv": priv,
+				"rock": t.rock or ""
 			})
 		return out
 	except Exception as e:
@@ -647,10 +648,13 @@ def get_issues_list(is_admin=True, allocated_teams=None):
 		filters = {}
 		if not is_admin and allocated_teams is not None:
 			filters["team"] = ["in", allocated_teams] if allocated_teams else ["in", ["__NONE__"]]
+		fields = ["name", "issue_name", "description", "team", "owner_user", "priority", "status", "archived", "creation", "source"]
+		if frappe.db.has_column("Issue", "rock"):
+			fields.append("rock")
 		issues = frappe.get_all(
 			"Issue",
 			filters=filters,
-			fields=["name", "issue_name", "description", "team", "owner_user", "priority", "status", "archived", "creation", "source"],
+			fields=fields,
 			order_by="creation desc"
 		)
 		out = []
@@ -674,7 +678,8 @@ def get_issues_list(is_admin=True, allocated_teams=None):
 				"term": term,
 				"pri": i.priority or "",
 				"archived": is_solved,
-				"raised": str(getdate(i.creation)) if i.creation else nowdate()
+				"raised": str(getdate(i.creation)) if i.creation else nowdate(),
+				"rock": i.get("rock") or ""
 			})
 		return out
 	except Exception as e:
@@ -750,9 +755,21 @@ def get_vto_info():
 # ACTION HANDLERS (PERSIST DIRECTLY TO ERP DOCUMENTS)
 # =====================================================================
 
+def resolve_rock_docname(rock):
+	if not rock:
+		return None
+	if frappe.db.exists("Rock", rock):
+		return rock
+	found = frappe.db.get_value("Rock", {"rock_name": rock}, "name")
+	if found:
+		return found
+	return None
+
+
 @frappe.whitelist(allow_guest=True)
-def save_todo(docname=None, name=None, owner=None, due=None, team=None, priv=False):
+def save_todo(docname=None, name=None, owner=None, due=None, team=None, priv=False, rock=None):
 	owner_user = resolve_user_email(owner)
+	rock_docname = resolve_rock_docname(rock)
 	if docname and frappe.db.exists("To Do", docname):
 		doc = frappe.get_doc("To Do", docname)
 		if name: doc.todo_name = name
@@ -760,6 +777,7 @@ def save_todo(docname=None, name=None, owner=None, due=None, team=None, priv=Fal
 		if due: doc.due_date = due
 		if team and not priv: doc.team = team
 		elif priv: doc.team = None
+		if rock is not None: doc.rock = rock_docname
 		doc.save(ignore_permissions=True)
 	else:
 		doc = frappe.get_doc({
@@ -770,6 +788,7 @@ def save_todo(docname=None, name=None, owner=None, due=None, team=None, priv=Fal
 			"team": None if priv else (team or "Leadership Team"),
 			"status": "Not Started",
 			"priority": "Medium",
+			"rock": rock_docname,
 			"archived": 0
 		}).insert(ignore_permissions=True)
 	frappe.db.commit()
@@ -900,8 +919,10 @@ def delete_rock_milestone(docname, milestone_idx):
 
 
 @frappe.whitelist(allow_guest=True)
-def save_issue(docname=None, name=None, desc="", pri="", team=None, owner=None, term="short"):
+def save_issue(docname=None, name=None, desc="", pri="", team=None, owner=None, term="short", rock=None):
 	owner_user = resolve_user_email(owner)
+	rock_docname = resolve_rock_docname(rock)
+	has_rock = frappe.db.has_column("Issue", "rock")
 	if docname and frappe.db.exists("Issue", docname):
 		doc = frappe.get_doc("Issue", docname)
 		if name: doc.issue_name = name
@@ -909,9 +930,10 @@ def save_issue(docname=None, name=None, desc="", pri="", team=None, owner=None, 
 		if pri is not None: doc.priority = str(pri) if pri else ""
 		if team: doc.team = team
 		if owner_user: doc.owner_user = owner_user
+		if has_rock and rock is not None: doc.rock = rock_docname
 		doc.save(ignore_permissions=True)
 	else:
-		doc = frappe.get_doc({
+		issue_data = {
 			"doctype": "Issue",
 			"issue_name": name,
 			"description": desc,
@@ -921,9 +943,52 @@ def save_issue(docname=None, name=None, desc="", pri="", team=None, owner=None, 
 			"status": "Identified",
 			"archived": 0,
 			"source": "Manual"
-		}).insert(ignore_permissions=True)
+		}
+		if has_rock and rock_docname:
+			issue_data["rock"] = rock_docname
+		doc = frappe.get_doc(issue_data).insert(ignore_permissions=True)
 	frappe.db.commit()
 	return {"status": "ok", "docname": doc.name}
+
+
+@frappe.whitelist(allow_guest=True)
+def get_rock_links(rock):
+	if not rock:
+		return {"status": "ok", "todos": [], "issues": []}
+
+	rock_docname = rock
+	if not frappe.db.exists("Rock", rock_docname):
+		found = frappe.db.get_value("Rock", {"rock_name": rock}, "name")
+		if found:
+			rock_docname = found
+
+	rock_filters = [rock_docname]
+	if rock != rock_docname:
+		rock_filters.append(rock)
+
+	todos = frappe.get_all(
+		"To Do",
+		filters={"rock": ["in", rock_filters], "archived": 0},
+		fields=["name", "todo_name", "status", "owner_user", "due_date", "creation"],
+		order_by="creation desc"
+	)
+	for t in todos:
+		t["title"] = t.get("todo_name") or t.get("name")
+		t["owner"] = frappe.utils.get_fullname(t.get("owner_user")) if t.get("owner_user") else "Administrator"
+
+	issues = []
+	if frappe.db.has_column("Issue", "rock"):
+		issues = frappe.get_all(
+			"Issue",
+			filters={"rock": ["in", rock_filters], "archived": 0},
+			fields=["name", "issue_name", "status", "owner_user", "due_date", "priority", "creation"],
+			order_by="creation desc"
+		)
+		for i in issues:
+			i["title"] = i.get("issue_name") or i.get("name")
+			i["owner"] = frappe.utils.get_fullname(i.get("owner_user")) if i.get("owner_user") else "Administrator"
+
+	return {"status": "ok", "todos": todos, "issues": issues}
 
 
 @frappe.whitelist(allow_guest=True)
