@@ -987,12 +987,18 @@ function renderScorecardsDirectory() {
 }
 
 /* ---------- Rocks ---------- */
+function getRockName(rname) {
+  if (!rname) return '';
+  const r = (eRocks || []).find(x => x.docname === rname || x.name === rname);
+  return r ? r.name : rname;
+}
+
 function eRockRow(r, own) {
   const open = E.openRock.has(r.id), has = r.ms && r.ms.length > 0, done = has ? r.ms.filter(m => m.done).length : 0, cols = own ? 7 : 6;
   const cls = r.status === 'On-track' ? 'on' : r.status === 'Off-track' ? 'off' : 'done', ic = r.status === 'Off-track' ? 'thumbdown' : r.status === 'Done' ? 'check' : 'thumbup';
   let h = `<tr><td class="ck">${has || open ? `<button class="icon-btn" data-act="eos-rock-open" data-id="${r.id}" aria-expanded="${open}" aria-label="${open ? 'Hide' : 'Show'} milestones">${icon(open ? 'down' : 'chev')}</button>` : ''}</td>
    <td><span class="e-st ${cls}">${icon(ic)}${r.status}</span></td>
-   <td class="tl strong">${eEsc(r.name)}${!own && r.company ? '<span class="e-tag">Company Rock</span>' : ''}</td>
+   <td class="tl strong"><button class="link" style="padding:0;color:inherit;font-weight:600;text-align:left;background:none;border:none;cursor:pointer" data-act="eos-edit-rock" data-id="${r.id}" title="Click to view Rock details and linked items">${eEsc(r.name)}</button>${!own && r.company ? '<span class="e-tag">Company Rock</span>' : ''}</td>
    <td>${has ? `<span class="e-prog"><span class="e-bar"><i style="width:${done / r.ms.length * 100}%"></i></span>${done}/${r.ms.length}</span>` : ''}</td>
    ${own ? `<td>${eAv(r.owner)}</td>` : ''}<td>${eDD(r.end, r.status === 'Done')}</td><td class="act">${eMenuBtn('rock', r.id)}</td></tr>`;
   if (open) {
@@ -1026,7 +1032,7 @@ function eosRocks() {
   } else if (tab === 'board') {
     body = `<div class="board">${['On-track', 'Off-track', 'Done'].map(s => {
       const c = rs.filter(r => r.status === s);
-      return `<section class="col"><h4>${s}<span>${c.length}</span></h4>${c.map(r => `<div class="card"><small>${r.company ? 'Company Rock' : eEsc(r.team)}</small><strong>${eEsc(r.name)}</strong><p>Due ${eShort(r.end)} · ${r.ms ? r.ms.filter(m => m.done).length : 0}/${r.ms ? r.ms.length : 0} milestones</p><div class="by">${eAv(r.owner, '')}</div></div>`).join('')}</section>`;
+      return `<section class="col"><h4>${s}<span>${c.length}</span></h4>${c.map(r => `<div class="card" data-act="eos-edit-rock" data-id="${r.id}" style="cursor:pointer" title="Click to view Rock details and linked items"><small>${r.company ? 'Company Rock' : eEsc(r.team)}</small><strong>${eEsc(r.name)}</strong><p>Due ${eShort(r.end)} · ${r.ms ? r.ms.filter(m => m.done).length : 0}/${r.ms ? r.ms.length : 0} milestones</p><div class="by">${eAv(r.owner, '')}</div></div>`).join('')}</section>`;
     }).join('')}</div>`;
   } else {
     body = `<div class="eos-col">${rs.length ? `<div class="panel"><div class="scroll"><table class="eos-t"><thead><tr><th>Title</th><th>Owner</th><th>Due by</th><th class="act"></th></tr></thead><tbody>${rs.map(r => `<tr><td class="strong tl">${eEsc(r.name)}</td><td>${eAv(r.owner)}</td><td>${eDD(r.end, true)}</td><td class="act"><button class="mini" data-act="eos-rock-st" data-id="${r.id}:archive">Restore</button></td></tr>`).join('')}</tbody></table></div></div>`
@@ -1061,7 +1067,7 @@ function eosTodos() {
     </div>
    <div class="eos-col"><div class="panel"><div class="pnl-h"><h2>${tab === 'private' ? 'Private To-Dos' : 'Team To-Dos'}<span class="pcount">${rs.length}</span></h2></div>
    ${vis.length ? `<div class="scroll"><table class="eos-t"><thead><tr><th class="ck"></th><th>Title</th><th>Due by</th><th>Owner</th><th class="act"></th></tr></thead><tbody>
-   ${vis.map(t => `<tr><td class="ck">${eCheck(t.done, 'eos-todo-done', t.id, (t.done ? 'Mark not done: ' : 'Mark done: ') + t.name)}</td><td class="tdn ${t.done ? 'done' : ''}">${eEsc(t.name)}</td><td>${eDue(t.due, t.done)}</td><td>${eAv(t.owner)}</td><td class="act">${eMenuBtn('todo', t.id)}</td></tr>`).join('')}</tbody></table></div>`
+   ${vis.map(t => `<tr><td class="ck">${eCheck(t.done, 'eos-todo-done', t.id, (t.done ? 'Mark not done: ' : 'Mark done: ') + t.name)}</td><td class="tdn ${t.done ? 'done' : ''}"><button class="link" style="padding:0;color:inherit;font-weight:600;text-align:left;background:none;border:none;cursor:pointer" data-act="eos-edit-todo" data-id="${t.id}">${eEsc(t.name)}</button>${t.rock ? `<span class="e-tag" style="margin-left:6px;font-size:10px;background:#f1f5f9;color:#475569" title="Linked Rock: ${eEsc(t.rock)}">${icon('mountain')} ${eEsc(getRockName(t.rock))}</span>` : ''}</td><td>${eDue(t.due, t.done)}</td><td>${eAv(t.owner)}</td><td class="act">${eMenuBtn('todo', t.id)}</td></tr>`).join('')}</tbody></table></div>`
       : `<div class="empty"><div class="eic">${icon('checksq')}</div><h3>${F.arch ? 'No archived To-Dos' : 'No To-Dos found in ERP'}</h3><p>${F.arch ? 'Archived documents will appear here.' : 'Create a To-Do to save it directly to the To Do DocType.'}</p></div>`}
    <div class="pager"><button class="addlink" data-act="create">${icon('plus')}Create To-Do</button>${ePager('todos', rs.length)}</div></div></div>`;
 }
@@ -1075,7 +1081,7 @@ function eosIssues() {
   const rs = eIssues.filter(i => eMatch(i, F) && i.term === tab && i.archived === F.arch && eQ(i.name)).sort((a, b) => (ePriRank[a.pri] ?? 99) - (ePriRank[b.pri] ?? 99) || String(a.raised || '').localeCompare(String(b.raised || '')) || a.id - b.id);
   const vis = eSlice('issues', rs), off = (F.page - 1) * (+F.per);
   const body = rs.length ? `<div class="panel"><div class="pnl-h"><h2>${tab === 'short' ? 'Short-Term' : 'Long-Term'}<span class="pcount">${rs.length}</span></h2></div><div class="scroll"><table class="eos-t"><thead><tr><th class="ck"></th><th>Title</th><th>Priority</th><th>Created</th><th>Owner</th><th class="act"></th></tr></thead><tbody>
-   ${vis.map((i, k) => `<tr><td class="ck">${eCheck(i.archived, 'eos-issue-done', i.id, (i.archived ? 'Reopen: ' : 'Solve: ') + i.name)}</td><td class="tdn ${i.archived ? 'done' : ''}"><button class="link" style="padding:0;color:inherit;font-weight:600;text-align:left;background:none;border:none;cursor:pointer" data-act="eos-edit-issue" data-id="${i.id}">${off + k + 1}. ${eEsc(i.name)}</button></td>
+   ${vis.map((i, k) => `<tr><td class="ck">${eCheck(i.archived, 'eos-issue-done', i.id, (i.archived ? 'Reopen: ' : 'Solve: ') + i.name)}</td><td class="tdn ${i.archived ? 'done' : ''}"><button class="link" style="padding:0;color:inherit;font-weight:600;text-align:left;background:none;border:none;cursor:pointer" data-act="eos-edit-issue" data-id="${i.id}">${off + k + 1}. ${eEsc(i.name)}</button>${i.rock ? `<span class="e-tag" style="margin-left:6px;font-size:10px;background:#f1f5f9;color:#475569" title="Linked Rock: ${eEsc(i.rock)}">${icon('mountain')} ${eEsc(getRockName(i.rock))}</span>` : ''}</td>
    <td><select class="pri" data-eos-pri="${i.id}" aria-label="Priority">${['', '1', '2', '3', '4', '5'].map(p => `<option value="${p}" ${String(i.pri || '') === String(p) ? 'selected' : ''}>${p || 'None'}</option>`).join('')}</select></td><td class="muted-s">${eShort(i.raised)}</td><td>${eAv(i.owner)}</td><td class="act">${eMenuBtn('issue', i.id)}</td></tr>`).join('')}</tbody></table></div>
    <div class="pager"><button class="addlink" data-act="create">${icon('plus')}Add Issue</button>${ePager('issues', rs.length)}</div></div>`
     : `<div class="empty"><div class="eic">${icon('alert')}</div><h3>${F.arch ? 'No archived issues' : "No Issues found in ERP."}</h3><p>${F.arch ? 'Solved issues are stored in ERP.' : 'Add an Issue to save it directly to the Issue DocType.'}</p>${F.arch ? '' : `<button class="btn primary" data-act="create">Add Issue</button>`}</div>`;
@@ -2176,13 +2182,64 @@ function eRenderMenu() {
 }
 
 /* ---------- drawer forms & DB persistence ---------- */
-function eosForm(title, fields, save) {
+async function eosLoadRockLinks(rock) {
+  const container = document.getElementById('eos-rock-linked-items');
+  const countEl = document.getElementById('eos-rock-links-count');
+  if (!container) return;
+  try {
+    const res = await apiCall('eos_core.eos_api.get_rock_links', { rock: rock });
+    const todos = (res && res.todos) || [];
+    const issues = (res && res.issues) || [];
+    const total = todos.length + issues.length;
+    if (countEl) countEl.textContent = total;
+    if (total === 0) {
+      container.innerHTML = `<div style="padding:14px;color:var(--ink-3);font-size:12px;background:#f9fafb;border-radius:6px;text-align:center">No linked items found for this Rock. Use the buttons above to create linked To-Dos or Issues.</div>`;
+      return;
+    }
+    let html = '';
+    todos.forEach(t => {
+      const isDone = t.status === 'Complete';
+      html += `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#f8fafc;border:1px solid var(--line);border-radius:6px;font-size:12px;gap:8px">
+          <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1">
+            <span style="background:#e0e7ff;color:#3730a3;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;text-transform:uppercase">To-Do</span>
+            <span style="font-weight:600;color:var(--ink-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${eEsc(t.title || t.todo_name || t.name)}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+            <span style="color:var(--ink-3);font-size:11px">${eEsc(t.owner || t.owner_user || '')}</span>
+            <span class="e-st ${isDone ? 'done' : 'on'}" style="font-size:10.5px;padding:2px 6px">${eEsc(t.status || 'Not Started')}</span>
+          </div>
+        </div>
+      `;
+    });
+    issues.forEach(i => {
+      const isSolved = i.status === 'Solved';
+      html += `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#f8fafc;border:1px solid var(--line);border-radius:6px;font-size:12px;gap:8px">
+          <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1">
+            <span style="background:#fee2e2;color:#991b1b;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;text-transform:uppercase">Issue</span>
+            <span style="font-weight:600;color:var(--ink-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${eEsc(i.title || i.issue_name || i.name)}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+            <span style="color:var(--ink-3);font-size:11px">${eEsc(i.owner || i.owner_user || '')}</span>
+            <span class="e-st ${isSolved ? 'done' : 'off'}" style="font-size:10.5px;padding:2px 6px">${eEsc(i.status || 'Identified')}</span>
+          </div>
+        </div>
+      `;
+    });
+    container.innerHTML = html;
+  } catch (err) {
+    if (container) container.innerHTML = `<div style="padding:10px;color:#ef4444;font-size:12px">Failed to load linked items.</div>`;
+  }
+}
+
+function eosForm(title, fields, save, extraHtml) {
   E.form = { fields, save };
   const fh = (f, i) => f.t === 'select' ? `<select class="field" id="d${i}">${f.o.map(o => Array.isArray(o) ? o : [o, o]).map(([v, l]) => `<option value="${eEsc(v)}" ${String(f.v) === String(v) ? 'selected' : ''}>${eEsc(l)}</option>`).join('')}</select>`
     : f.t === 'textarea' ? `<textarea class="field" id="d${i}" placeholder="${eEsc(f.ph || '')}">${eEsc(f.v || '')}</textarea>`
       : `<input class="field" id="d${i}" type="${f.t || 'text'}" value="${eEsc(f.v == null ? '' : f.v)}" placeholder="${eEsc(f.ph || '')}">`;
   $('#drawer').innerHTML = `<header><h2>${title}</h2><button class="icon-btn" data-act="close" aria-label="Close">${icon('x')}</button></header>
-   <div class="body">${fields.map((f, i) => `<div class="f" data-k="${f.k}"><label for="d${i}">${f.l}${f.req ? ' *' : f.opt ? ' (optional)' : ''}</label>${fh(f, i)}<div class="err">${f.l} is required.</div></div>`).join('')}</div>
+   <div class="body">${fields.map((f, i) => `<div class="f" data-k="${f.k}"><label for="d${i}">${f.l}${f.req ? ' *' : f.opt ? ' (optional)' : ''}</label>${fh(f, i)}<div class="err">${f.l} is required.</div></div>`).join('')}${extraHtml || ''}</div>
    <footer><button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="save">Save to ERP</button></footer>`;
   document.body.classList.add('drawer-open'); $('#drawer').setAttribute('aria-hidden', 'false');
   setTimeout(() => {
@@ -2236,7 +2293,11 @@ function eosSave() {
     vals[f.k] = isHidden ? '' : (f.t === 'number' ? (v === '' ? 0 : Number(v)) : v);
   });
   if (bad) return;
-  E.form.save(vals); closeDrawer(); E.form = null; renderMain();
+  const saveFn = E.form.save;
+  closeDrawer();
+  E.form = null;
+  renderMain();
+  saveFn(vals);
 }
 
 const eOps = [['>=', '>= (Greater than or equal)'], ['<=', '<= (Less than or equal)'], ['==', '= (Equal to goal)'], ['Inside min/max', 'Inside min/max'], ['Outside min/max', 'Outside min/max']];
@@ -2578,6 +2639,23 @@ function eosDrawer(kind, rec, pre) {
   else if (p === 'rocks') {
     const o = rec ? (rec.company ? 'company' : rec.owner) : (q.owner);
     const curType = rec ? (rec.company ? 'company' : 'personal') : (o === 'company' ? 'company' : 'personal');
+    const extraHtml = rec ? `
+      <div class="f" style="margin-top:20px;padding-top:16px;border-top:1px solid var(--line)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:8px">
+            <label style="margin:0;font-size:12.5px;font-weight:700;color:var(--ink-1);text-transform:uppercase;letter-spacing:0.5px">Linked items</label>
+            <span class="pcount" id="eos-rock-links-count" style="font-size:11px">0</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <button type="button" class="btn sec" data-act="eos-create-linked-todo" data-id="${rec.id}" style="height:28px;padding:0 10px;font-size:11.5px;font-weight:600;border-radius:6px;border:1px solid var(--line-2);background:#fff;cursor:pointer">${icon('plus')} Create To-Do</button>
+            <button type="button" class="btn sec" data-act="eos-create-linked-issue" data-id="${rec.id}" style="height:28px;padding:0 10px;font-size:11.5px;font-weight:600;border-radius:6px;border:1px solid var(--line-2);background:#fff;cursor:pointer">${icon('plus')} Create Issue</button>
+          </div>
+        </div>
+        <div id="eos-rock-linked-items" style="display:flex;flex-direction:column;gap:6px">
+          <div style="padding:12px;color:var(--ink-3);font-size:12px;font-style:italic">Loading linked items...</div>
+        </div>
+      </div>
+    ` : '';
     eosForm(rec ? 'Edit Rock in ERP' : 'Create Rock in ERP', [
       { k: 'type', l: 'Rock type', t: 'select', o: [['personal', 'Individual Rock'], ['company', 'Company Rock']], v: curType },
       { k: 'name', l: 'Title', req: true, ph: 'Add a title for the Rock', v: r.name || '' },
@@ -2621,38 +2699,72 @@ function eosDrawer(kind, rec, pre) {
           toast('Rock saved to ERP Document!');
           renderMain();
         }
-      });
-  } else if (p === 'to-dos') eosForm(rec ? 'Edit To-Do in ERP' : 'Create To-Do in ERP', [{ k: 'name', l: 'Title', req: true, v: r.name }, { k: 'team', l: 'Team', ...team(r.team) }, { k: 'owner', l: 'Owner', ...own(r.owner, r.team) }, { k: 'due', l: 'Due date', t: 'date', v: r.due || eRel(7), req: true },
-  { k: 'vis', l: 'Visibility', t: 'select', o: [['team', 'Team'], ['private', 'Private']], v: rec ? (r.priv ? 'private' : 'team') : (q.vis || E.tab.todos) }],
+      }, extraHtml);
+    if (rec) {
+      eosLoadRockLinks(rec.docname || rec.name);
+    }
+  } else if (p === 'to-dos') {
+    const curRock = r.rock || q.rock || '';
+    const rockOptions = [['', 'None / No Rock'], ...(eRocks || []).map(rk => [rk.docname || rk.name, rk.name + (rk.company ? ' (Company)' : '')])];
+    eosForm(rec ? 'Edit To-Do in ERP' : 'Create To-Do in ERP', [
+      { k: 'name', l: 'Title', req: true, v: r.name },
+      { k: 'team', l: 'Team', ...team(r.team || q.team) },
+      { k: 'owner', l: 'Owner', ...own(r.owner || q.owner, r.team || q.team) },
+      { k: 'rock', l: 'Linked Rock', opt: true, t: 'select', o: rockOptions, v: curRock },
+      { k: 'due', l: 'Due date', t: 'date', v: r.due || eRel(7), req: true },
+      { k: 'vis', l: 'Visibility', t: 'select', o: [['team', 'Team'], ['private', 'Private']], v: rec ? (r.priv ? 'private' : 'team') : (q.vis || E.tab.todos) }
+    ],
     async v => {
       if (rec) {
-        Object.assign(rec, { name: v.name, owner: v.owner, due: v.due, team: v.team, priv: v.vis === 'private' }); toast('Updating To Do...');
-        await apiCall('eos_core.eos_api.save_todo', { docname: rec.docname, name: v.name, owner: v.owner, due: v.due, team: v.team, priv: v.vis === 'private' });
+        Object.assign(rec, { name: v.name, owner: v.owner, due: v.due, team: v.team, priv: v.vis === 'private', rock: v.rock || '' });
+        toast('Updating To Do...');
+        await apiCall('eos_core.eos_api.save_todo', { docname: rec.docname, name: v.name, owner: v.owner, due: v.due, team: v.team, priv: v.vis === 'private', rock: v.rock || null });
         toast('To Do DocType updated!');
       } else {
-        const newT = { id: ++eSeq, name: v.name, owner: v.owner, team: v.team, due: v.due, done: false, archived: false, priv: v.vis === 'private' };
+        const newT = { id: ++eSeq, name: v.name, owner: v.owner, team: v.team, due: v.due, done: false, archived: false, priv: v.vis === 'private', rock: v.rock || '' };
         eTodos.push(newT); E.tab.todos = v.vis; toast('Saving To Do...');
-        const res = await apiCall('eos_core.eos_api.save_todo', { name: v.name, owner: v.owner, due: v.due, team: v.team, priv: v.vis === 'private' });
+        const res = await apiCall('eos_core.eos_api.save_todo', { name: v.name, owner: v.owner, due: v.due, team: v.team, priv: v.vis === 'private', rock: v.rock || null });
         if (res && res.docname) newT.docname = res.docname;
         toast('Saved to To Do DocType!');
+        if (q.returnToRock) {
+          setTimeout(() => {
+            eosDrawer('rocks', q.returnToRock);
+          }, 150);
+        }
       }
     });
-  else if (p === 'issues') eosForm(rec ? 'Edit Issue in ERP' : 'Create Issue in ERP', [{ k: 'name', l: 'Title', req: true, v: r.name }, { k: 'desc', l: 'Description', opt: true, t: 'textarea', v: r.desc },
-  { k: 'pri', l: 'Priority', opt: true, t: 'select', o: [['', 'None'], '1', '2', '3', '4', '5'], v: r.pri || '' }, { k: 'team', l: 'Team', ...team(r.team) },
-  { k: 'owner', l: 'Owner', ...own(r.owner, r.team) }, { k: 'term', l: 'Term', t: 'select', o: [['short', 'Short-Term'], ['long', 'Long-Term']], v: r.term || E.tab.issues }],
+  } else if (p === 'issues') {
+    const curRock = r.rock || q.rock || '';
+    const rockOptions = [['', 'None / No Rock'], ...(eRocks || []).map(rk => [rk.docname || rk.name, rk.name + (rk.company ? ' (Company)' : '')])];
+    eosForm(rec ? 'Edit Issue in ERP' : 'Create Issue in ERP', [
+      { k: 'name', l: 'Title', req: true, v: r.name },
+      { k: 'desc', l: 'Description', opt: true, t: 'textarea', v: r.desc },
+      { k: 'pri', l: 'Priority', opt: true, t: 'select', o: [['', 'None'], '1', '2', '3', '4', '5'], v: r.pri || '' },
+      { k: 'team', l: 'Team', ...team(r.team || q.team) },
+      { k: 'owner', l: 'Owner', ...own(r.owner || q.owner, r.team || q.team) },
+      { k: 'rock', l: 'Linked Rock', opt: true, t: 'select', o: rockOptions, v: curRock },
+      { k: 'term', l: 'Term', t: 'select', o: [['short', 'Short-Term'], ['long', 'Long-Term']], v: r.term || E.tab.issues }
+    ],
     async v => {
       if (rec) {
-        Object.assign(rec, { name: v.name, desc: v.desc, pri: v.pri, team: v.team, owner: v.owner, term: v.term }); toast('Updating Issue...');
-        await apiCall('eos_core.eos_api.save_issue', { docname: rec.docname, name: v.name, desc: v.desc, pri: v.pri, team: v.team, owner: v.owner, term: v.term });
+        Object.assign(rec, { name: v.name, desc: v.desc, pri: v.pri, team: v.team, owner: v.owner, term: v.term, rock: v.rock || '' });
+        toast('Updating Issue...');
+        await apiCall('eos_core.eos_api.save_issue', { docname: rec.docname, name: v.name, desc: v.desc, pri: v.pri, team: v.team, owner: v.owner, term: v.term, rock: v.rock || null });
         toast('Issue DocType updated!');
       } else {
-        const newI = { id: ++eSeq, name: v.name, desc: v.desc, pri: v.pri, team: v.team, owner: v.owner, term: v.term, archived: false, raised: eRel(0) };
+        const newI = { id: ++eSeq, name: v.name, desc: v.desc, pri: v.pri, team: v.team, owner: v.owner, term: v.term, archived: false, raised: eRel(0), rock: v.rock || '' };
         eIssues.push(newI); E.tab.issues = v.term; toast('Saving Issue...');
-        const res = await apiCall('eos_core.eos_api.save_issue', { name: v.name, desc: v.desc, pri: v.pri, team: v.team, owner: v.owner, term: v.term });
+        const res = await apiCall('eos_core.eos_api.save_issue', { name: v.name, desc: v.desc, pri: v.pri, team: v.team, owner: v.owner, term: v.term, rock: v.rock || null });
         if (res && res.docname) newI.docname = res.docname;
         toast('Saved to Issue DocType!');
+        if (q.returnToRock) {
+          setTimeout(() => {
+            eosDrawer('rocks', q.returnToRock);
+          }, 150);
+        }
       }
     });
+  }
   else if (p === 'meetings') eosForm('Schedule a Meeting in ERP', [{ k: 'title', l: 'Title', req: true, v: 'Weekly Level 10 Meeting™' }, { k: 'team', l: 'Team', ...team() }, { k: 'date', l: 'Date', t: 'date', v: eRel(1), req: true }, { k: 'time', l: 'Time', t: 'time', v: '09:00' }],
     async v => {
       const item = { title: v.title, team: v.team, date: v.date, time: v.time };
@@ -2970,6 +3082,30 @@ async function eosAct(a, el, e) {
     case 'eos-edit-rock': {
       const r = eRocks.find(x => x.id === +id);
       if (r) eosDrawer('rocks', r);
+      break;
+    }
+    case 'eos-create-linked-todo': {
+      const r = eRocks.find(x => x.id === +id);
+      if (r) {
+        eosDrawer('to-dos', null, {
+          rock: r.docname || r.name,
+          team: r.team,
+          owner: r.owner,
+          returnToRock: r
+        });
+      }
+      break;
+    }
+    case 'eos-create-linked-issue': {
+      const r = eRocks.find(x => x.id === +id);
+      if (r) {
+        eosDrawer('issues', null, {
+          rock: r.docname || r.name,
+          team: r.team,
+          owner: r.owner,
+          returnToRock: r
+        });
+      }
       break;
     }
     case 'eos-add-rock': eosDrawer('rocks', null, { owner: id }); break;

@@ -1603,6 +1603,24 @@
 						<div class="nn-field-label">${this.render_field_label("Rock", "duration_end", "Due Date", true)}</div>
 						<input type="date" class="nn-input-text" id="nn-r-due" value="${this.esc(current_due)}">
 					</div>
+
+					${is_edit ? `
+					<div class="nn-field-group" style="margin-top:20px;padding-top:16px;border-top:1px solid #e5e7eb">
+						<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:8px;flex-wrap:wrap">
+							<div style="display:flex;align-items:center;gap:8px">
+								<span class="nn-field-label" style="font-weight:700;margin:0">${__("Linked Items")}</span>
+								<span class="pcount" id="nn-rock-links-count" style="background:#e5e7eb;color:#374151;border-radius:10px;padding:1px 7px;font-size:11px;font-weight:700">0</span>
+							</div>
+							<div style="display:flex;align-items:center;gap:6px">
+								<button type="button" class="nn-btn-sec" id="nn-rock-add-todo" style="height:28px;padding:0 10px;font-size:11.5px;font-weight:600;border-radius:6px;border:1px solid #d1d5db;background:#fff;cursor:pointer">+ ${__("Create To-Do")}</button>
+								<button type="button" class="nn-btn-sec" id="nn-rock-add-issue" style="height:28px;padding:0 10px;font-size:11.5px;font-weight:600;border-radius:6px;border:1px solid #d1d5db;background:#fff;cursor:pointer">+ ${__("Create Issue")}</button>
+							</div>
+						</div>
+						<div id="nn-rock-linked-items" style="display:flex;flex-direction:column;gap:6px">
+							<div style="padding:10px;color:#6b7280;font-size:12px;font-style:italic">${__("Loading linked items...")}</div>
+						</div>
+					</div>
+					` : ""}
 				</div>
 
 				<div class="nn-drawer-footer">
@@ -1615,6 +1633,62 @@
 			$drawer.html(drawer_html);
 
 			const self = this;
+			if (is_edit && r) {
+				self.call("eos_core.eos_api.get_rock_links", { rock: r.name }).then(res => {
+					const $container = $drawer.find("#nn-rock-linked-items");
+					const $count = $drawer.find("#nn-rock-links-count");
+					if (!$container.length) return;
+					const todos = (res && res.data && res.data.todos) || (res && res.todos) || [];
+					const issues = (res && res.data && res.data.issues) || (res && res.issues) || [];
+					const total = todos.length + issues.length;
+					$count.text(total);
+					if (total === 0) {
+						$container.html(`<div style="padding:12px;color:#6b7280;font-size:12px;background:#f9fafb;border-radius:6px;text-align:center">${__("No linked To-Dos or Issues yet.")}</div>`);
+						return;
+					}
+					let html = "";
+					todos.forEach(t => {
+						const isDone = t.status === "Complete";
+						html += `
+							<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;gap:8px">
+								<div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1">
+									<span style="background:#e0e7ff;color:#3730a3;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;text-transform:uppercase">To-Do</span>
+									<span style="font-weight:600;color:#1e293b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${self.esc(t.title || t.todo_name || t.name)}</span>
+								</div>
+								<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+									<span style="color:#64748b;font-size:11px">${self.esc(t.owner || t.owner_user || "")}</span>
+									<span class="nn-status-badge ${isDone ? "complete" : "in-progress"}" style="font-size:10.5px;padding:2px 6px">${self.esc(t.status || "Not Started")}</span>
+								</div>
+							</div>
+						`;
+					});
+					issues.forEach(i => {
+						const isSolved = i.status === "Solved";
+						html += `
+							<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;gap:8px">
+								<div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1">
+									<span style="background:#fee2e2;color:#991b1b;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;text-transform:uppercase">Issue</span>
+									<span style="font-weight:600;color:#1e293b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${self.esc(i.title || i.issue_name || i.name)}</span>
+								</div>
+								<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+									<span style="color:#64748b;font-size:11px">${self.esc(i.owner || i.owner_user || "")}</span>
+									<span class="nn-status-badge ${isSolved ? "complete" : "off-track"}" style="font-size:10.5px;padding:2px 6px">${self.esc(i.status || "Identified")}</span>
+								</div>
+							</div>
+						`;
+					});
+					$container.html(html);
+				});
+
+				$drawer.find("#nn-rock-add-todo").on("click", function() {
+					self.open_todo_drawer(null, { rock: r.name, team: r.team, owner: r.owner_user, returnToRock: r.name });
+				});
+
+				$drawer.find("#nn-rock-add-issue").on("click", function() {
+					self.open_issue_drawer(null, { rock: r.name, team: r.team, owner: r.owner_user, returnToRock: r.name });
+				});
+			}
+
 			$drawer.find("#nn-drawer-close, #nn-drawer-rock-cancel").on("click", () => self.close_drawer());
 			$drawer.find("#nn-drawer-rock-save").on("click", async function () {
 				const title = $drawer.find("#nn-r-title").val().trim();
@@ -2020,13 +2094,14 @@
 			});
 		}
 
-		open_todo_drawer(todo_id = null) {
+		open_todo_drawer(todo_id = null, initial_data = null) {
 			const is_edit = !!todo_id;
 			const td = is_edit ? (this.todos || []).find(x => x.name === todo_id) : null;
 
-			const current_title = td ? td.todo_name : "";
-			const current_owner = td ? td.owner_user : ((frappe.session && frappe.session.user) || "");
-			const current_team = td ? (td.team || "") : (this.s.todo_team !== "All Teams" ? this.s.todo_team : (this.all_teams.find(t => t !== "All Teams") || ""));
+			const current_title = td ? td.todo_name : (initial_data && initial_data.title ? initial_data.title : "");
+			const current_owner = td ? td.owner_user : (initial_data && initial_data.owner ? initial_data.owner : ((frappe.session && frappe.session.user) || ""));
+			const current_team = td ? (td.team || "") : (initial_data && initial_data.team ? initial_data.team : (this.s.todo_team !== "All Teams" ? this.s.todo_team : (this.all_teams.find(t => t !== "All Teams") || "")));
+			const current_rock = td ? (td.rock || "") : (initial_data && initial_data.rock ? initial_data.rock : "");
 			const current_status = td ? td.status : "Not Started";
 			const current_priority = td ? (td.priority || "Medium") : "Medium";
 			const current_due = td && td.due_date ? td.due_date : ((frappe.datetime && frappe.datetime.add_days) ? frappe.datetime.add_days(frappe.datetime.get_today(), 7) : "");
@@ -2045,6 +2120,12 @@
 			this.all_teams.filter(t => t !== "All Teams").forEach(t => {
 				const sel = t === current_team ? "selected" : "";
 				team_options += `<option value="${this.esc(t)}" ${sel}>${this.esc(t)}</option>`;
+			});
+
+			let rock_options = `<option value="">${__("None / No Rock")}</option>`;
+			(this.rocks || []).forEach(rk => {
+				const sel = (current_rock === rk.name || current_rock === rk.title) ? "selected" : "";
+				rock_options += `<option value="${this.esc(rk.name)}" ${sel}>${this.esc(rk.title)}</option>`;
 			});
 
 			const drawer_html = `
@@ -2069,6 +2150,11 @@
 					<div class="nn-field-group">
 						<div class="nn-field-label">${this.render_field_label("To Do", "team", "Team", false)}</div>
 						<select class="nn-select" id="nn-td-team">${team_options}</select>
+					</div>
+
+					<div class="nn-field-group">
+						<div class="nn-field-label">${this.render_field_label("To Do", "rock", "Linked Rock", false)}</div>
+						<select class="nn-select" id="nn-td-rock">${rock_options}</select>
 					</div>
 
 					<div class="nn-field-group">
@@ -2138,6 +2224,7 @@
 					return;
 				}
 				const team = $drawer.find("#nn-td-team").val();
+				const rock = $drawer.find("#nn-td-rock").val() || null;
 				const status = $drawer.find("#nn-td-status").val();
 				const due = $drawer.find("#nn-td-due").val();
 				const priority = $drawer.find("#nn-td-priority").val();
@@ -2150,6 +2237,7 @@
 							todo_name: title,
 							owner_user: owner,
 							team: team,
+							rock: rock,
 							status: status,
 							due_date: due,
 							priority: priority,
@@ -2163,6 +2251,7 @@
 							todo_name: title,
 							owner_user: owner,
 							team: team,
+							rock: rock,
 							status: status,
 							due_date: due,
 							priority: priority,
@@ -2174,7 +2263,9 @@
 
 				self.close_drawer();
 				await self.fetch_todos_data();
-				if (self.s.view === "todos") {
+				if (initial_data && initial_data.returnToRock) {
+					setTimeout(() => { self.open_rock_drawer(initial_data.returnToRock); }, 150);
+				} else if (self.s.view === "todos") {
 					self.render_todos_table();
 				} else if (self.s.view === "meetings" && self.s.meeting_in_progress) {
 					self.render_l10_meeting_workspace();
@@ -2576,6 +2667,7 @@
 			const current_title = iss ? iss.issue_name : (initial_data && initial_data.title ? initial_data.title : "");
 			const current_owner = iss ? iss.owner_user : (initial_data && initial_data.owner ? initial_data.owner : ((frappe.session && frappe.session.user) || ""));
 			const current_team = iss ? (iss.team || "") : (initial_data && initial_data.team ? initial_data.team : (this.s.issue_team !== "All Teams" ? this.s.issue_team : (this.all_teams.find(t => t !== "All Teams") || "")));
+			const current_rock = iss ? (iss.rock || "") : (initial_data && initial_data.rock ? initial_data.rock : "");
 			const current_priority = iss ? (iss.priority || "") : "";
 			const current_status = iss ? (iss.status || "Identified") : "Identified";
 			const current_desc = iss ? (iss.description || "") : (initial_data && initial_data.description ? initial_data.description : "");
@@ -2594,6 +2686,12 @@
 			this.all_teams.filter(t => t !== "All Teams").forEach(t => {
 				const sel = t === current_team ? "selected" : "";
 				team_options += `<option value="${this.esc(t)}" ${sel}>${this.esc(t)}</option>`;
+			});
+
+			let rock_options = `<option value="">${__("None / No Rock")}</option>`;
+			(this.rocks || []).forEach(rk => {
+				const sel = (current_rock === rk.name || current_rock === rk.title) ? "selected" : "";
+				rock_options += `<option value="${this.esc(rk.name)}" ${sel}>${this.esc(rk.title)}</option>`;
 			});
 
 			const drawer_html = `
@@ -2622,6 +2720,11 @@
 					</div>
 					<div style="font-size:11px;color:#9ca3af;margin-top:-6px;">
 						${__("Changing the team will affect which users the Issue can be assigned to.")}
+					</div>
+
+					<div class="nn-field-group">
+						<div class="nn-field-label">${__("Linked Rock")}</div>
+						<select class="nn-select" id="nn-iss-rock">${rock_options}</select>
 					</div>
 
 					<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
@@ -2705,6 +2808,7 @@
 					return;
 				}
 				const team = $drawer.find("#nn-iss-team").val();
+				const rock = $drawer.find("#nn-iss-rock").val() || null;
 				const priority = $drawer.find("#nn-iss-priority").val();
 				const desc = $drawer.find("#nn-iss-desc").val().trim();
 
@@ -2716,6 +2820,7 @@
 							issue_name: title,
 							owner_user: owner,
 							team: team,
+							rock: rock,
 							priority: priority,
 							description: desc,
 							status: status
@@ -2734,6 +2839,7 @@
 							issue_name: title,
 							owner_user: owner,
 							team: team,
+							rock: rock,
 							priority: priority,
 							description: desc,
 							status: "Identified",
@@ -2756,7 +2862,9 @@
 					}
 
 					self.close_drawer();
-					if (self.s.view === "issues") {
+					if (initial_data && initial_data.returnToRock) {
+						setTimeout(() => { self.open_rock_drawer(initial_data.returnToRock); }, 150);
+					} else if (self.s.view === "issues") {
 						await self.fetch_issues_data();
 						self.render_issues_table();
 					} else if (self.s.view === "meetings" && self.s.meeting_in_progress) {

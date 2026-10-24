@@ -4,6 +4,7 @@ from frappe.tests import IntegrationTestCase
 
 class TestRock(IntegrationTestCase):
 	def setUp(self):
+		frappe.db.delete("Issue")
 		frappe.db.delete("To Do")
 		frappe.db.delete("Rock")
 		frappe.db.delete("Team")
@@ -219,7 +220,38 @@ class TestRock(IntegrationTestCase):
 		self.assertEqual(summary["linked_todos"], 1)
 		self.assertEqual(summary["todos"]["total"], 1)
 
+	def test_eos_029_get_rock_links(self):
+		from eos_core.eos_api import get_rock_links, save_todo, save_issue
+
+		if not frappe.db.exists("Team", "Leadership Team"):
+			frappe.get_doc({"doctype": "Team", "team_name": "Leadership Team"}).insert(ignore_permissions=True)
+
+		rock = frappe.get_doc(
+			{
+				"doctype": "Rock",
+				"rock_name": "EOS-029 Link Test Rock",
+				"status": "In Progress",
+				"owner_user": "Administrator",
+				"duration_start": "2026-09-01",
+				"duration_end": "2026-11-30",
+			}
+		).insert()
+
+		todo_res = save_todo(name="EOS-029 Linked To-Do", owner="Administrator", rock=rock.name)
+		self.assertEqual(todo_res.get("status"), "ok")
+
+		issue_res = save_issue(name="EOS-029 Linked Issue", owner="Administrator", rock=rock.name)
+		self.assertEqual(issue_res.get("status"), "ok")
+
+		links = get_rock_links(rock.name)
+		self.assertEqual(links.get("status"), "ok")
+		self.assertEqual(len(links.get("todos", [])), 1)
+		self.assertEqual(links["todos"][0]["title"], "EOS-029 Linked To-Do")
+		self.assertEqual(len(links.get("issues", [])), 1)
+		self.assertEqual(links["issues"][0]["title"], "EOS-029 Linked Issue")
+
 	def tearDown(self):
+		frappe.db.delete("Issue")
 		frappe.db.delete("To Do")
 		frappe.db.delete("Rock")
 		frappe.db.delete("Team")
