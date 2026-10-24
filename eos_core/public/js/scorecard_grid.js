@@ -68,6 +68,22 @@
 
 	const ic = (n, s) => `<svg class="nn-svg" width="${s || 14}" height="${s || 14}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${IC[n] || ""}</svg>`;
 
+	const OWNER_PALETTES = [
+		{ bg: '#dbeafe', fg: '#1e40af' },
+		{ bg: '#fce7f3', fg: '#9d174d' },
+		{ bg: '#e0e7ff', fg: '#3730a3' },
+		{ bg: '#fef3c7', fg: '#92400e' },
+		{ bg: '#dcfce7', fg: '#166534' },
+		{ bg: '#ede9fe', fg: '#5b21b6' },
+		{ bg: '#cffafe', fg: '#155e75' },
+		{ bg: '#ffedd5', fg: '#9a3412' }
+	];
+	function getOwnerColor(str) {
+		let h = 0;
+		for (let i = 0; i < (str || '').length; i++) h = (h * 31 + str.charCodeAt(i)) & 0xffffffff;
+		return OWNER_PALETTES[Math.abs(h) % OWNER_PALETTES.length];
+	}
+
 	class EOSNinety {
 		constructor(wrapper) {
 			this.wrapper = wrapper;
@@ -83,6 +99,7 @@
 				range: 13,
 				team: "All Teams",
 				owner_filter: null,
+				owner_customized: false,
 				owner_popover_open: false,
 				owner_search: "",
 				sc_dir_team: "All Teams",
@@ -342,7 +359,7 @@
 			if (!m) return false;
 			const cur_user = (frappe.session && frappe.session.user) || "";
 			const cur_fullname = (frappe.session && frappe.session.user_fullname) || "";
-			const owner = String(m.owner || "").trim().toLowerCase();
+			const owner = String(m.owner || m.owner_user || "").trim().toLowerCase();
 			if (!owner) return false;
 			if (cur_user && owner === cur_user.toLowerCase()) return true;
 			if (cur_fullname && owner === cur_fullname.toLowerCase()) return true;
@@ -374,6 +391,23 @@
 				return user_obj.full_name || `${user_obj.first_name} ${user_obj.last_name || ""}`.trim();
 			}
 			return u;
+		}
+
+		get_owner_filter_summary() {
+			const all_owners = Array.from(new Set((this.data.metrics || []).map(m => m.owner).filter(Boolean)));
+			const my_owners = all_owners.filter(o => this.is_my_metric({ owner: o, owner_user: o }));
+			let effective = this.s.owner_customized ? this.s.owner_filter : my_owners;
+			if (!effective || (all_owners.length > 0 && effective.length === all_owners.length)) {
+				return all_owners.length ? `${__("All")} (${all_owners.length})` : __("All");
+			}
+			if (Array.isArray(effective)) {
+				if (effective.length === 1) {
+					return this.is_my_metric({ owner: effective[0], owner_user: effective[0] }) ? __("My Scorecard") : (this.get_user_display_name(effective[0]) || effective[0]);
+				}
+				if (effective.length === 0) return __("None");
+				return `${effective.length} ${__("Selected")}`;
+			}
+			return all_owners.length ? `${__("All")} (${all_owners.length})` : __("All");
 		}
 
 		get_available_owners(team = null) {
@@ -628,16 +662,47 @@
 			.nn-col-goal { position: sticky; left: 316px; z-index: 4; width: 90px; min-width: 90px; max-width: 90px; text-align: center; background: #fff; border-right: 2px solid #e2e8f0 !important; box-shadow: 3px 0 6px -2px rgba(0,0,0,0.08); }
 			.nn-sc-tbl thead th.nn-col-metric, .nn-sc-tbl thead th.nn-col-owner, .nn-sc-tbl thead th.nn-col-goal { background: #fafafa !important; z-index: 6; }
 			.nn-sc-tbl tbody tr:hover td.nn-col-metric, .nn-sc-tbl tbody tr:hover td.nn-col-owner, .nn-sc-tbl tbody tr:hover td.nn-col-goal { background: #f9fafb !important; }
-			.nn-owner-filter-btn { background: transparent; border: none; padding: 2px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; border-radius: 4px; transition: all 0.15s ease; line-height: 1; }
-			.nn-owner-filter-btn:hover { background: #f3f4f6; color: #047857 !important; }
-			.nn-owner-filter-btn.active { color: #047857 !important; }
-			.nn-owner-filter-popover { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 6px; width: 220px; background: #ffffff; border: 1px solid #d1d5db; border-radius: 6px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1); z-index: 99999; padding: 8px; text-align: left; font-family: inherit; font-weight: normal; cursor: default; }
-			.nn-owner-filter-popover input[type="text"] { width: 100%; height: 28px; padding: 4px 8px; font-size: 12px; border: 1px solid #d1d5db; border-radius: 4px; outline: none; box-sizing: border-box; margin-bottom: 6px; color: #111827; background: #ffffff; }
-			.nn-owner-filter-popover input[type="text"]:focus { border-color: #047857; }
-			.nn-owner-filter-list { max-height: 190px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
-			.nn-owner-filter-opt, .nn-owner-filter-popover label { display: flex; align-items: center; gap: 8px; padding: 4px 6px; font-size: 12px; color: #374151; cursor: pointer; border-radius: 4px; user-select: none; transition: background 0.1s ease; }
-			.nn-owner-filter-opt:hover, .nn-owner-filter-popover label:hover { background: #f3f4f6; color: #111827; }
-			.nn-owner-filter-popover input[type="checkbox"] { cursor: pointer; accent-color: #047857; margin: 0; width: 14px; height: 14px; }
+			.nn-owner-filter-btn { background: transparent; border: none; padding: 3px 5px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; border-radius: 5px; transition: all 0.15s ease; line-height: 1; color: #9ca3af; }
+			.nn-owner-filter-btn:hover { background: #ecfdf5; color: #047857 !important; }
+			.nn-owner-filter-btn.active { color: #047857 !important; background: #d1fae5; }
+
+			.sc-owner-filter-pill { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; font-size: 12.5px; border-radius: 6px; background: #f9fafb; border: 1px solid #e5e7eb; cursor: pointer; color: #374151; font-weight: 500; transition: all 0.15s ease; }
+			.sc-owner-filter-pill:hover { background: #f3f4f6; border-color: #d1d5db; }
+			.sc-owner-filter-pill.is-filtered { border-color: #86efac; background: #f0fdf4; }
+
+			.nn-owner-filter-popover { position: fixed; width: 300px; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.14), 0 8px 10px -6px rgba(0, 0, 0, 0.08); z-index: 100000; padding: 12px; text-align: left; font-family: inherit; font-weight: normal; cursor: default; display: flex; flex-direction: column; animation: nnPopIn 0.15s cubic-bezier(0.16, 1, 0.3, 1); box-sizing: border-box; }
+			@keyframes nnPopIn { from { opacity: 0; transform: translateY(-4px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+			.nn-owner-popover-header { padding-bottom: 8px; border-bottom: 1px solid #f3f4f6; margin-bottom: 8px; }
+			.nn-owner-popover-title-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+			.nn-owner-popover-title { font-size: 12.5px; font-weight: 700; color: #111827; display: flex; align-items: center; gap: 6px; }
+			.nn-owner-popover-badge { font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 10px; background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+			.nn-owner-quick-row { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+			.nn-quick-btn { flex: 1; height: 26px; padding: 0 6px; font-size: 11px; font-weight: 600; border-radius: 6px; border: 1px solid #e5e7eb; background: #f9fafb; color: #4b5563; cursor: pointer; transition: all 0.15s ease; display: inline-flex; align-items: center; justify-content: center; }
+			.nn-quick-btn:hover { background: #f3f4f6; color: #111827; border-color: #d1d5db; }
+			.nn-quick-btn.active { background: #047857; color: #ffffff; border-color: #047857; }
+
+			.nn-owner-search-wrap { position: relative; display: flex; align-items: center; height: 30px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 0 8px; gap: 6px; color: #9ca3af; transition: all 0.15s ease; }
+			.nn-owner-search-wrap:focus-within { background: #ffffff; border-color: #047857; box-shadow: 0 0 0 2px rgba(4, 120, 87, 0.15); color: #047857; }
+			.nn-owner-search-wrap input { border: none; background: transparent; outline: none; font-size: 12px; color: #111827; width: 100%; box-shadow: none; margin: 0; padding: 0; }
+			.nn-owner-search-clear { background: none; border: none; cursor: pointer; padding: 0 4px; color: #9ca3af; font-size: 15px; display: flex; align-items: center; line-height: 1; }
+			.nn-owner-search-clear:hover { color: #374151; }
+
+			.nn-owner-filter-list { max-height: 210px; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; padding-right: 2px; }
+			.nn-owner-filter-list::-webkit-scrollbar { width: 4px; }
+			.nn-owner-filter-list::-webkit-scrollbar-track { background: transparent; }
+			.nn-owner-filter-list::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 4px; }
+
+			.nn-owner-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; font-size: 12px; color: #374151; cursor: pointer; border-radius: 6px; user-select: none; transition: all 0.12s ease; margin: 0; }
+			.nn-owner-row:hover { background: #f3f4f6; color: #111827; }
+			.nn-owner-row.selected { background: #f0fdf4; }
+			.nn-owner-row input[type="checkbox"] { cursor: pointer; accent-color: #047857; margin: 0; width: 15px; height: 15px; flex-shrink: 0; }
+			.nn-owner-row-av { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; flex-shrink: 0; }
+			.nn-owner-row-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; color: #1f2937; }
+			.nn-owner-row.selected .nn-owner-row-name { font-weight: 600; color: #064e3b; }
+			.nn-me-tag { font-size: 9.5px; font-weight: 700; padding: 1px 5px; border-radius: 4px; background: #dcfce7; color: #15803d; letter-spacing: 0.2px; margin-left: auto; }
+
+			.nn-owner-popover-footer { display: flex; align-items: center; justify-content: space-between; padding-top: 8px; margin-top: 6px; border-top: 1px solid #f3f4f6; }
 			.nn-btn-bar { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 6px; border: 1px solid #e5e7eb; background: #fff; font-size: 12px; font-weight: 500; color: #374151; cursor: pointer; }
 			.nn-btn-bar:hover { background: #f9fafb; border-color: #cbd5e1; }
 
@@ -4585,6 +4650,7 @@
 
 					<div class="nn-table-scroll" id="nn-table-wrap"></div>
 				</div>
+				<div id="nn-owner-popover-container"></div>
 			`);
 
 			this.bind_scorecard_events();
@@ -4604,6 +4670,9 @@
 				self.pick_menu(this, teams_list, s.team, v => {
 					s.team = v;
 					s.rock_team = v;
+					s.owner_filter = null;
+					s.owner_customized = false;
+					s.owner_popover_open = false;
 					self.load_scorecard();
 				});
 			});
@@ -4614,6 +4683,9 @@
 				self.pick_menu(this, ["Week", "Month", "Quarter", "Annual"], s.timeframe, v => {
 					s.timeframe = v;
 					s.range = null;
+					s.owner_filter = null;
+					s.owner_customized = false;
+					s.owner_popover_open = false;
 					self.load_scorecard();
 				});
 			});
@@ -4659,6 +4731,9 @@
 				$(this).addClass("on");
 				s.timeframe = tf;
 				s.range = null;
+				s.owner_filter = null;
+				s.owner_customized = false;
+				s.owner_popover_open = false;
 				self.load_scorecard();
 			});
 
@@ -4704,8 +4779,16 @@
 				frappe.set_route("List", "EOS Metric");
 			});
 
-			$m.find("#nn-sc-owner-filter").off("click").on("click", function (e) {
+			// Owner filter toggle (from header icon)
+			$m.off("click.nn_owner_btn", "#nn-sc-owner-filter").on("click.nn_owner_btn", "#nn-sc-owner-filter", function (e) {
 				e.stopPropagation();
+				const rect = this.getBoundingClientRect();
+				const popover_width = 310;
+				const trigger_center = rect.left + (rect.width / 2);
+				self.s.owner_popover_pos = {
+					top: Math.round(rect.bottom + 6),
+					left: Math.round(Math.max(12, Math.min(trigger_center - (popover_width / 2), window.innerWidth - popover_width - 16)))
+				};
 				self.s.owner_popover_open = !self.s.owner_popover_open;
 				self.s.owner_search = "";
 				self.render_grid();
@@ -4716,32 +4799,73 @@
 				}
 			});
 
-			$m.find("#nn-owner-search").off("input").on("input", function () {
+			$m.off("input.nn_owner_srch", "#nn-owner-search").on("input.nn_owner_srch", "#nn-owner-search", function () {
 				self.s.owner_search = $(this).val();
 				const q = self.s.owner_search.toLowerCase().trim();
-				$m.find(".nn-owner-filter-opt").each(function () {
-					const txt = $(this).text().toLowerCase();
+				$m.find(".nn-owner-row").each(function () {
+					const txt = $(this).find(".nn-owner-row-name").text().toLowerCase();
 					$(this).css("display", (!q || txt.includes(q)) ? "flex" : "none");
 				});
+				$m.find("#nn-owner-search-clear").toggle(Boolean(q));
 			});
 
-			$m.find("#nn-owner-all").off("change").on("change", function () {
-				const checked = $(this).prop("checked");
-				self.s.owner_filter = checked ? null : [];
+			$m.off("click.nn_owner_clr_srch", "#nn-owner-search-clear").on("click.nn_owner_clr_srch", "#nn-owner-search-clear", function (e) {
+				e.stopPropagation();
+				self.s.owner_search = "";
+				$m.find("#nn-owner-search").val("").focus();
+				$m.find(".nn-owner-row").css("display", "flex");
+				$(this).hide();
+			});
+
+			$m.off("click.nn_owner_only_me", "#nn-owner-only-me").on("click.nn_owner_only_me", "#nn-owner-only-me", function (e) {
+				e.stopPropagation();
+				const all_owners = Array.from(new Set((self.data.metrics || []).map(m => m.owner).filter(Boolean)));
+				const my_owners = all_owners.filter(o => self.is_my_metric({ owner: o, owner_user: o }));
+				self.s.owner_customized = true;
+				self.s.owner_filter = my_owners.length ? my_owners : [];
 				self.render_grid();
 			});
 
-			$m.find(".nn-owner-filter-item").off("change").on("change", function () {
-				const items = $m.find(".nn-owner-filter-item");
-				const checked = [];
-				items.each(function () {
-					if ($(this).prop("checked")) checked.push($(this).val());
-				});
+			$m.off("click.nn_owner_all", "#nn-owner-select-all").on("click.nn_owner_all", "#nn-owner-select-all", function (e) {
+				e.stopPropagation();
+				self.s.owner_customized = true;
+				self.s.owner_filter = null;
+				self.render_grid();
+			});
+
+			$m.off("click.nn_owner_clr", "#nn-owner-clear").on("click.nn_owner_clr", "#nn-owner-clear", function (e) {
+				e.stopPropagation();
+				self.s.owner_customized = true;
+				self.s.owner_filter = [];
+				self.render_grid();
+			});
+
+			$m.off("click.nn_owner_done", "#nn-owner-done").on("click.nn_owner_done", "#nn-owner-done", function (e) {
+				e.stopPropagation();
+				self.s.owner_popover_open = false;
+				self.s.owner_search = "";
+				self.render_grid();
+			});
+
+			$m.off("change.nn_owner_item", ".nn-owner-filter-item").on("change.nn_owner_item", ".nn-owner-filter-item", function () {
 				const all_owners = Array.from(new Set((self.data.metrics || []).map(m => m.owner).filter(Boolean)));
-				if (checked.length === all_owners.length) {
+				const my_owners = all_owners.filter(o => self.is_my_metric({ owner: o, owner_user: o }));
+				let cur_selected = self.s.owner_customized
+					? (self.s.owner_filter === null ? [...all_owners] : (Array.isArray(self.s.owner_filter) ? [...self.s.owner_filter] : []))
+					: [...my_owners];
+
+				const val = $(this).val();
+				if ($(this).prop("checked")) {
+					if (!cur_selected.includes(val)) cur_selected.push(val);
+				} else {
+					cur_selected = cur_selected.filter(x => x !== val);
+				}
+
+				self.s.owner_customized = true;
+				if (cur_selected.length >= all_owners.length && all_owners.every(o => cur_selected.includes(o))) {
 					self.s.owner_filter = null;
 				} else {
-					self.s.owner_filter = checked;
+					self.s.owner_filter = cur_selected;
 				}
 				self.render_grid();
 			});
@@ -4857,31 +4981,70 @@
 			d.show();
 		}
 
-		render_owner_popover(all_owners) {
+		render_owner_popover(all_owners, selected_owners) {
 			const self = this;
-			const is_all = !this.s.owner_filter || this.s.owner_filter.length === all_owners.length;
+			const is_all = !selected_owners || (all_owners.length > 0 && selected_owners.length === all_owners.length);
 			const q = (this.s.owner_search || "").toLowerCase().trim();
-			const visible_owners = all_owners.filter(o => !q || (self.get_user_display_name(o) || o).toLowerCase().includes(q));
+			const visible_owners = all_owners.filter(o => {
+				const name = (self.get_user_display_name(o) || o).toLowerCase();
+				return !q || name.includes(q) || o.toLowerCase().includes(q);
+			});
+
+			const my_owners = all_owners.filter(o => self.is_my_metric({ owner: o, owner_user: o }));
+			const is_only_me = Array.isArray(selected_owners) &&
+				my_owners.length > 0 &&
+				selected_owners.length === my_owners.length &&
+				selected_owners.every(o => my_owners.includes(o));
+
+			const selected_count = is_all ? all_owners.length : (Array.isArray(selected_owners) ? selected_owners.length : 0);
+			const pos = this.s.owner_popover_pos || { top: 180, left: 240 };
 
 			return `
-				<div class="nn-owner-filter-popover" id="nn-owner-popover" onclick="event.stopPropagation()">
-					<input type="text" class="nn-owner-filter-search" id="nn-owner-search" placeholder="${__("Search")}..." value="${this.esc(this.s.owner_search || "")}">
-					<div class="nn-owner-filter-list">
-						<label style="color:#111827;font-weight:600">
-							<input type="checkbox" class="nn-owner-filter-all" id="nn-owner-all" ${is_all ? 'checked' : ''}>
-							<span>(${__("Select All")})</span>
-						</label>
+				<div class="nn-owner-filter-popover" id="nn-owner-popover" style="top:${pos.top}px;left:${pos.left}px;width:310px;max-width:calc(100vw - 24px);position:fixed;z-index:100000;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 20px 25px -5px rgba(0,0,0,0.14),0 8px 10px -6px rgba(0,0,0,0.08);padding:12px;box-sizing:border-box;display:flex;flex-direction:column;font-family:inherit;text-align:left;">
+					<div class="nn-owner-popover-header" style="padding-bottom:8px;border-bottom:1px solid #f3f4f6;margin-bottom:8px;">
+						<div class="nn-owner-popover-title-row" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+							<div class="nn-owner-popover-title" style="font-size:12.5px;font-weight:700;color:#111827;display:flex;align-items:center;gap:6px;">
+								${ic("users", 14)}
+								<span>${__("Filter by Owner")}</span>
+							</div>
+							<span class="nn-owner-popover-badge" style="font-size:11px;font-weight:600;padding:2px 7px;border-radius:10px;background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;">
+								${is_all ? `${__("All")} (${all_owners.length})` : `${selected_count} / ${all_owners.length} ${__("selected")}`}
+							</span>
+						</div>
+						<div class="nn-owner-quick-row" style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+							<button type="button" class="nn-quick-btn ${is_only_me ? 'active' : ''}" id="nn-owner-only-me" style="flex:1;height:26px;padding:0 6px;font-size:11px;font-weight:600;border-radius:6px;border:1px solid ${is_only_me ? '#047857' : '#e5e7eb'};background:${is_only_me ? '#047857' : '#f9fafb'};color:${is_only_me ? '#ffffff' : '#4b5563'};cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:all 0.15s ease;">${__("Only Me")}</button>
+							<button type="button" class="nn-quick-btn ${is_all ? 'active' : ''}" id="nn-owner-select-all" style="flex:1;height:26px;padding:0 6px;font-size:11px;font-weight:600;border-radius:6px;border:1px solid ${is_all ? '#047857' : '#e5e7eb'};background:${is_all ? '#047857' : '#f9fafb'};color:${is_all ? '#ffffff' : '#4b5563'};cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:all 0.15s ease;">${__("Select All")}</button>
+							<button type="button" class="nn-quick-btn" id="nn-owner-clear" style="flex:1;height:26px;padding:0 6px;font-size:11px;font-weight:600;border-radius:6px;border:1px solid #e5e7eb;background:#f9fafb;color:#4b5563;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:all 0.15s ease;">${__("Clear")}</button>
+						</div>
+						<div class="nn-owner-search-wrap" style="position:relative;display:flex;align-items:center;height:30px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:0 8px;gap:6px;color:#9ca3af;">
+							${ic("search", 13)}
+							<input type="text" id="nn-owner-search" placeholder="${__("Search team members")}…" value="${this.esc(this.s.owner_search || "")}" style="border:none;background:transparent;outline:none;font-size:12px;color:#111827;width:100%;box-shadow:none;margin:0;padding:0;">
+							${this.s.owner_search ? `<button type="button" class="nn-owner-search-clear" id="nn-owner-search-clear" style="background:none;border:none;cursor:pointer;padding:0 4px;color:#9ca3af;font-size:15px;line-height:1;display:flex;align-items:center;">×</button>` : ""}
+						</div>
+					</div>
+					<div class="nn-owner-filter-list" style="max-height:210px;overflow-y:auto;display:flex;flex-direction:column;gap:3px;padding-right:2px;">
 						${visible_owners.map(o => {
 							const name = self.get_user_display_name(o) || o;
-							const checked = is_all || (Array.isArray(self.s.owner_filter) && self.s.owner_filter.includes(o));
+							const checked = is_all || (Array.isArray(selected_owners) && selected_owners.includes(o));
+							const is_me = self.is_my_metric({ owner: o, owner_user: o });
+							const initials = (name || "U").split(/\s+/).slice(0, 2).map(w => w[0] || "").join("").toUpperCase() || "U";
+							const col = getOwnerColor(name || o);
 							return `
-								<label class="nn-owner-filter-opt">
-									<input type="checkbox" class="nn-owner-filter-item" value="${self.esc(o)}" ${checked ? 'checked' : ''}>
-									<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${self.esc(name)}">${self.esc(name)}</span>
+								<label class="nn-owner-row ${checked ? 'selected' : ''}" style="display:flex;align-items:center;gap:8px;padding:6px 8px;font-size:12px;color:#374151;cursor:pointer;border-radius:6px;user-select:none;transition:all 0.12s ease;margin:0;background:${checked ? '#f0fdf4' : 'transparent'};">
+									<input type="checkbox" class="nn-owner-filter-item" value="${self.esc(o)}" ${checked ? 'checked' : ''} style="cursor:pointer;accent-color:#047857;margin:0;width:15px;height:15px;flex-shrink:0;">
+									<div class="nn-owner-row-av" style="width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;background:${col.bg};color:${col.fg};">${self.esc(initials)}</div>
+									<span class="nn-owner-row-name" title="${self.esc(name)}" style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:${checked ? '600' : '500'};color:${checked ? '#064e3b' : '#1f2937'};">${self.esc(name)}</span>
+									${is_me ? `<span class="nn-me-tag" style="font-size:9.5px;font-weight:700;padding:1px 5px;border-radius:4px;background:#dcfce7;color:#15803d;letter-spacing:0.2px;margin-left:auto;">${__("You")}</span>` : ""}
 								</label>
 							`;
 						}).join("")}
-						${visible_owners.length === 0 ? `<div style="padding:6px;font-size:11.5px;color:#9ca3af;text-align:center;">${__("No owners found")}</div>` : ""}
+						${visible_owners.length === 0 ? `<div style="padding:14px;font-size:12px;color:#9ca3af;text-align:center;">${__("No team members found")}</div>` : ""}
+					</div>
+					<div class="nn-owner-popover-footer" style="display:flex;align-items:center;justify-content:space-between;padding-top:8px;margin-top:6px;border-top:1px solid #f3f4f6;">
+						<span style="font-size:11px;color:#6b7280;">
+							${selected_count === 0 ? __("No owners selected") : selected_count === all_owners.length ? __("Showing all scorecards") : `${selected_count} ${__("user(s) selected")}`}
+						</span>
+						<button type="button" class="nn-btn-green" id="nn-owner-done" style="height:26px;padding:0 14px;font-size:11.5px;font-weight:600;border-radius:5px;background:#047857;color:#ffffff;border:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;">${__("Done")}</button>
 					</div>
 				</div>
 			`;
@@ -4893,14 +5056,27 @@
 			const q = (this.s.search || "").toLowerCase().trim();
 			let metrics = this.data.metrics.filter(m => !q || m.title.toLowerCase().includes(q));
 
-			const is_leader = this.is_team_leader(this.s.team);
 			const all_owners = Array.from(new Set((this.data.metrics || []).map(m => m.owner).filter(Boolean))).sort();
-			if (!is_leader) {
-				metrics = metrics.filter(m => self.is_my_metric(m));
-			} else if (Array.isArray(this.s.owner_filter)) {
-				metrics = metrics.filter(m => this.s.owner_filter.includes(m.owner));
+			const my_owners = all_owners.filter(o => self.is_my_metric({ owner: o, owner_user: o }));
+
+			let effective_selected_owners = null;
+			if (this.s.owner_customized) {
+				if (Array.isArray(this.s.owner_filter)) {
+					this.s.owner_filter = this.s.owner_filter.filter(o => all_owners.includes(o));
+					if (all_owners.length > 0 && this.s.owner_filter.length === all_owners.length) {
+						this.s.owner_filter = null;
+					}
+				}
+				effective_selected_owners = this.s.owner_filter;
+				if (Array.isArray(effective_selected_owners)) {
+					metrics = metrics.filter(m => (effective_selected_owners.length ? effective_selected_owners.includes(m.owner) : false));
+				}
+			} else {
+				// Default for ALL users: show their scorecard only
+				effective_selected_owners = my_owners;
+				metrics = metrics.filter(m => self.is_my_metric(m) || (my_owners.length && my_owners.includes(m.owner)));
 			}
-			const is_owner_filtered = is_leader && Array.isArray(this.s.owner_filter) && this.s.owner_filter.length < all_owners.length;
+			const is_owner_filtered = Array.isArray(effective_selected_owners) && effective_selected_owners.length < all_owners.length;
 
 			const ths = P.map(p => `<th>${p.label}</th>`).join("");
 			const rows = metrics.length ? metrics.map(m => {
@@ -4929,13 +5105,13 @@
 
 				return `
 					<tr>
-						<td class="left nn-col-metric" style="font-weight:600;color:#111827;white-space:normal;word-break:break-word;overflow-wrap:break-word;line-height:1.35">
+						<td class="left nn-col-metric" style="width:240px;min-width:240px;max-width:240px;font-weight:600;color:#111827;white-space:normal;word-break:break-word;overflow-wrap:break-word;line-height:1.35">
 							<span class="nn-metric-title" data-id="${m.id}" style="cursor:pointer;white-space:normal;word-break:break-word;overflow-wrap:break-word;display:block">${this.esc(m.title)}</span>
 						</td>
-						<td class="nn-col-owner" style="text-align:center">
+						<td class="nn-col-owner" style="width:76px;min-width:76px;max-width:76px;text-align:center">
 							<span class="nn-av-circle" style="width:22px;height:22px;font-size:9.5px">${initials}</span>
 						</td>
-						<td class="nn-col-goal" style="font-weight:600;color:#374151;text-align:center">${m.goal_op || ">="} ${m.goal}</td>
+						<td class="nn-col-goal" style="width:110px;min-width:110px;max-width:110px;font-weight:600;color:#374151;text-align:center">${m.goal_op || ">="} ${m.goal}</td>
 						${cells}
 					</tr>
 				`;
@@ -4949,24 +5125,26 @@
 				<table class="nn-sc-tbl">
 					<thead>
 						<tr>
-							<th class="left nn-col-metric" style="min-width:240px">${this.get_field_label("EOS Metric", "metric_name", "Measurable")}</th>
-							<th class="nn-col-owner" style="width:76px;min-width:76px;text-align:center;position:relative;">
+							<th class="left nn-col-metric" style="width:240px;min-width:240px;max-width:240px">${this.get_field_label("EOS Metric", "metric_name", "Measurable")}</th>
+							<th class="nn-col-owner" style="width:76px;min-width:76px;max-width:76px;text-align:center;">
 								<div style="display:inline-flex;align-items:center;justify-content:center;gap:4px">
 									<span>${this.get_field_label("EOS Metric", "owner_user", "Owner")}</span>
-									${is_leader ? `
-									<button class="nn-btn-icon nn-owner-filter-btn ${is_owner_filtered ? 'active' : ''}" id="nn-sc-owner-filter" title="${__("Filter by Owner")}" style="color:${is_owner_filtered ? '#047857' : '#9ca3af'};background:none;border:none;padding:1px;cursor:pointer;display:inline-flex;align-items:center;">
+									<button class="nn-btn-icon nn-owner-filter-btn ${is_owner_filtered ? 'active' : ''}" id="nn-sc-owner-filter" title="${__("Filter by Owner")}" style="color:${is_owner_filtered ? '#047857' : '#9ca3af'};background:${is_owner_filtered ? '#d1fae5' : 'transparent'};border:none;padding:2px 3px;cursor:pointer;display:inline-flex;align-items:center;border-radius:4px;transition:all 0.15s ease;">
 										${ic("filter", 12)}
-									</button>` : ''}
+									</button>
 								</div>
-								${(is_leader && this.s.owner_popover_open) ? this.render_owner_popover(all_owners) : ''}
 							</th>
-							<th class="nn-col-goal" style="width:90px;min-width:90px;text-align:center">${this.get_field_label("EOS Metric", "target_value", "Goal")}</th>
+							<th class="nn-col-goal" style="width:110px;min-width:110px;max-width:110px;text-align:center">${this.get_field_label("EOS Metric", "target_value", "Goal")}</th>
 							${ths}
 						</tr>
 					</thead>
 					<tbody>${rows}</tbody>
 				</table>
 			`);
+
+			this.$main.find("#nn-owner-popover-container").html(
+				this.s.owner_popover_open ? this.render_owner_popover(all_owners, effective_selected_owners) : ""
+			);
 
 			this.$main.find(".nn-badge-cnt").text(metrics.length);
 

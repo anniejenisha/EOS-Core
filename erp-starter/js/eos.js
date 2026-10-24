@@ -622,30 +622,81 @@ function getScorecardOwners(curTab, team) {
   }
 }
 
+const OWNER_PALETTES = [
+  { bg: '#dbeafe', fg: '#1e40af' },
+  { bg: '#fce7f3', fg: '#9d174d' },
+  { bg: '#e0e7ff', fg: '#3730a3' },
+  { bg: '#fef3c7', fg: '#92400e' },
+  { bg: '#dcfce7', fg: '#166534' },
+  { bg: '#ede9fe', fg: '#5b21b6' },
+  { bg: '#cffafe', fg: '#155e75' },
+  { bg: '#ffedd5', fg: '#9a3412' }
+];
+function getOwnerColor(str) {
+  let h = 0;
+  for (let i = 0; i < (str || '').length; i++) h = (h * 31 + str.charCodeAt(i)) & 0xffffffff;
+  return OWNER_PALETTES[Math.abs(h) % OWNER_PALETTES.length];
+}
+
 function renderOwnerFilterPopover(allOwners, selectedOwners, search) {
   const isAll = !selectedOwners || (allOwners.length > 0 && selectedOwners.length === allOwners.length);
   const q = (search || '').toLowerCase().trim();
   const visibleOwners = allOwners.filter(o => !q || o.toLowerCase().includes(q));
 
+  const myOwners = allOwners.filter(o => isMyOwnerName(o));
+  const isOnlyMe = Array.isArray(selectedOwners) &&
+    myOwners.length > 0 &&
+    selectedOwners.length === myOwners.length &&
+    selectedOwners.every(o => myOwners.includes(o));
+
+  const selectedCount = isAll ? allOwners.length : (Array.isArray(selectedOwners) ? selectedOwners.length : 0);
+  const pos = E.owner_filter_pos || { top: 140, left: 240 };
+
   return `
-    <div class="nn-owner-filter-popover" onclick="event.stopPropagation()">
-      <input type="text" class="nn-owner-filter-search" placeholder="Search..." value="${eEsc(search || '')}">
-      <div class="nn-owner-filter-list">
-        ${allOwners.length ? `
-        <label style="color:#111827;font-weight:600">
-          <input type="checkbox" class="nn-owner-filter-all" ${isAll ? 'checked' : ''}>
-          <span>(Select All)</span>
-        </label>` : ''}
+    <div class="nn-owner-filter-popover" style="top:${pos.top}px;left:${pos.left}px;width:310px;max-width:calc(100vw - 24px);position:fixed;z-index:100000;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 20px 25px -5px rgba(0,0,0,0.14),0 8px 10px -6px rgba(0,0,0,0.08);padding:12px;box-sizing:border-box;display:flex;flex-direction:column;font-family:inherit;text-align:left;">
+      <div class="nn-owner-popover-header" style="padding-bottom:8px;border-bottom:1px solid #f3f4f6;margin-bottom:8px;">
+        <div class="nn-owner-popover-title-row" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <div class="nn-owner-popover-title" style="font-size:12.5px;font-weight:700;color:#111827;display:flex;align-items:center;gap:6px;">
+            ${icon('users')}
+            <span>Filter by Owner</span>
+          </div>
+          <span class="nn-owner-popover-badge" style="font-size:11px;font-weight:600;padding:2px 7px;border-radius:10px;background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;">
+            ${isAll ? `All (${allOwners.length})` : `${selectedCount} of ${allOwners.length} selected`}
+          </span>
+        </div>
+        <div class="nn-owner-quick-row" style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+          <button type="button" class="nn-quick-btn ${isOnlyMe ? 'active' : ''}" data-act="eos-owner-only-me" style="flex:1;height:26px;padding:0 6px;font-size:11px;font-weight:600;border-radius:6px;border:1px solid ${isOnlyMe ? '#047857' : '#e5e7eb'};background:${isOnlyMe ? '#047857' : '#f9fafb'};color:${isOnlyMe ? '#ffffff' : '#4b5563'};cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:all 0.15s ease;">Only Me</button>
+          <button type="button" class="nn-quick-btn ${isAll ? 'active' : ''}" data-act="eos-owner-select-all" style="flex:1;height:26px;padding:0 6px;font-size:11px;font-weight:600;border-radius:6px;border:1px solid ${isAll ? '#047857' : '#e5e7eb'};background:${isAll ? '#047857' : '#f9fafb'};color:${isAll ? '#ffffff' : '#4b5563'};cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:all 0.15s ease;">Select All</button>
+          <button type="button" class="nn-quick-btn" data-act="eos-owner-clear" style="flex:1;height:26px;padding:0 6px;font-size:11px;font-weight:600;border-radius:6px;border:1px solid #e5e7eb;background:#f9fafb;color:#4b5563;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:all 0.15s ease;">Clear</button>
+        </div>
+        <div class="nn-owner-search-wrap" style="position:relative;display:flex;align-items:center;height:30px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:0 8px;gap:6px;color:#9ca3af;">
+          ${icon('search')}
+          <input type="text" class="nn-owner-filter-search" placeholder="Search team members…" value="${eEsc(search || '')}" style="border:none;background:transparent;outline:none;font-size:12px;color:#111827;width:100%;box-shadow:none;margin:0;padding:0;">
+          ${search ? `<button type="button" class="nn-owner-search-clear" data-act="eos-owner-clear-search" style="background:none;border:none;cursor:pointer;padding:0 4px;color:#9ca3af;font-size:15px;line-height:1;display:flex;align-items:center;">×</button>` : ''}
+        </div>
+      </div>
+      <div class="nn-owner-filter-list" style="max-height:210px;overflow-y:auto;display:flex;flex-direction:column;gap:3px;padding-right:2px;">
         ${visibleOwners.map(o => {
-    const checked = isAll || (Array.isArray(selectedOwners) && selectedOwners.includes(o));
-    return `
-            <label class="nn-owner-filter-opt">
-              <input type="checkbox" class="nn-owner-filter-item" value="${eEsc(o)}" ${checked ? 'checked' : ''}>
-              <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${eEsc(o)}">${eEsc(o)}</span>
+          const checked = isAll || (Array.isArray(selectedOwners) && selectedOwners.includes(o));
+          const isMe = isMyOwnerName(o);
+          const av = initials(o || 'U');
+          const col = getOwnerColor(o);
+          return `
+            <label class="nn-owner-row ${checked ? 'selected' : ''}" style="display:flex;align-items:center;gap:8px;padding:6px 8px;font-size:12px;color:#374151;cursor:pointer;border-radius:6px;user-select:none;transition:all 0.12s ease;margin:0;background:${checked ? '#f0fdf4' : 'transparent'};">
+              <input type="checkbox" class="nn-owner-filter-item" value="${eEsc(o)}" ${checked ? 'checked' : ''} style="cursor:pointer;accent-color:#047857;margin:0;width:15px;height:15px;flex-shrink:0;">
+              <div class="nn-owner-row-av" style="width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;background:${col.bg};color:${col.fg};">${eEsc(av)}</div>
+              <span class="nn-owner-row-name" title="${eEsc(o)}" style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:${checked ? '600' : '500'};color:${checked ? '#064e3b' : '#1f2937'};">${eEsc(o)}</span>
+              ${isMe ? `<span class="nn-me-tag" style="font-size:9.5px;font-weight:700;padding:1px 5px;border-radius:4px;background:#dcfce7;color:#15803d;letter-spacing:0.2px;margin-left:auto;">You</span>` : ''}
             </label>
           `;
-  }).join('')}
-        ${visibleOwners.length === 0 ? `<div style="padding:6px;font-size:11.5px;color:#9ca3af;text-align:center;">No owners found</div>` : ''}
+        }).join('')}
+        ${visibleOwners.length === 0 ? `<div style="padding:14px;font-size:12px;color:#9ca3af;text-align:center;">No team members found</div>` : ''}
+      </div>
+      <div class="nn-owner-popover-footer" style="display:flex;align-items:center;justify-content:space-between;padding-top:8px;margin-top:6px;border-top:1px solid #f3f4f6;">
+        <span style="font-size:11px;color:#6b7280;">
+          ${selectedCount === 0 ? 'No owners selected' : selectedCount === allOwners.length ? 'Showing all team scorecards' : `Showing ${selectedCount} user${selectedCount === 1 ? '' : 's'}`}
+        </span>
+        <button type="button" class="nn-btn-green" data-act="eos-owner-close" style="height:26px;padding:0 14px;font-size:11.5px;font-weight:600;border-radius:5px;background:#047857;color:#ffffff;border:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;">Done</button>
       </div>
     </div>
   `;
@@ -678,17 +729,11 @@ function renderMeasurablesGrid(curTab) {
   const allOwners = getScorecardOwners(curTab, F.team);
   const myOwners = allOwners.filter(o => isMyOwnerName(o));
 
-  const isTeamLeader = isUserTeamLeader(F.team);
-
   let effectiveSelectedOwners = null;
-  if (!isTeamLeader) {
-    // Non-team leader: ALWAYS see only their own scorecards
-    effectiveSelectedOwners = myOwners;
-    metrics = metrics.filter(m => isMyItem(m) || (myOwners.length && myOwners.includes(m.owner)));
-  } else if (F.owners_customized) {
+  if (F.owners_customized) {
     if (Array.isArray(F.owners)) {
       F.owners = F.owners.filter(o => allOwners.includes(o));
-      if (F.owners.length === allOwners.length) {
+      if (allOwners.length > 0 && F.owners.length === allOwners.length) {
         F.owners = null;
       }
     }
@@ -697,11 +742,12 @@ function renderMeasurablesGrid(curTab) {
       metrics = metrics.filter(m => (effectiveSelectedOwners.length ? effectiveSelectedOwners.includes(m.owner) : false));
     }
   } else {
-    // Team Leader by default: view ALL users' scorecards for this team
-    effectiveSelectedOwners = null;
+    // Default for ALL users: show their scorecard only
+    effectiveSelectedOwners = myOwners;
+    metrics = metrics.filter(m => isMyItem(m) || (myOwners.length && myOwners.includes(m.owner)));
   }
 
-  const isOwnerFiltered = isTeamLeader && Array.isArray(effectiveSelectedOwners) && effectiveSelectedOwners.length < allOwners.length;
+  const isOwnerFiltered = Array.isArray(effectiveSelectedOwners) && effectiveSelectedOwners.length < allOwners.length;
 
   let rangeOptions = [];
   if (curTab === 'monthly') {
@@ -758,17 +804,15 @@ function renderMeasurablesGrid(curTab) {
           <thead>
             <tr>
               <th class="left nn-col-metric" style="width:240px;min-width:240px;max-width:240px">Measurable</th>
-              <th class="nn-col-owner" style="width:68px;min-width:68px;max-width:68px;text-align:center;">
+              <th class="nn-col-owner" style="width:76px;min-width:76px;max-width:76px;text-align:center;">
                 <div style="display:inline-flex;align-items:center;justify-content:center;gap:4px">
                   <span>Owner</span>
-                  ${isTeamLeader ? `
-                  <button class="nn-owner-filter-btn ${isOwnerFiltered ? 'active' : ''}" data-act="eos-toggle-owner-filter" title="Filter by Owner" style="color:${isOwnerFiltered ? '#047857' : '#9ca3af'};">
+                  <button type="button" class="nn-owner-filter-btn ${isOwnerFiltered ? 'active' : ''}" data-act="eos-toggle-owner-filter" title="Filter by Owner" style="color:${isOwnerFiltered ? '#047857' : '#9ca3af'};background:${isOwnerFiltered ? '#d1fae5' : 'transparent'};border:none;padding:2px 3px;border-radius:4px;cursor:pointer;display:inline-flex;align-items:center;transition:all 0.15s ease;">
                     ${icon('filter')}
-                  </button>` : ''}
+                  </button>
                 </div>
-                ${(isTeamLeader && E.owner_filter_open) ? renderOwnerFilterPopover(allOwners, effectiveSelectedOwners, E.owner_filter_search || '') : ''}
               </th>
-              <th class="nn-col-goal" style="width:130px;min-width:130px;max-width:130px;text-align:center">Goal</th>
+              <th class="nn-col-goal" style="width:110px;min-width:110px;max-width:110px;text-align:center">Goal</th>
               ${periods.map(p => `<th style="min-width:80px;text-align:center">${eEsc(p)}</th>`).join('')}
             </tr>
           </thead>
@@ -814,10 +858,10 @@ function renderMeasurablesGrid(curTab) {
                       ${eEsc(m.name)}
                     </span>
                   </td>
-                  <td class="nn-col-owner" style="width:68px;min-width:68px;max-width:68px;text-align:center">
+                  <td class="nn-col-owner" style="width:76px;min-width:76px;max-width:76px;text-align:center">
                     <span class="nn-owner-circle" style="width:24px;height:24px;font-size:10px" title="${eEsc(m.owner)}">${av}</span>
                   </td>
-                  <td class="nn-col-goal" style="width:130px;min-width:130px;max-width:130px;text-align:center;white-space:nowrap">
+                  <td class="nn-col-goal" style="width:110px;min-width:110px;max-width:110px;text-align:center;white-space:nowrap">
                     <span style="font-weight:600;color:#374151;white-space:nowrap">${(m.op === '==' || m.op === '=') ? '=' : (m.op || '>=')} ${eU(m, m.target)}</span>
                   </td>
                   ${cells}
@@ -838,7 +882,7 @@ function renderMeasurablesGrid(curTab) {
     </div>
   `;
 
-  return bar + body;
+  return bar + body + (E.owner_filter_open ? renderOwnerFilterPopover(allOwners, effectiveSelectedOwners, E.owner_filter_search || '') : '');
 }
 
 function renderScorecardsDirectory() {
@@ -2786,11 +2830,10 @@ function eosNavigateCell(dir) {
   }
   const allOwners = getScorecardOwners(curTab, F.team);
   const myOwners = allOwners.filter(o => isMyOwnerName(o));
-  const isTeamLeader = isUserTeamLeader(F.team);
   let effectiveSelectedOwners = null;
   if (F.owners_customized) {
     effectiveSelectedOwners = F.owners;
-  } else if (!isTeamLeader) {
+  } else {
     effectiveSelectedOwners = myOwners;
   }
   if (Array.isArray(effectiveSelectedOwners)) {
@@ -3248,6 +3291,17 @@ async function eosAct(a, el, e) {
     case 'eos-toggle-owner-filter': {
       E.owner_filter_open = !E.owner_filter_open;
       E.owner_filter_search = '';
+      if (E.owner_filter_open) {
+        const trigger = (el && el.closest && el.closest('.nn-owner-filter-btn')) || document.querySelector('.nn-owner-filter-btn') || document.querySelector('[data-act="eos-toggle-owner-filter"]');
+        if (trigger) {
+          const b = trigger.getBoundingClientRect();
+          const popoverWidth = 310;
+          const triggerCenter = b.left + (b.width / 2);
+          const left = Math.max(12, Math.min(triggerCenter - (popoverWidth / 2), window.innerWidth - popoverWidth - 16));
+          const top = Math.min(b.bottom + 6, window.innerHeight - 380);
+          E.owner_filter_pos = { top: Math.round(top), left: Math.round(left) };
+        }
+      }
       renderMain();
       if (E.owner_filter_open) {
         setTimeout(() => {
@@ -3255,6 +3309,42 @@ async function eosAct(a, el, e) {
           if (inp) inp.focus();
         }, 50);
       }
+      break;
+    }
+    case 'eos-owner-select-all': {
+      E.f.scorecard.owners_customized = true;
+      E.f.scorecard.owners = null;
+      renderMain();
+      break;
+    }
+    case 'eos-owner-only-me': {
+      const curTab = E.tab.scorecard === 'scorecards' ? 'weekly' : (E.tab.scorecard || 'weekly');
+      const allOwners = getScorecardOwners(curTab, E.f.scorecard.team);
+      const myOwners = allOwners.filter(o => isMyOwnerName(o));
+      E.f.scorecard.owners_customized = true;
+      E.f.scorecard.owners = myOwners;
+      renderMain();
+      break;
+    }
+    case 'eos-owner-clear': {
+      E.f.scorecard.owners_customized = true;
+      E.f.scorecard.owners = [];
+      renderMain();
+      break;
+    }
+    case 'eos-owner-clear-search': {
+      E.owner_filter_search = '';
+      renderMain();
+      setTimeout(() => {
+        const inp = document.querySelector('.nn-owner-filter-search');
+        if (inp) inp.focus();
+      }, 50);
+      break;
+    }
+    case 'eos-owner-close': {
+      E.owner_filter_open = false;
+      E.owner_filter_search = '';
+      renderMain();
       break;
     }
     case 'eos-sc-optimize': {
@@ -3379,6 +3469,14 @@ async function eosAct(a, el, e) {
 }
 
 document.addEventListener('click', e => {
+  const popoverAct = e.target.closest('.nn-owner-filter-popover [data-act]');
+  if (popoverAct) {
+    const act = popoverAct.getAttribute('data-act');
+    if (typeof eosAct === 'function') {
+      eosAct(act, popoverAct, e);
+      return;
+    }
+  }
   const cell = e.target.closest('[data-act="eos-cell"]');
   if (cell) {
     if (E.edit && E.edit.td === cell && e.target.tagName === 'INPUT') {
@@ -3430,7 +3528,7 @@ document.addEventListener('input', e => {
     const q = e.target.value.toLowerCase().trim();
     const popover = e.target.closest('.nn-owner-filter-popover');
     if (popover) {
-      popover.querySelectorAll('.nn-owner-filter-opt').forEach(opt => {
+      popover.querySelectorAll('.nn-owner-row, .nn-owner-filter-opt').forEach(opt => {
         const txt = opt.textContent.toLowerCase();
         opt.style.display = (!q || txt.includes(q)) ? 'flex' : 'none';
       });
@@ -3490,16 +3588,25 @@ document.addEventListener('change', async e => {
     return;
   }
   if (e.target.classList.contains('nn-owner-filter-item')) {
-    const popover = e.target.closest('.nn-owner-filter-popover');
-    const items = Array.from(popover.querySelectorAll('.nn-owner-filter-item'));
-    const checked = items.filter(cb => cb.checked).map(cb => cb.value);
     const curTab = E.tab.scorecard === 'scorecards' ? 'weekly' : (E.tab.scorecard || 'weekly');
     const allOwners = getScorecardOwners(curTab, E.f.scorecard.team);
+    const myOwners = allOwners.filter(o => isMyOwnerName(o));
+    let curSelected = E.f.scorecard.owners_customized
+      ? (E.f.scorecard.owners === null ? [...allOwners] : (Array.isArray(E.f.scorecard.owners) ? [...E.f.scorecard.owners] : []))
+      : [...myOwners];
+
+    const val = e.target.value;
+    if (e.target.checked) {
+      if (!curSelected.includes(val)) curSelected.push(val);
+    } else {
+      curSelected = curSelected.filter(x => x !== val);
+    }
+
     E.f.scorecard.owners_customized = true;
-    if (checked.length === allOwners.length) {
+    if (curSelected.length >= allOwners.length && allOwners.every(o => curSelected.includes(o))) {
       E.f.scorecard.owners = null;
     } else {
-      E.f.scorecard.owners = checked;
+      E.f.scorecard.owners = curSelected;
     }
     E.owner_filter_open = true;
     renderMain();
