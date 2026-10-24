@@ -3,8 +3,30 @@
    100% Dynamic: Backed exclusively by live Frappe ERP DocTypes.
    Hooks into app.js through: renderEos, eosDrawer, eosSave, eosAct.
    ===================================================================== */
-let EOS_ME = (typeof USER !== 'undefined' && USER.name && USER.name !== 'User') ? USER.name : (getLoggedInUserName() || window.frappe_user_name || '');
-let EOS_USER_ID = (typeof USER !== 'undefined' && USER.email) ? USER.email : (getLoggedInUserEmail() || window.frappe_user || '');
+if (typeof getLoggedInUserName !== 'function') {
+  window.getLoggedInUserName = function() {
+    if (typeof USER !== 'undefined' && USER.name && USER.name !== 'User') return USER.name;
+    if (typeof frappe !== 'undefined' && frappe.session) {
+      if (frappe.session.user_fullname) return frappe.session.user_fullname;
+      if (frappe.session.user && frappe.session.user !== 'Guest') return frappe.session.user;
+    }
+    if (typeof window !== 'undefined' && window.frappe_user_name) return window.frappe_user_name;
+    return '';
+  };
+}
+if (typeof getLoggedInUserEmail !== 'function') {
+  window.getLoggedInUserEmail = function() {
+    if (typeof USER !== 'undefined' && USER.email) return USER.email;
+    if (typeof frappe !== 'undefined' && frappe.session && frappe.session.user && frappe.session.user !== 'Guest') {
+      return frappe.session.user;
+    }
+    if (typeof window !== 'undefined' && window.frappe_user) return window.frappe_user;
+    return '';
+  };
+}
+
+let EOS_ME = (typeof USER !== 'undefined' && USER.name && USER.name !== 'User') ? USER.name : (getLoggedInUserName() || (typeof window !== 'undefined' ? window.frappe_user_name : '') || '');
+let EOS_USER_ID = (typeof USER !== 'undefined' && USER.email) ? USER.email : (getLoggedInUserEmail() || (typeof window !== 'undefined' ? window.frappe_user : '') || '');
 let EOS_IS_ADMIN = (window.__EOS_BOOT__ && window.__EOS_BOOT__.user && !!window.__EOS_BOOT__.user.is_admin) || false;
 let EOS_TEAMS = [];
 let EOS_LEADER_TEAMS = (window.__EOS_BOOT__ && (window.__EOS_BOOT__.leader_teams || (window.__EOS_BOOT__.user && window.__EOS_BOOT__.user.leader_teams))) || [];
@@ -326,7 +348,27 @@ async function apiCall(method, args = {}) {
       console.warn(`[EOS ERP API] ${method} (${res.status}):`, errText);
       try {
         const parsed = JSON.parse(errText);
-        return { error: true, message: parsed.message || parsed.exception || `HTTP ${res.status}` };
+        let msg = parsed.message;
+        if (!msg && (parsed._server_messages || (parsed.responseJSON && parsed.responseJSON._server_messages))) {
+          try {
+            const sm = parsed._server_messages || (parsed.responseJSON && parsed.responseJSON._server_messages);
+            const msgs = typeof sm === 'string' ? JSON.parse(sm) : sm;
+            if (Array.isArray(msgs) && msgs.length > 0) {
+              const first = typeof msgs[0] === 'string' ? JSON.parse(msgs[0]) : msgs[0];
+              msg = first.message || first;
+            }
+          } catch (_) {}
+        }
+        if (!msg && parsed.exception) {
+          msg = String(parsed.exception).replace(/^[a-zA-Z0-9_.]*ValidationError:\s*/, '').replace(/^[a-zA-Z0-9_.]*:\s*/, '');
+        }
+        if (!msg) {
+          msg = parsed.exc || `HTTP ${res.status}`;
+        }
+        if (typeof msg === 'string') {
+          msg = msg.replace(/<[^>]+>/g, '').trim();
+        }
+        return { error: true, message: msg || `HTTP ${res.status}` };
       } catch (e) {
         return { error: true, message: `HTTP ${res.status}` };
       }
@@ -989,12 +1031,13 @@ function renderScorecardsDirectory() {
 /* ---------- Rocks ---------- */
 function eRockRow(r, own) {
   const open = E.openRock.has(r.id), has = r.ms && r.ms.length > 0, done = has ? r.ms.filter(m => m.done).length : 0, cols = own ? 7 : 6;
-  const cls = r.status === 'On-track' ? 'on' : r.status === 'Off-track' ? 'off' : 'done', ic = r.status === 'Off-track' ? 'thumbdown' : r.status === 'Done' ? 'check' : 'thumbup';
+  const st = r.status === 'Done' ? 'Done' : r.status === 'Off-track' ? 'Off-track' : 'On-track';
+  const cls = st === 'On-track' ? 'on' : st === 'Off-track' ? 'off' : 'done', ic = st === 'Off-track' ? 'thumbdown' : st === 'Done' ? 'check' : 'thumbup';
   let h = `<tr><td class="ck">${has || open ? `<button class="icon-btn" data-act="eos-rock-open" data-id="${r.id}" aria-expanded="${open}" aria-label="${open ? 'Hide' : 'Show'} milestones">${icon(open ? 'down' : 'chev')}</button>` : ''}</td>
-   <td><span class="e-st ${cls}">${icon(ic)}${r.status}</span></td>
+   <td><span class="e-st ${cls}">${icon(ic)}${st}</span></td>
    <td class="tl strong">${eEsc(r.name)}${!own && r.company ? '<span class="e-tag">Company Rock</span>' : ''}</td>
    <td>${has ? `<span class="e-prog"><span class="e-bar"><i style="width:${done / r.ms.length * 100}%"></i></span>${done}/${r.ms.length}</span>` : ''}</td>
-   ${own ? `<td>${eAv(r.owner)}</td>` : ''}<td>${eDD(r.end, r.status === 'Done')}</td><td class="act">${eMenuBtn('rock', r.id)}</td></tr>`;
+   ${own ? `<td>${eAv(r.owner)}</td>` : ''}<td>${eDD(r.end, st === 'Done')}</td><td class="act">${eMenuBtn('rock', r.id)}</td></tr>`;
   if (open) {
     if (r.ms) {
       r.ms.forEach((m, i) => { h += `<tr class="msr"><td class="ck"></td><td>${eCheck(m.done, 'eos-ms-toggle', r.id + ':' + i, (m.done ? 'Mark not done: ' : 'Mark done: ') + m.t)}</td><td colspan="2" class="${m.done ? 'dd' : ''}">${eEsc(m.t)}</td>${own ? `<td>${eAv(m.owner || r.owner)}</td>` : ''}<td>${eDD(m.due || r.end, m.done)}</td><td class="act">${eMenuBtn('ms', r.id + ':' + i)}</td></tr>`; });
@@ -1710,9 +1753,10 @@ function renderL10RockReviewStep(team) {
         <tbody>
           ${rocks.length ? rocks.map(r => {
     const av = initials(r.owner || 'U');
-    const st = r.status || 'On-track';
-    const is_off = st === 'Off-track' || st === 'Not Started';
-    const st_cls = st === 'Done' ? 'complete' : is_off ? 'off-track' : 'on-track';
+    const st = r.status === 'Done' ? 'Done' : r.status === 'Off-track' ? 'Off-track' : 'On-track';
+    const is_off = st === 'Off-track';
+    const is_done = st === 'Done';
+    const st_cls = is_done ? 'complete' : is_off ? 'off-track' : 'on-track';
     return `
               <tr class="nn-rock-row">
                 <td><b>${eEsc(r.name)}</b></td>
@@ -1722,8 +1766,8 @@ function renderL10RockReviewStep(team) {
                 </td>
                 <td style="text-align:right">
                   <div class="nn-progress-wrap">
-                    <div class="nn-prog-bar"><div class="nn-prog-fill" style="width:${st === 'Done' ? '100%' : is_off ? '35%' : '75%'};background:${st === 'Done' ? '#16a34a' : is_off ? '#ef4444' : '#059669'}"></div></div>
-                    <span class="nn-prog-txt">${st === 'Done' ? '100%' : is_off ? '35%' : '75%'}</span>
+                    <div class="nn-prog-bar"><div class="nn-prog-fill" style="width:${is_done ? '100%' : is_off ? '35%' : '75%'};background:${is_done ? '#16a34a' : is_off ? '#ef4444' : '#059669'}"></div></div>
+                    <span class="nn-prog-txt">${is_done ? '100%' : is_off ? '35%' : '75%'}</span>
                   </div>
                 </td>
                 <td style="text-align:center">
@@ -2164,7 +2208,7 @@ function renderEos() {
 function eMenuItems(t, id) {
   if (t === 'todo') { const x = eTodos.find(a => a.id === +id); return x && [['Edit', 'eos-edit-todo', id], [x.archived ? 'Restore' : 'Archive', 'eos-todo-arch', id]]; }
   if (t === 'issue') { const x = eIssues.find(a => a.id === +id); return x && [['Edit', 'eos-edit-issue', id], [x.archived ? 'Restore' : 'Archive', 'eos-issue-arch', id]]; }
-  if (t === 'rock') { const r = eRocks.find(a => a.id === +id); return r && [['Edit', 'eos-edit-rock', id], ...['On-track', 'Off-track', 'Done'].filter(s => s !== r.status).map(s => ['Mark ' + s.toLowerCase(), 'eos-rock-st', id + ':' + s]), ['Add milestone', 'eos-ms-add', id], [r.archived ? 'Restore' : 'Archive', 'eos-rock-st', id + ':archive']]; }
+  if (t === 'rock') { const r = eRocks.find(a => a.id === +id); const curStatus = r ? (r.status === 'Done' ? 'Done' : r.status === 'Off-track' ? 'Off-track' : 'On-track') : 'On-track'; return r && [['Edit', 'eos-edit-rock', id], ...['On-track', 'Off-track', 'Done'].filter(s => s !== curStatus).map(s => ['Mark ' + s.toLowerCase(), 'eos-rock-st', id + ':' + s]), ['Add milestone', 'eos-ms-add', id], [r.archived ? 'Restore' : 'Archive', 'eos-rock-st', id + ':archive']]; }
   if (t === 'ms') return [['Delete milestone', 'eos-ms-del', id]];
 }
 
@@ -2578,29 +2622,20 @@ function eosDrawer(kind, rec, pre) {
   else if (p === 'rocks') {
     const o = rec ? (rec.company ? 'company' : rec.owner) : (q.owner);
     const curType = rec ? (rec.company ? 'company' : 'personal') : (o === 'company' ? 'company' : 'personal');
+    const curStatus = (r.status === 'Done' || r.status === 'Complete') ? 'Done' : (r.status === 'Off-track' || r.status === 'Dropped') ? 'Off-track' : 'On-track';
     eosForm(rec ? 'Edit Rock in ERP' : 'Create Rock in ERP', [
       { k: 'type', l: 'Rock type', t: 'select', o: [['personal', 'Individual Rock'], ['company', 'Company Rock']], v: curType },
       { k: 'name', l: 'Title', req: true, ph: 'Add a title for the Rock', v: r.name || '' },
       { k: 'team', l: 'Team', ...team(r.team) },
       { k: 'owner', l: 'Owner', ...own(r.owner || (o && o !== 'company' ? o : null), r.team) },
       { k: 'end', l: 'Due date', t: 'date', v: r.end || eYD('12-31'), req: true },
-      { k: 'status', l: 'Status', t: 'select', o: ['On-track', 'Off-track', 'Done'], v: r.status || 'On-track' },
+      { k: 'status', l: 'Status', t: 'select', o: ['On-track', 'Off-track', 'Done'], v: curStatus },
       { k: 'desc', l: 'Description', opt: true, t: 'textarea', v: r.desc || '' }
     ],
       async v => {
         if (rec) {
-          Object.assign(rec, {
-            name: v.name,
-            owner: v.owner,
-            team: v.team,
-            status: v.status,
-            end: v.end,
-            desc: v.desc,
-            company: v.type === 'company'
-          });
           toast('Updating Rock in ERP...');
-          renderMain();
-          await apiCall('eos_core.eos_api.save_rock', {
+          const res = await apiCall('eos_core.eos_api.save_rock', {
             docname: rec.docname,
             name: v.name,
             owner: v.owner,
@@ -2610,14 +2645,38 @@ function eosDrawer(kind, rec, pre) {
             is_company: v.type === 'company',
             desc: v.desc
           });
+          if (res && (res.error || res.status !== 'ok')) {
+            const msg = res.message || 'Failed to update Rock in ERP';
+            if (typeof frappe !== 'undefined' && frappe.msgprint) frappe.msgprint(msg);
+            toast(msg);
+            renderMain();
+            return;
+          }
+          Object.assign(rec, {
+            name: v.name,
+            owner: v.owner,
+            team: v.team,
+            status: v.status,
+            end: v.end,
+            desc: v.desc,
+            company: v.type === 'company'
+          });
           toast('Rock updated in ERP!');
           renderMain();
         } else {
-          const newR = { id: ++eSeq, name: v.name, owner: v.owner, team: v.team, status: v.status, end: v.end, desc: v.desc, ms: [], company: v.type === 'company', archived: false };
-          eRocks.push(newR); E.tab.rocks = 'list'; toast('Saving to Rock DocType...');
-          renderMain();
+          toast('Saving to Rock DocType...');
           const res = await apiCall('eos_core.eos_api.save_rock', { name: v.name, owner: v.owner, team: v.team, end: v.end, status: v.status, is_company: v.type === 'company', desc: v.desc });
+          if (res && (res.error || res.status !== 'ok')) {
+            const msg = res.message || 'Failed to save Rock in ERP';
+            if (typeof frappe !== 'undefined' && frappe.msgprint) frappe.msgprint(msg);
+            toast(msg);
+            renderMain();
+            return;
+          }
+          const newR = { id: ++eSeq, name: v.name, owner: v.owner, team: v.team, status: v.status, end: v.end, desc: v.desc, ms: [], company: v.type === 'company', archived: false };
           if (res && res.docname) newR.docname = res.docname;
+          eRocks.push(newR);
+          E.tab.rocks = 'list';
           toast('Rock saved to ERP Document!');
           renderMain();
         }
@@ -2941,28 +3000,72 @@ async function eosAct(a, el, e) {
     case 'eos-rock-open': { const n = +id; E.openRock.has(n) ? E.openRock.delete(n) : E.openRock.add(n); renderMain(); break; }
     case 'eos-rock-st': {
       const [r, s] = id.split(':'), k = eRocks.find(x => x.id === +r);
+      if (!k) break;
       if (s === 'archive') {
+        const prev = k.archived;
         k.archived = !k.archived; toast(k.archived ? 'Archiving Rock in ERP...' : 'Restoring Rock in ERP...');
-        await apiCall('eos_core.eos_api.update_rock_status', { docname: k.docname || k.name, status: 'archive' });
+        renderMain();
+        const res = await apiCall('eos_core.eos_api.update_rock_status', { docname: k.docname || k.name, status: 'archive' });
+        if (res && (res.error || res.status !== 'ok')) {
+          k.archived = prev;
+          renderMain();
+          const msg = res.message || 'Failed to update Rock archive state in ERP';
+          if (typeof frappe !== 'undefined' && frappe.msgprint) frappe.msgprint(msg);
+          toast(msg);
+          break;
+        }
+        toast(k.archived ? 'Rock archived in ERP!' : 'Rock restored in ERP!');
+        renderMain();
+        break;
       } else {
-        k.status = s; toast('Updating Rock in ERP...');
-        await apiCall('eos_core.eos_api.update_rock_status', { docname: k.docname || k.name, status: s });
+        const prev = k.status;
+        toast('Updating Rock in ERP...');
+        const res = await apiCall('eos_core.eos_api.update_rock_status', { docname: k.docname || k.name, status: s });
+        if (res && (res.error || res.status !== 'ok')) {
+          k.status = prev;
+          renderMain();
+          const msg = res.message || 'Failed to update Rock status in ERP';
+          if (typeof frappe !== 'undefined' && frappe.msgprint) frappe.msgprint(msg);
+          toast(msg);
+          break;
+        }
+        k.status = s;
+        toast('Rock updated in ERP!');
+        renderMain();
+        break;
       }
-      toast('Rock updated in ERP!');
-      renderMain(); break;
     }
     case 'eos-ms-toggle': {
       const [r, i] = id.split(':').map(Number), k = eRocks.find(x => x.id === r);
+      if (!k || !k.ms || !k.ms[i]) break;
+      const prev = k.ms[i].done;
       k.ms[i].done = !k.ms[i].done; renderMain();
       toast('Updating Rock Milestone in ERP...');
-      await apiCall('eos_core.eos_api.toggle_rock_milestone', { docname: k.docname || k.name, milestone_idx: i, done: k.ms[i].done ? 1 : 0 });
+      const res = await apiCall('eos_core.eos_api.toggle_rock_milestone', { docname: k.docname || k.name, milestone_idx: i, done: k.ms[i].done ? 1 : 0 });
+      if (res && (res.error || res.status !== 'ok')) {
+        k.ms[i].done = prev;
+        renderMain();
+        const msg = res.message || 'Failed to update Rock Milestone in ERP';
+        if (typeof frappe !== 'undefined' && frappe.msgprint) frappe.msgprint(msg);
+        toast(msg);
+        break;
+      }
       toast('Rock Milestone updated in ERP!');
       break;
     }
     case 'eos-ms-del': {
       const [r, i] = id.split(':').map(Number), k = eRocks.find(x => x.id === r);
-      k.ms.splice(i, 1); toast('Deleting Rock Milestone in ERP...'); renderMain();
-      await apiCall('eos_core.eos_api.delete_rock_milestone', { docname: k.docname || k.name, milestone_idx: i });
+      if (!k || !k.ms || !k.ms[i]) break;
+      const deleted = k.ms.splice(i, 1)[0]; toast('Deleting Rock Milestone in ERP...'); renderMain();
+      const res = await apiCall('eos_core.eos_api.delete_rock_milestone', { docname: k.docname || k.name, milestone_idx: i });
+      if (res && (res.error || res.status !== 'ok')) {
+        k.ms.splice(i, 0, deleted);
+        renderMain();
+        const msg = res.message || 'Failed to delete Rock Milestone in ERP';
+        if (typeof frappe !== 'undefined' && frappe.msgprint) frappe.msgprint(msg);
+        toast(msg);
+        break;
+      }
       toast('Rock Milestone deleted in ERP!');
       break;
     }
@@ -3204,11 +3307,20 @@ async function eosAct(a, el, e) {
       const r = eRocks.find(x => x.id === +id);
       if (r) {
         const order = ['On-track', 'Off-track', 'Done'];
-        const next = order[(order.indexOf(r.status) + 1) % order.length] || 'On-track';
+        const curStatus = r.status === 'Done' ? 'Done' : (r.status === 'Off-track' ? 'Off-track' : 'On-track');
+        const next = order[(order.indexOf(curStatus) + 1) % order.length] || 'On-track';
+        toast(`Updating Rock status to ${next}...`);
+        const res = await apiCall('eos_core.eos_api.update_rock_status', { docname: r.docname || r.name, status: next });
+        if (res && (res.error || res.status !== 'ok')) {
+          const msg = res.message || 'Failed to update Rock status in ERP';
+          if (typeof frappe !== 'undefined' && frappe.msgprint) frappe.msgprint(msg);
+          toast(msg);
+          renderMain();
+          break;
+        }
         r.status = next;
-        renderMain();
-        await apiCall('eos_core.eos_api.update_rock_status', { docname: r.docname || r.name, status: next });
         toast(`Rock status updated to ${next}!`);
+        renderMain();
       }
       break;
     }
@@ -3706,13 +3818,24 @@ document.addEventListener('keydown', async e => {
     }
   } else if (t.hasAttribute('data-eos-ms') && e.key === 'Enter' && t.value.trim()) {
     const r = eRocks.find(x => x.id === +t.dataset.eosMs);
+    if (!r) return;
     if (!r.ms) r.ms = [];
     const title = t.value.trim();
-    r.ms.push({ t: title, done: false, owner: r.owner, due: r.end });
+    const newMs = { t: title, done: false, owner: r.owner, due: r.end };
+    r.ms.push(newMs);
     E.focusMs = r.id;
     renderMain();
     toast('Adding milestone to Rock DocType in ERP...');
-    await apiCall('eos_core.eos_api.add_rock_milestone', { docname: r.docname || r.name, title: title });
+    const res = await apiCall('eos_core.eos_api.add_rock_milestone', { docname: r.docname || r.name, title: title });
+    if (res && (res.error || res.status !== 'ok')) {
+      const idx = r.ms.indexOf(newMs);
+      if (idx !== -1) r.ms.splice(idx, 1);
+      renderMain();
+      const msg = res.message || 'Failed to add Rock Milestone in ERP';
+      if (typeof frappe !== 'undefined' && frappe.msgprint) frappe.msgprint(msg);
+      toast(msg);
+      return;
+    }
     toast('Rock Milestone saved in ERP!');
   }
 });

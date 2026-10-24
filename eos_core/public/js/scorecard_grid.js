@@ -1110,7 +1110,7 @@
 
 				// Status filter
 				if (s.rock_status && s.rock_status !== "All") {
-					const norm = (r.status === "In Progress" || r.status === "On-track") ? "On-track" : (r.status === "Not Started" || r.status === "Off-track") ? "Off-track" : r.status;
+					const norm = (r.status === "In Progress" || r.status === "On-track") ? "On-track" : (r.status === "Off-track" || r.status === "Dropped") ? "Off-track" : (r.status === "Complete" || r.status === "Done") ? "Done" : r.status;
 					if (norm !== s.rock_status) return false;
 				}
 
@@ -1255,8 +1255,8 @@
 
 		get_rock_status_badge(st, rname = null) {
 			st = (st || "").trim();
-			const is_off = st === "Not Started" || st === "Off-track";
-			const is_complete = st === "Complete";
+			const is_off = st === "Off-track" || st === "Dropped";
+			const is_complete = st === "Complete" || st === "Done";
 			const is_dropped = st === "Dropped";
 
 			let cls = "on-track";
@@ -1500,20 +1500,27 @@
 
 				const options = [
 					["In Progress", __("On-track")],
-					["Not Started", __("Off-track")],
+					["Dropped", __("Off-track")],
 					["Complete", __("Complete")]
 				];
 
-				const current_val = (rock.status === "Not Started" || rock.status === "Off-track") ? "Not Started" : (rock.status === "Complete" ? "Complete" : "In Progress");
+				const current_val = (rock.status === "Dropped" || rock.status === "Off-track") ? "Dropped" : (rock.status === "Complete" || rock.status === "Done" ? "Complete" : "In Progress");
 
 				self.pick_menu(this, options, current_val, async new_val => {
-					rock.status = new_val;
-					await self.call("frappe.client.set_value", {
-						doctype: "Rock",
-						name: rname,
-						fieldname: "status",
-						value: new_val
+					const prev_val = rock.status;
+					const status_to_send = new_val === "Complete" ? "Done" : (new_val === "Dropped" ? "Off-track" : "On-track");
+					const res = await self.call("eos_core.eos_api.update_rock_status", {
+						docname: rname,
+						status: status_to_send
 					});
+					if (!res || !res.ok || (res.data && res.data.status !== "ok")) {
+						rock.status = prev_val;
+						self.render_rocks_tables();
+						const err_msg = res.error || (res.data && res.data.message) || __("Failed to update rock status");
+						frappe.msgprint(err_msg);
+						return;
+					}
+					rock.status = new_val;
 					self.render_rocks_tables();
 					frappe.show_alert({ message: __("Rock status updated!"), indicator: "green" });
 				});
@@ -1589,8 +1596,8 @@
 						<div class="nn-field-label">${this.render_field_label("Rock", "status", "Status", false)}</div>
 						<select class="nn-select" id="nn-r-status">
 							<option value="In Progress" ${current_status === "In Progress" || current_status === "On-track" ? "selected" : ""}>In Progress (On-track)</option>
-							<option value="Not Started" ${current_status === "Not Started" || current_status === "Off-track" ? "selected" : ""}>Not Started (Off-track)</option>
-							<option value="Complete" ${current_status === "Complete" ? "selected" : ""}>Complete</option>
+							<option value="Dropped" ${current_status === "Dropped" || current_status === "Off-track" ? "selected" : ""}>Dropped (Off-track)</option>
+							<option value="Complete" ${current_status === "Complete" || current_status === "Done" ? "selected" : ""}>Complete</option>
 						</select>
 					</div>
 
@@ -1642,8 +1649,9 @@
 				const is_comp = $drawer.find("#nn-r-comp").is(":checked") ? 1 : 0;
 				const status = $drawer.find("#nn-r-status").val();
 
+				let res;
 				if (is_edit && r) {
-					await self.call("frappe.client.set_value", {
+					res = await self.call("frappe.client.set_value", {
 						doctype: "Rock", name: r.name,
 						fieldname: {
 							rock_name: title,
@@ -1657,7 +1665,7 @@
 						}
 					});
 				} else {
-					await self.call("frappe.client.insert", {
+					res = await self.call("frappe.client.insert", {
 						doc: {
 							doctype: "Rock",
 							rock_name: title,
@@ -1671,6 +1679,11 @@
 							archived: 0
 						}
 					});
+				}
+
+				if (!res || !res.ok) {
+					frappe.msgprint(res.error || __("Failed to save Rock"));
+					return;
 				}
 
 				self.close_drawer();
@@ -3798,7 +3811,8 @@
 				const owner_name = this.get_user_display_name(r.owner_user);
 				const av = this.get_initials(owner_name);
 				const st = r.status || "On Track";
-				const is_off = st === "Off-track" || st === "Not Started";
+				const is_off = st === "Off-track" || st === "Dropped";
+				const is_complete = st === "Complete" || st === "Done";
 				return `
 									<tr class="nn-rock-row">
 										<td><b>${this.esc(r.title)}</b></td>
@@ -3806,8 +3820,8 @@
 										<td>${this.get_rock_status_badge(st, r.title)}</td>
 										<td style="text-align:right">
 											<div class="nn-progress-wrap">
-												<div class="nn-prog-bar"><div class="nn-prog-fill" style="width:${is_off ? "35%" : "75%"};background:${is_off ? "#ef4444" : "#059669"}"></div></div>
-												<span class="nn-prog-txt">${is_off ? "35%" : "75%"}</span>
+												<div class="nn-prog-bar"><div class="nn-prog-fill" style="width:${is_complete ? "100%" : is_off ? "35%" : "75%"};background:${is_complete ? "#16a34a" : is_off ? "#ef4444" : "#059669"}"></div></div>
+												<span class="nn-prog-txt">${is_complete ? "100%" : is_off ? "35%" : "75%"}</span>
 											</div>
 										</td>
 										<td style="text-align:center">
