@@ -223,20 +223,67 @@
 		/* ================= helpers ================= */
 		esc(v) { return frappe.utils.escape_html(v == null ? "" : String(v)); }
 
+		extract_clean_error(err, fallback = "An error occurred while saving. Please try again.") {
+			if (!err) return __(fallback);
+			let raw = "";
+
+			const sm = (err && (err._server_messages || (err.responseJSON && err.responseJSON._server_messages)));
+			if (sm) {
+				try {
+					const list = typeof sm === "string" ? JSON.parse(sm) : sm;
+					if (Array.isArray(list) && list.length > 0) {
+						const first = typeof list[0] === "string" ? JSON.parse(list[0]) : list[0];
+						if (first && typeof first === "object" && first.message) {
+							raw = String(first.message);
+						} else if (typeof first === "string") {
+							raw = first;
+						}
+					}
+				} catch (_) {}
+			}
+
+			if (!raw && err.error) {
+				if (typeof err.error === "string") raw = err.error;
+				else if (typeof err.error === "object" && err.error.message) raw = String(err.error.message);
+			}
+			if (!raw && err.data && err.data.message) {
+				if (typeof err.data.message === "string") raw = err.data.message;
+			}
+			if (!raw && err.responseJSON && err.responseJSON.exception) raw = String(err.responseJSON.exception);
+			if (!raw && err.responseJSON && err.responseJSON.message && typeof err.responseJSON.message === "string") raw = err.responseJSON.message;
+			if (!raw && err.exception) raw = String(err.exception);
+			if (!raw && err.message) {
+				if (typeof err.message === "string") raw = err.message;
+				else if (typeof err.message === "object" && err.message.message) raw = String(err.message.message);
+			}
+			if (!raw && typeof err === "string") raw = err;
+
+			if (!raw || raw === "[object Object]") return __(fallback);
+
+			raw = raw.replace(/<[^>]+>/g, "").trim();
+
+			if (raw.includes("Traceback (most recent call last):")) {
+				const lines = raw.split("\n").map(l => l.trim()).filter(Boolean);
+				const lastLine = lines[lines.length - 1];
+				if (lastLine && !lastLine.startsWith("File ")) {
+					raw = lastLine;
+				} else {
+					return __(fallback);
+				}
+			}
+
+			raw = raw.replace(/^[a-zA-Z0-9_.]*(Exception|Error|ValidationError):\s*/i, "");
+
+			if (!raw || raw === "[object Object]") return __(fallback);
+			return __(raw);
+		}
+
 		async call(method, args) {
 			try { return { ok: true, data: await frappe.xcall(method, args || {}) }; }
 			catch (e) {
 				console.error("EOS call failed:", method, e);
-				let msg = "Request failed";
-				try {
-					const sm = (e && (e._server_messages || (e.responseJSON && e.responseJSON._server_messages)));
-					if (sm) msg = JSON.parse(JSON.parse(sm)[0]).message;
-					else if (e && e.responseJSON && e.responseJSON.exception) msg = e.responseJSON.exception;
-					else if (e && e.exception) msg = e.exception;
-					else if (e && e.message) msg = e.message;
-					else if (typeof e === "string") msg = e;
-				} catch (_) { /* ignore */ }
-				return { ok: false, error: String(msg).replace(/<[^>]+>/g, "") };
+				const clean = this.extract_clean_error(e, "Request failed");
+				return { ok: false, error: clean };
 			}
 		}
 
@@ -1110,8 +1157,17 @@
 
 				// Status filter
 				if (s.rock_status && s.rock_status !== "All") {
-					const norm = (r.status === "In Progress" || r.status === "On-track") ? "On-track" : (r.status === "Off-track" || r.status === "Dropped") ? "Off-track" : (r.status === "Complete" || r.status === "Done") ? "Done" : r.status;
-					if (norm !== s.rock_status) return false;
+					const is_complete_filter = (s.rock_status === "Complete" || s.rock_status === "Done");
+					const is_off_filter = (s.rock_status === "Off-track" || s.rock_status === "Dropped");
+					const is_on_filter = (s.rock_status === "On-track" || s.rock_status === "In Progress");
+
+					const is_rock_complete = (r.status === "Complete" || r.status === "Done");
+					const is_rock_off = (r.status === "Off-track" || r.status === "Dropped");
+					const is_rock_on = (r.status === "On-track" || r.status === "In Progress");
+
+					if (is_complete_filter && !is_rock_complete) return false;
+					if (is_off_filter && !is_rock_off) return false;
+					if (is_on_filter && !is_rock_on) return false;
 				}
 
 				return true;
@@ -1516,7 +1572,7 @@
 					if (!res || !res.ok || (res.data && res.data.status !== "ok")) {
 						rock.status = prev_val;
 						self.render_rocks_tables();
-						const err_msg = res.error || (res.data && res.data.message) || __("Failed to update rock status");
+						const err_msg = self.extract_clean_error(res, "Failed to update rock status");
 						frappe.msgprint(err_msg);
 						return;
 					}
@@ -1595,8 +1651,8 @@
 					<div class="nn-field-group">
 						<div class="nn-field-label">${this.render_field_label("Rock", "status", "Status", false)}</div>
 						<select class="nn-select" id="nn-r-status">
-							<option value="In Progress" ${current_status === "In Progress" || current_status === "On-track" ? "selected" : ""}>In Progress (On-track)</option>
-							<option value="Dropped" ${current_status === "Dropped" || current_status === "Off-track" ? "selected" : ""}>Dropped (Off-track)</option>
+							<option value="In Progress" ${current_status === "In Progress" || current_status === "On-track" ? "selected" : ""}>On-track</option>
+							<option value="Dropped" ${current_status === "Dropped" || current_status === "Off-track" ? "selected" : ""}>Off-track</option>
 							<option value="Complete" ${current_status === "Complete" || current_status === "Done" ? "selected" : ""}>Complete</option>
 						</select>
 					</div>
@@ -3817,7 +3873,7 @@
 									<tr class="nn-rock-row">
 										<td><b>${this.esc(r.title)}</b></td>
 										<td><span class="nn-owner-circle">${av}</span></td>
-										<td>${this.get_rock_status_badge(st, r.title)}</td>
+										<td>${this.get_rock_status_badge(st, r.name)}</td>
 										<td style="text-align:right">
 											<div class="nn-progress-wrap">
 												<div class="nn-prog-bar"><div class="nn-prog-fill" style="width:${is_complete ? "100%" : is_off ? "35%" : "75%"};background:${is_complete ? "#16a34a" : is_off ? "#ef4444" : "#059669"}"></div></div>
@@ -4278,19 +4334,34 @@
 			});
 
 			// Rock status change
-			$main.find(".nn-status-badge[data-rock]").on("click", function (e) {
+			$main.find(".nn-status-badge[data-rock]").off("click").on("click", function (e) {
 				e.stopPropagation();
 				const rname = $(this).attr("data-rock");
-				const r = (self.rocks || []).find(x => x.title === rname || x.name === rname);
+				const r = (self.rocks || []).find(x => x.name === rname || x.title === rname);
 				if (!r) return;
-				const statuses = ["On-track", "Off-track", "Complete", "Dropped"];
-				self.pick_menu(this, statuses, r.status || "On-track", async new_st => {
-					r.status = new_st;
-					await self.call("frappe.client.set_value", {
-						doctype: "Rock", name: r.name, fieldname: "status", value: new_st
+				const options = [
+					["In Progress", __("On-track")],
+					["Dropped", __("Off-track")],
+					["Complete", __("Complete")]
+				];
+				const current_val = (r.status === "Dropped" || r.status === "Off-track") ? "Dropped" : (r.status === "Complete" || r.status === "Done" ? "Complete" : "In Progress");
+				self.pick_menu(this, options, current_val, async new_val => {
+					const prev_val = r.status;
+					const status_to_send = new_val === "Complete" ? "Done" : (new_val === "Dropped" ? "Off-track" : "On-track");
+					const res = await self.call("eos_core.eos_api.update_rock_status", {
+						docname: r.name,
+						status: status_to_send
 					});
+					if (!res || !res.ok || (res.data && res.data.status !== "ok")) {
+						r.status = prev_val;
+						self.render_l10_meeting_workspace();
+						const err_msg = self.extract_clean_error(res, "Failed to update rock status");
+						frappe.msgprint(err_msg);
+						return;
+					}
+					r.status = new_val === "Complete" ? "Complete" : (new_val === "Dropped" ? "Off-track" : "On-track");
 					self.render_l10_meeting_workspace();
-					frappe.show_alert({ message: __(`Rock status updated: ${new_st}`), indicator: "green" });
+					frappe.show_alert({ message: __("Rock status updated!"), indicator: "green" });
 				});
 			});
 

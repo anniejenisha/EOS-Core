@@ -3,30 +3,13 @@
    100% Dynamic: Backed exclusively by live Frappe ERP DocTypes.
    Hooks into app.js through: renderEos, eosDrawer, eosSave, eosAct.
    ===================================================================== */
-if (typeof getLoggedInUserName !== 'function') {
-  window.getLoggedInUserName = function() {
-    if (typeof USER !== 'undefined' && USER.name && USER.name !== 'User') return USER.name;
-    if (typeof frappe !== 'undefined' && frappe.session) {
-      if (frappe.session.user_fullname) return frappe.session.user_fullname;
-      if (frappe.session.user && frappe.session.user !== 'Guest') return frappe.session.user;
-    }
-    if (typeof window !== 'undefined' && window.frappe_user_name) return window.frappe_user_name;
-    return '';
-  };
-}
-if (typeof getLoggedInUserEmail !== 'function') {
-  window.getLoggedInUserEmail = function() {
-    if (typeof USER !== 'undefined' && USER.email) return USER.email;
-    if (typeof frappe !== 'undefined' && frappe.session && frappe.session.user && frappe.session.user !== 'Guest') {
-      return frappe.session.user;
-    }
-    if (typeof window !== 'undefined' && window.frappe_user) return window.frappe_user;
-    return '';
-  };
-}
+let EOS_ME = (typeof USER !== 'undefined' && USER.name && USER.name !== 'User')
+  ? USER.name
+  : ((typeof getLoggedInUserName === 'function' ? getLoggedInUserName() : '') || (typeof window !== 'undefined' && window.frappe_user_name) || (typeof frappe !== 'undefined' && frappe.session && frappe.session.user_fullname) || '');
 
-let EOS_ME = (typeof USER !== 'undefined' && USER.name && USER.name !== 'User') ? USER.name : (getLoggedInUserName() || (typeof window !== 'undefined' ? window.frappe_user_name : '') || '');
-let EOS_USER_ID = (typeof USER !== 'undefined' && USER.email) ? USER.email : (getLoggedInUserEmail() || (typeof window !== 'undefined' ? window.frappe_user : '') || '');
+let EOS_USER_ID = (typeof USER !== 'undefined' && USER.email)
+  ? USER.email
+  : ((typeof getLoggedInUserEmail === 'function' ? getLoggedInUserEmail() : '') || (typeof window !== 'undefined' && window.frappe_user) || (typeof frappe !== 'undefined' && frappe.session && frappe.session.user) || '');
 let EOS_IS_ADMIN = (window.__EOS_BOOT__ && window.__EOS_BOOT__.user && !!window.__EOS_BOOT__.user.is_admin) || false;
 let EOS_TEAMS = [];
 let EOS_LEADER_TEAMS = (window.__EOS_BOOT__ && (window.__EOS_BOOT__.leader_teams || (window.__EOS_BOOT__.user && window.__EOS_BOOT__.user.leader_teams))) || [];
@@ -348,29 +331,37 @@ async function apiCall(method, args = {}) {
       console.warn(`[EOS ERP API] ${method} (${res.status}):`, errText);
       try {
         const parsed = JSON.parse(errText);
-        let msg = parsed.message;
-        if (!msg && (parsed._server_messages || (parsed.responseJSON && parsed.responseJSON._server_messages))) {
+        let msg = '';
+        const sm = parsed._server_messages || (parsed.responseJSON && parsed.responseJSON._server_messages);
+        if (sm) {
           try {
-            const sm = parsed._server_messages || (parsed.responseJSON && parsed.responseJSON._server_messages);
-            const msgs = typeof sm === 'string' ? JSON.parse(sm) : sm;
-            if (Array.isArray(msgs) && msgs.length > 0) {
-              const first = typeof msgs[0] === 'string' ? JSON.parse(msgs[0]) : msgs[0];
-              msg = first.message || first;
+            const list = typeof sm === 'string' ? JSON.parse(sm) : sm;
+            if (Array.isArray(list) && list.length > 0) {
+              const first = typeof list[0] === 'string' ? JSON.parse(list[0]) : list[0];
+              if (first && typeof first === 'object' && first.message) msg = String(first.message);
+              else if (typeof first === 'string') msg = first;
             }
           } catch (_) {}
         }
-        if (!msg && parsed.exception) {
-          msg = String(parsed.exception).replace(/^[a-zA-Z0-9_.]*ValidationError:\s*/, '').replace(/^[a-zA-Z0-9_.]*:\s*/, '');
+        if (!msg && parsed.message) {
+          if (typeof parsed.message === 'string') msg = parsed.message;
+          else if (typeof parsed.message === 'object' && parsed.message.message) msg = String(parsed.message.message);
         }
-        if (!msg) {
-          msg = parsed.exc || `HTTP ${res.status}`;
+        if (!msg && parsed.exception) msg = String(parsed.exception);
+        if (!msg && parsed.exc) {
+          const lines = String(parsed.exc).split('\n').map(l => l.trim()).filter(Boolean);
+          const last = lines[lines.length - 1];
+          if (last && !last.startsWith('File ')) msg = last;
         }
+
         if (typeof msg === 'string') {
           msg = msg.replace(/<[^>]+>/g, '').trim();
+          msg = msg.replace(/^[a-zA-Z0-9_.]*(Exception|Error|ValidationError):\s*/i, '');
         }
-        return { error: true, message: msg || `HTTP ${res.status}` };
+        if (!msg || msg === '[object Object]') msg = `Request failed (${res.status})`;
+        return { error: true, message: msg };
       } catch (e) {
-        return { error: true, message: `HTTP ${res.status}` };
+        return { error: true, message: `Request failed (${res.status})` };
       }
     }
     const json = await res.json();
